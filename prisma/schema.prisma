@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum Gender {
+  HIM
+  HER
+  UNISEX
+}
+
+enum ScentProfile {
+  VANILLA
+  MUSK
+  OUD
+  FLORAL
+  WOODY
+  CITRUS
+  AQUATIC
+  SPICY
+  POWDERY
+  GOURMAND
+}
+
+enum Sillage {
+  SOFT_LANDING
+  MODERATE
+  NOTICEABLE
+  STRONG
+  ENORMOUS
+  FILLS_THE_ROOM
+}
+
+enum FragranceNote {
+  TOP
+  MIDDLE
+  BASE
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+enum CouponApplicability {
+  ALL
+  SPECIFIC_USERS
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  name           String?
+  phone          String?
+  role           Role      @default(CUSTOMER)
+  createdAt      DateTime  @default(now())
+  orders         Order[]
+  addresses      Address[]
+  appliedCoupons Coupon[]  @relation("CouponUsers")
+
+  @@index([role])
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  label     String
+  line1     String
+  line2     String?
+  city      String
+  country   String
+  isDefault Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Announcement {
+  id        String    @id @default(cuid())
+  textEn    String
+  textAr    String
+  linkUrl   String?
+  isActive  Boolean   @default(false)
+  startAt   DateTime?
+  endAt     DateTime?
+  bgColor   String    @default("#402A08")
+  textColor String    @default("#DEBC7E")
+  createdAt DateTime  @default(now())
+
+  @@index([isActive])
+}
+
+model Collection {
+  id            String                @id @default(cuid())
+  slug          String                @unique
+  nameEn        String
+  nameAr        String
+  descriptionEn String
+  descriptionAr String
+  coverImage    String
+  position      Int                   @default(0)
+  isPublished   Boolean               @default(false)
+  createdAt     DateTime              @default(now())
+  fragrances    FragranceCollection[]
+
+  @@index([isPublished, position])
+}
+
+model Fragrance {
+  id            String                @id @default(cuid())
+  slug          String                @unique
+  nameEn        String
+  nameAr        String
+  taglineEn     String
+  taglineAr     String
+  descriptionEn String
+  descriptionAr String
+  gender        Gender
+  scentProfile  ScentProfile
+  avoidIf       String[]
+  bestFor       String[]
+  sillage       Sillage
+  longevity     Int
+  isPublished   Boolean               @default(false)
+  isFeatured    Boolean               @default(false)
+  position      Int                   @default(0)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  variants      FragranceVariant[]
+  ingredients   FragranceIngredient[]
+  images        FragranceImage[]
+  collections   FragranceCollection[]
+
+  @@index([isPublished, isFeatured, position])
+  @@index([gender])
+  @@index([scentProfile])
+}
+
+model FragranceCollection {
+  fragranceId  String
+  collectionId String
+  fragrance    Fragrance  @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([fragranceId, collectionId])
+  @@index([collectionId])
+}
+
+model FragranceIngredient {
+  id          String        @id @default(cuid())
+  fragranceId String
+  nameEn      String
+  nameAr      String
+  note        FragranceNote
+  fragrance   Fragrance     @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+
+  @@index([fragranceId])
+  @@index([note])
+}
+
+model FragranceImage {
+  id          String    @id @default(cuid())
+  fragranceId String
+  url         String
+  altEn       String
+  altAr       String
+  position    Int       @default(0)
+  isPrimary   Boolean   @default(false)
+  fragrance   Fragrance @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+
+  @@index([fragranceId, position])
+}
+
+model FragranceVariant {
+  id             String      @id @default(cuid())
+  fragranceId    String
+  sizeML         Int
+  price          Decimal     @db.Decimal(10, 2)
+  compareAtPrice Decimal?    @db.Decimal(10, 2)
+  stock          Int         @default(0)
+  sku            String      @unique
+  fragrance      Fragrance   @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+  orderItems     OrderItem[]
+
+  @@index([fragranceId])
+}
+
+model Coupon {
+  id             String              @id @default(cuid())
+  code           String              @unique
+  type           CouponType
+  value          Decimal             @db.Decimal(10, 2)
+  minOrderAmount Decimal?            @db.Decimal(10, 2)
+  maxUses        Int?
+  usedCount      Int                 @default(0)
+  isActive       Boolean             @default(false)
+  expiresAt      DateTime?
+  createdAt      DateTime            @default(now())
+  applicableTo   CouponApplicability @default(ALL)
+  users          User[]              @relation("CouponUsers")
+  orders         Order[]
+
+  @@index([isActive])
+  @@index([applicableTo])
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  userId          String
+  status          OrderStatus   @default(PENDING)
+  paymentMethod   PaymentMethod @default(CASH_ON_DELIVERY)
+  subtotal        Decimal       @db.Decimal(10, 2)
+  discountAmount  Decimal       @default(0) @db.Decimal(10, 2)
+  total           Decimal       @db.Decimal(10, 2)
+  couponId        String?
+  addressSnapshot Json
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  user            User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  coupon          Coupon?       @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([couponId])
+}
+
+model OrderItem {
+  id              String            @id @default(cuid())
+  orderId         String
+  variantId       String
+  fragranceNameEn String
+  fragranceNameAr String
+  sizeML          Int
+  quantity        Int
+  unitPrice       Decimal           @db.Decimal(10, 2)
+  totalPrice      Decimal           @db.Decimal(10, 2)
+  order           Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant         FragranceVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([variantId])
+}

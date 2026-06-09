@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "title": "Valentro Fragrance",
+    "description": "Luxury fragrance e-commerce for Valentro."
+  },
+  "nav": {
+    "collections": "Collections",
+    "fragrances": "Fragrances",
+    "atelier": "The Atelier",
+    "story": "Our Story",
+    "cart": "Cart",
+    "menu": "Menu",
+    "close": "Close"
+  },
+  "hero": {
+    "discover": "Discover",
+    "addToCart": "Add to Cart",
+    "previous": "Previous fragrance",
+    "next": "Next fragrance",
+    "slides": {
+      "noir": {
+        "collection": "Private Collection",
+        "name": "Noir Vanille",
+        "tagline": "A velvet trail of vanilla, amber, and smoked woods.",
+        "alt": "Noir Vanille Valentro fragrance bottle"
+      },
+      "oud": {
+        "collection": "Signature Reserve",
+        "name": "Oud Imperial",
+        "tagline": "Rare oud, saffron heat, and a resinous golden base.",
+        "alt": "Oud Imperial Valentro fragrance bottle"
+      }
+    }
+  },
+  "admin": {
+    "dashboard": "Dashboard Overview",
+    "announcements": "Announcements",
+    "fragrances": "Fragrances",
+    "collections": "Collections",
+    "coupons": "Coupons",
+    "orders": "Orders"
+  },
+  "pages": {
+    "login": "Admin Login",
+    "cart": "Cart",
+    "account": "Account",
+    "productDetail": "Product Detail",
+    "collectionDetail": "Collection Detail"
+  }
+}

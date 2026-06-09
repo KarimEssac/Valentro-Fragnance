@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #000000;
+    --color-surface: #131410;
+    --color-surface-mid: #20201c;
+    --color-surface-hi: #2a2a26;
+    --color-gold: #debc7e;
+    --color-gold-muted: #c6a45a;
+    --color-umber: #402a08;
+    --color-parchment: #f9f6f0;
+    --color-on-surface: #e5e2dc;
+    --color-outline: #4c4546;
+
+    --font-serif: "Libre Caslon Text", Georgia, serif;
+    --font-sans: "Hanken Grotesk", system-ui, sans-serif;
+
+    --radius: 0px;
+    --container-max: 1440px;
+    --gutter: 24px;
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: var(--color-outline);
+  }
+
+  html {
+    min-height: 100%;
+    background: var(--color-bg);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100%;
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-on-surface);
+    font-family: var(--font-sans);
+    text-rendering: geometricPrecision;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    border-radius: 0;
+    font: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: rgba(222, 188, 126, 0.32);
+    color: var(--color-parchment);
+  }
+}
+
+@layer components {
+  .label-caps {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1rem;
+    text-transform: uppercase;
+  }
+
+  .focus-gold {
+    outline: 1px solid transparent;
+    outline-offset: 4px;
+  }
+
+  .focus-gold:focus-visible {
+    outline-color: var(--color-gold);
+  }
+}
+
+@keyframes bottle-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes scroll-pulse {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: scaleY(0.78);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes smoke-dash {
+  to {
+    stroke-dashoffset: -1240;
+  }
+}
+
+@keyframes smoke-drift-a {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: translate3d(-2%, 2%, 0) scale(1) rotate(-2deg);
+  }
+  50% {
+    opacity: 0.58;
+    transform: translate3d(2%, -3%, 0) scale(1.06) rotate(2deg);
+  }
+}
+
+@keyframes smoke-drift-b {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translate3d(3%, -2%, 0) scale(1.02) rotate(1deg);
+  }
+  50% {
+    opacity: 0.46;
+    transform: translate3d(-3%, 3%, 0) scale(0.98) rotate(-3deg);
+  }
+}
+
+@keyframes smoke-drift-c {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: translate3d(0, 3%, 0) scale(1.08) rotate(0deg);
+  }
+  50% {
+    opacity: 0.38;
+    transform: translate3d(1%, -4%, 0) scale(1) rotate(4deg);
+  }
+}
+
+.animate-bottle-float {
+  animation: bottle-float 4s ease-in-out infinite;
+}
+
+.animate-scroll-pulse {
+  animation: scroll-pulse 2.4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.smoke-stage {
+  mix-blend-mode: screen;
+}
+
+.smoke-layer {
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.smoke-layer-a {
+  animation: smoke-drift-a 34s ease-in-out infinite;
+}
+
+.smoke-layer-b {
+  animation: smoke-drift-b 28s ease-in-out infinite;
+}
+
+.smoke-layer-c {
+  animation: smoke-drift-c 40s ease-in-out infinite;
+}
+
+.smoke-path {
+  stroke-dasharray: 420 820;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  animation: smoke-dash 32s linear infinite;
+}
+
+.smoke-path-slow {
+  animation-duration: 46s;
+}
+
+.smoke-path-fast {
+  animation-duration: 24s;
+}
