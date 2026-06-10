@@ -80,6 +80,7 @@ model User {
   orders         Order[]
   addresses      Address[]
   appliedCoupons Coupon[]  @relation("CouponUsers")
+  reviews        Review[]
 
   @@index([role])
 }
@@ -113,6 +114,26 @@ model Announcement {
   @@index([isActive])
 }
 
+model Testimonial {
+  id          String   @id @default(cuid())
+  messageEn   String
+  messageAr   String
+  imageUrl    String
+  imageAltEn  String
+  imageAltAr  String
+  rating      Int      @default(5)
+  fragranceId String?
+  reviewId    String?  @unique
+  position    Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  fragrance   Fragrance? @relation(fields: [fragranceId], references: [id], onDelete: SetNull)
+  review      Review?    @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+
+  @@index([isPublished, position])
+  @@index([fragranceId])
+}
+
 model Collection {
   id            String                @id @default(cuid())
   slug          String                @unique
@@ -144,6 +165,8 @@ model Fragrance {
   bestFor       String[]
   sillage       Sillage
   longevity     Int
+  ratingAverage Decimal               @default(0) @db.Decimal(3, 2)
+  ratingCount   Int                   @default(0)
   isPublished   Boolean               @default(false)
   isFeatured    Boolean               @default(false)
   position      Int                   @default(0)
@@ -153,10 +176,32 @@ model Fragrance {
   ingredients   FragranceIngredient[]
   images        FragranceImage[]
   collections   FragranceCollection[]
+  testimonials  Testimonial[]
+  reviews       Review[]
 
   @@index([isPublished, isFeatured, position])
   @@index([gender])
   @@index([scentProfile])
+}
+
+model Review {
+  id           String       @id @default(cuid())
+  fragranceId  String
+  userId       String
+  reviewerName String
+  rating       Int
+  messageEn    String
+  messageAr    String?
+  isPublished  Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  fragrance    Fragrance    @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testimonial  Testimonial?
+
+  @@unique([fragranceId, userId])
+  @@index([fragranceId, isPublished, createdAt])
+  @@index([userId])
 }
 
 model FragranceCollection {

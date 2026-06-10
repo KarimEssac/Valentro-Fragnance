@@ -7,6 +7,8 @@ async function main() {
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.coupon.deleteMany();
+  await prisma.testimonial.deleteMany();
+  await prisma.review.deleteMany();
   await prisma.fragranceCollection.deleteMany();
   await prisma.fragranceImage.deleteMany();
   await prisma.fragranceIngredient.deleteMany();
@@ -28,6 +30,33 @@ async function main() {
     }
   });
 
+  const layla = await prisma.user.create({
+    data: {
+      email: "layla.customer@example.com",
+      passwordHash,
+      name: "Layla Hassan",
+      role: "CUSTOMER"
+    }
+  });
+
+  const omar = await prisma.user.create({
+    data: {
+      email: "omar.customer@example.com",
+      passwordHash,
+      name: "Omar Nabil",
+      role: "CUSTOMER"
+    }
+  });
+
+  const salma = await prisma.user.create({
+    data: {
+      email: "salma.customer@example.com",
+      passwordHash,
+      name: "Salma Kareem",
+      role: "CUSTOMER"
+    }
+  });
+
   await prisma.announcement.create({
     data: {
       textEn: "LIMITED TIME OFFER: DISCOVER OUR PRIVATE COLLECTION",
@@ -36,6 +65,47 @@ async function main() {
       bgColor: "#F7EEDF",
       textColor: "#A97832"
     }
+  });
+
+  await prisma.testimonial.createMany({
+    data: [
+      {
+        messageEn:
+          "The fragrance settles with a quiet confidence: warm, polished, and unmistakably refined from the first hour to the last.",
+        messageAr:
+          "يستقر العطر بثقة هادئة: دافئ ومصقول وراقي بوضوح من الساعة الأولى حتى الأخيرة.",
+        imageUrl: "/uploads/fragrances/emporio-armani.png",
+        imageAltEn: "Valentro fragrance bottle in warm light",
+        rating: 5,
+        imageAltAr: "زجاجة عطر فالنترو في ضوء دافئ",
+        position: 1,
+        isPublished: true
+      },
+      {
+        messageEn:
+          "It feels composed rather than loud, leaving a memorable trail that makes evening wear feel complete.",
+        messageAr:
+          "يشعر بأنه متوازن لا صاخب، ويترك أثرا لا ينسى يجعل إطلالة المساء مكتملة.",
+        imageUrl: "/uploads/fragrances/valentino-uomo.png",
+        imageAltEn: "Deep-toned Valentro fragrance bottle",
+        rating: 4,
+        imageAltAr: "زجاجة عطر فالنترو بدرجات عميقة",
+        position: 2,
+        isPublished: true
+      },
+      {
+        messageEn:
+          "A smooth, elegant scent with enough character to feel personal and enough restraint to wear every day.",
+        messageAr:
+          "عطر ناعم وأنيق، فيه شخصية كافية ليبدو خاصا واتزان كاف لاستخدامه يوميا.",
+        imageUrl: "/uploads/fragrances/ultra-male.png",
+        imageAltEn: "Valentro fragrance bottle with refined styling",
+        rating: 5,
+        imageAltAr: "زجاجة عطر فالنترو بتنسيق راق",
+        position: 3,
+        isPublished: true
+      }
+    ]
   });
 
   const privateCollection = await prisma.collection.create({
@@ -66,12 +136,12 @@ async function main() {
     }
   });
 
-  await prisma.fragrance.create({
+  const noirVanille = await prisma.fragrance.create({
     data: {
-      slug: "noir-vanille",
-      nameEn: "Noir Vanille",
+      slug: "emporio-armani",
+      nameEn: "Emporio Armani",
       nameAr: "نوار فانيلا",
-      taglineEn: "A velvet trail of vanilla, amber, and smoked woods.",
+      taglineEn: "Vanilla, amber, and smoked woods with an addictive warm trail.",
       taglineAr: "أثر مخملي من الفانيلا والعنبر والأخشاب المدخنة.",
       descriptionEn:
         "Noir Vanille opens with polished bergamot before settling into a deep vanilla heart wrapped in ambered woods.",
@@ -114,8 +184,8 @@ async function main() {
       images: {
         create: [
           {
-            url: "/uploads/fragrances/noir-vanille-primary.jpg",
-            altEn: "Noir Vanille fragrance bottle",
+            url: "/uploads/fragrances/emporio-armani.png",
+            altEn: "Emporio Armani fragrance bottle",
             altAr: "زجاجة عطر نوار فانيلا",
             position: 1,
             isPrimary: true
@@ -128,18 +198,23 @@ async function main() {
             collection: {
               connect: {id: privateCollection.id}
             }
+          },
+          {
+            collection: {
+              connect: {id: signatureCollection.id}
+            }
           }
         ]
       }
     }
   });
 
-  await prisma.fragrance.create({
+  const oudImperial = await prisma.fragrance.create({
     data: {
-      slug: "oud-imperial",
-      nameEn: "Oud Imperial",
+      slug: "valentino-umo",
+      nameEn: "Valentino Umo",
       nameAr: "عود إمبريال",
-      taglineEn: "Rare oud, saffron heat, and a resinous golden base.",
+      taglineEn: "A refined woody amber profile with lavender, spice, and depth.",
       taglineAr: "عود نادر وحرارة الزعفران وقاعدة ذهبية راتنجية.",
       descriptionEn:
         "A commanding oud composition balanced by soft spice and a measured, luminous drydown.",
@@ -182,8 +257,8 @@ async function main() {
       images: {
         create: [
           {
-            url: "/uploads/fragrances/oud-imperial-primary.jpg",
-            altEn: "Oud Imperial fragrance bottle",
+            url: "/uploads/fragrances/valentino-uomo.png",
+            altEn: "Valentino Umo fragrance bottle",
             altAr: "زجاجة عطر عود إمبريال",
             position: 1,
             isPrimary: true
@@ -196,18 +271,23 @@ async function main() {
             collection: {
               connect: {id: privateCollection.id}
             }
+          },
+          {
+            collection: {
+              connect: {id: signatureCollection.id}
+            }
           }
         ]
       }
     }
   });
 
-  await prisma.fragrance.create({
+  const floralMusk = await prisma.fragrance.create({
     data: {
-      slug: "floral-musk",
-      nameEn: "Floral Musk",
+      slug: "ultra-male",
+      nameEn: "Ultra Male",
       nameAr: "فلورال مسك",
-      taglineEn: "White florals, clean musk, and soft powdered skin.",
+      taglineEn: "A bold aromatic gourmand profile with pear, vanilla, and spice.",
       taglineAr: "زهور بيضاء ومسك نظيف ونعومة بودرية على البشرة.",
       descriptionEn:
         "A refined floral musk for daylight wear, cut with airy citrus and a polished powder finish.",
@@ -250,8 +330,8 @@ async function main() {
       images: {
         create: [
           {
-            url: "/uploads/fragrances/floral-musk-primary.jpg",
-            altEn: "Floral Musk fragrance bottle",
+            url: "/uploads/fragrances/ultra-male.png",
+            altEn: "Ultra Male fragrance bottle",
             altAr: "زجاجة عطر فلورال مسك",
             position: 1,
             isPrimary: true
@@ -267,6 +347,96 @@ async function main() {
           }
         ]
       }
+    }
+  });
+
+  const ultraMaleReview = await prisma.review.create({
+    data: {
+      fragranceId: floralMusk.id,
+      userId: layla.id,
+      reviewerName: layla.name ?? "Layla Hassan",
+      rating: 5,
+      messageEn:
+        "A smooth, elegant scent with enough character to feel personal and enough restraint to wear every day.",
+      messageAr:
+        "عطر ناعم وأنيق، فيه شخصية كافية ليبدو خاصا واتزان كاف لاستخدامه يوميا.",
+      isPublished: true
+    }
+  });
+
+  const valentinoReview = await prisma.review.create({
+    data: {
+      fragranceId: oudImperial.id,
+      userId: omar.id,
+      reviewerName: omar.name ?? "Omar Nabil",
+      rating: 4,
+      messageEn:
+        "It feels composed rather than loud, leaving a memorable trail that makes evening wear feel complete.",
+      messageAr:
+        "يشعر بأنه متوازن لا صاخب، ويترك أثرا لا ينسى يجعل إطلالة المساء مكتملة.",
+      isPublished: true
+    }
+  });
+
+  const emporioReview = await prisma.review.create({
+    data: {
+      fragranceId: noirVanille.id,
+      userId: salma.id,
+      reviewerName: salma.name ?? "Salma Kareem",
+      rating: 5,
+      messageEn:
+        "The fragrance settles with a quiet confidence: warm, polished, and unmistakably refined from the first hour to the last.",
+      messageAr:
+        "يستقر العطر بثقة هادئة: دافئ ومصقول وراقي بوضوح من الساعة الأولى حتى الأخيرة.",
+      isPublished: true
+    }
+  });
+
+  await prisma.fragrance.update({
+    where: {id: floralMusk.id},
+    data: {ratingAverage: "5.00", ratingCount: 1}
+  });
+
+  await prisma.fragrance.update({
+    where: {id: oudImperial.id},
+    data: {ratingAverage: "4.00", ratingCount: 1}
+  });
+
+  await prisma.fragrance.update({
+    where: {id: noirVanille.id},
+    data: {ratingAverage: "5.00", ratingCount: 1}
+  });
+
+  await prisma.testimonial.updateMany({
+    where: {position: 1},
+    data: {
+      fragranceId: floralMusk.id,
+      reviewId: ultraMaleReview.id,
+      messageEn: ultraMaleReview.messageEn,
+      messageAr: ultraMaleReview.messageAr ?? "",
+      rating: ultraMaleReview.rating
+    }
+  });
+
+  await prisma.testimonial.updateMany({
+    where: {position: 2},
+    data: {
+      fragranceId: oudImperial.id,
+      reviewId: valentinoReview.id,
+      messageEn: valentinoReview.messageEn,
+      messageAr: valentinoReview.messageAr ?? "",
+      rating: valentinoReview.rating
+    }
+  });
+
+  await prisma.testimonial.updateMany({
+    where: {position: 3},
+    data: {
+      fragranceId: noirVanille.id,
+      reviewId: emporioReview.id,
+      messageEn: emporioReview.messageEn,
+      messageAr: emporioReview.messageAr ?? "",
+      rating: emporioReview.rating
     }
   });
 

@@ -106,7 +106,7 @@ export default function SignatureCollectionSection() {
   }
 
   return (
-    <section className="bg-bg px-gutter py-20 text-parchment sm:py-24 lg:py-32">
+    <section className="bg-bg px-gutter pb-12 pt-20 text-parchment sm:pb-14 sm:pt-24 lg:pb-16 lg:pt-32">
       <div className="mx-auto max-w-container">
         <div className="mb-10 flex items-end justify-between gap-6 sm:mb-14">
           <h2 className="font-serif text-3xl leading-tight text-parchment sm:text-5xl">
@@ -178,7 +178,7 @@ export default function SignatureCollectionSection() {
                   key={fragrance.id}
                   href={`/${locale}/fragrances/${fragrance.slug}`}
                   data-card
-                  className="group w-[82vw] shrink-0 snap-start sm:w-[360px] lg:w-[400px]"
+                  className="group w-[82vw] shrink-0 snap-start sm:w-[360px] lg:w-[calc((100%-3rem)/3)]"
                 >
                   <div className="relative mb-6 flex aspect-[3/4] items-center justify-center overflow-hidden border border-outline bg-surface">
                     {fragrance.primaryImage ? (
@@ -186,7 +186,7 @@ export default function SignatureCollectionSection() {
                         src={fragrance.primaryImage.url}
                         alt={imageAlt}
                         fill
-                        sizes="(min-width: 1024px) 400px, (min-width: 640px) 360px, 82vw"
+                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 360px, 82vw"
                         className="relative z-10 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
                         onError={(event) => {
                           event.currentTarget.style.display = "none";

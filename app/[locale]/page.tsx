@@ -2,6 +2,7 @@ import CategoriesSection from "@/components/storefront/home/CategoriesSection";
 import HeroSection from "@/components/storefront/home/HeroSection";
 import NewsTicker from "@/components/storefront/home/NewsTicker";
 import SignatureCollectionSection from "@/components/storefront/home/SignatureCollectionSection";
+import TestimonialsSection from "@/components/storefront/home/TestimonialsSection";
 import Navbar from "@/components/storefront/layout/Navbar";
 import SalesBar from "@/components/storefront/layout/SalesBar";
 
@@ -18,6 +19,7 @@ export default function HomePage() {
       <NewsTicker />
       <SignatureCollectionSection />
       <CategoriesSection />
+      <TestimonialsSection />
     </main>
   );
 }
