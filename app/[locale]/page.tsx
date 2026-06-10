@@ -1,3 +1,4 @@
+import CategoriesSection from "@/components/storefront/home/CategoriesSection";
 import HeroSection from "@/components/storefront/home/HeroSection";
 import NewsTicker from "@/components/storefront/home/NewsTicker";
 import SignatureCollectionSection from "@/components/storefront/home/SignatureCollectionSection";
@@ -16,6 +17,7 @@ export default function HomePage() {
       <HeroSection />
       <NewsTicker />
       <SignatureCollectionSection />
+      <CategoriesSection />
     </main>
   );
 }
