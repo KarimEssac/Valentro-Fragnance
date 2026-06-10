@@ -46,6 +46,27 @@ function BagIcon({className = "h-6 w-6"}: {className?: string}) {
   );
 }
 
+function CartIconWithCount({
+  count,
+  iconClassName = "h-7 w-7",
+  countClassName = "top-[60%] text-[10px]"
+}: {
+  count: number;
+  iconClassName?: string;
+  countClassName?: string;
+}) {
+  return (
+    <span className="relative inline-flex items-center justify-center">
+      <BagIcon className={iconClassName} />
+      <span
+        className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 font-semibold leading-none text-gold ${countClassName}`}
+      >
+        {count}
+      </span>
+    </span>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg
@@ -226,13 +247,10 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           <div className="flex items-center justify-end gap-3 sm:gap-4">
             <Link
               href={`/${locale}/cart`}
-              className="focus-gold relative flex h-10 w-10 items-center justify-center border border-gold/35 bg-surface/70 text-gold transition-colors duration-300 hover:border-gold hover:bg-gold/10 hover:text-parchment"
+              className="focus-gold relative text-gold transition-colors duration-300 hover:text-parchment"
               aria-label={t("cart")}
             >
-              <BagIcon />
-              <span className="absolute -end-2 -top-2 flex h-5 min-w-5 items-center justify-center border border-surface bg-parchment px-1 text-[10px] font-semibold leading-none text-surface-hi">
-                {localCartCount}
-              </span>
+              <CartIconWithCount count={localCartCount} />
             </Link>
             <button
               type="button"
@@ -258,7 +276,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
             : "pointer-events-none -translate-y-full opacity-0"
         }`}
       >
-        <div className="flex h-11 items-center justify-between gap-4 rounded-full border border-gold/20 bg-[#f5efe6]/90 px-4 shadow-[0_6px_24px_rgba(74,47,22,0.15)] backdrop-blur-md sm:h-12 sm:gap-5 sm:px-5">
+        <div className="flex h-11 items-center justify-between gap-4 rounded-full border border-outline/45 bg-surface px-4 shadow-[0_6px_24px_rgba(74,47,22,0.14)] backdrop-blur-sm sm:h-12 sm:gap-5 sm:px-5">
           {/* Hamburger — mobile only */}
           <button
             type="button"
@@ -292,13 +310,14 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           {/* Cart icon */}
           <Link
             href={`/${locale}/cart`}
-            className="focus-gold relative flex h-9 w-9 items-center justify-center border border-gold/35 bg-surface/70 text-gold transition-colors duration-300 hover:border-gold hover:bg-gold/10 hover:text-parchment"
+            className="focus-gold relative text-gold transition-colors duration-300 hover:text-parchment"
             aria-label={t("cart")}
           >
-            <BagIcon className="h-5 w-5" />
-            <span className="absolute -end-2 -top-2 flex h-5 min-w-5 items-center justify-center border border-surface bg-parchment px-1 text-[10px] font-semibold leading-none text-surface-hi">
-              {localCartCount}
-            </span>
+            <CartIconWithCount
+              count={localCartCount}
+              iconClassName="h-6 w-6"
+              countClassName="top-[60%] text-[9px]"
+            />
           </Link>
         </div>
       </div>

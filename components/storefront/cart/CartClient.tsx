@@ -70,7 +70,7 @@ export default function CartClient() {
 
   if (items.length === 0) {
     return (
-      <main className="min-h-screen bg-bg px-gutter pb-24 pt-36 text-parchment lg:px-16">
+      <main className="min-h-screen bg-bg px-gutter pb-24 pt-28 sm:pt-36 text-parchment lg:px-16">
         <section className="mx-auto max-w-container border border-outline bg-surface px-6 py-12 text-center">
           <p className="label-caps text-gold">Cart</p>
           <h1 className="mt-4 font-serif text-4xl leading-tight text-parchment sm:text-5xl">
@@ -91,9 +91,9 @@ export default function CartClient() {
   }
 
   return (
-    <main className="min-h-screen bg-bg px-gutter pb-24 pt-36 text-parchment lg:px-16">
+    <main className="min-h-screen bg-bg px-gutter pb-24 pt-[96px] sm:pt-36 text-parchment lg:px-16">
       <div className="mx-auto max-w-container">
-        <div className="mb-10 flex flex-col justify-between gap-4 border-b border-outline/60 pb-8 sm:flex-row sm:items-end">
+        <div className="hidden lg:flex mb-10 flex-col justify-between gap-4 border-b border-outline/60 pb-8 sm:flex-row sm:items-end">
           <div>
             <p className="label-caps text-gold">Cart</p>
             <h1 className="mt-3 font-serif text-4xl leading-tight text-parchment sm:text-6xl">
@@ -105,83 +105,96 @@ export default function CartClient() {
           </p>
         </div>
 
-        <div className="grid gap-10 lg:grid-cols-[1fr_360px] lg:items-start">
-          <section className="space-y-5">
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start lg:gap-10">
+          <section className="space-y-3 lg:space-y-5">
             {items.map((item) => {
               const lineTotal = Number(item.price) * item.quantity;
 
               return (
                 <article
                   key={item.variantId}
-                  className="grid gap-5 border border-outline/70 bg-surface p-4 sm:grid-cols-[120px_1fr] sm:p-5"
+                  className="flex items-center gap-3 border border-outline/70 bg-surface p-3 lg:grid lg:grid-cols-[120px_1fr] lg:gap-5 lg:p-5"
                 >
                   <Link
                     href={`/${locale}/fragrances/${item.slug}`}
-                    className="relative aspect-[4/5] overflow-hidden bg-surface-mid"
+                    className="relative h-16 w-14 shrink-0 overflow-hidden bg-surface-mid lg:aspect-[4/5] lg:h-auto lg:w-full"
                   >
                     {item.image ? (
                       <Image
                         src={item.image}
                         alt={item.name}
                         fill
-                        sizes="120px"
+                        sizes="(min-width: 1024px) 120px, 56px"
                         className="object-cover"
                       />
                     ) : null}
                   </Link>
 
-                  <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                  <div className="flex flex-1 items-center justify-between gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-5">
+                    <div className="flex flex-col min-w-0">
                       <Link
                         href={`/${locale}/fragrances/${item.slug}`}
-                        className="font-serif text-2xl leading-tight text-parchment transition-colors hover:text-gold"
+                        className="truncate font-serif text-base leading-tight text-parchment transition-colors hover:text-gold lg:text-2xl lg:whitespace-normal"
                       >
                         {item.name}
                       </Link>
-                      <p className="label-caps mt-2 text-gold">
-                        {item.sizeML}ml
-                      </p>
-                      <p className="mt-4 text-sm text-on-surface/75">
-                        {priceFormatter.format(Number(item.price))}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-on-surface/75 lg:hidden">
+                        <span className="label-caps font-semibold text-gold">
+                          {item.sizeML}ml
+                        </span>
+                        <span>•</span>
+                        <span>{priceFormatter.format(Number(item.price))}</span>
+                      </div>
+                      <div className="hidden lg:block">
+                        <p className="label-caps mt-2 text-gold">
+                          {item.sizeML}ml
+                        </p>
+                        <p className="mt-4 text-sm text-on-surface/75">
+                          {priceFormatter.format(Number(item.price))}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-4 sm:items-end">
-                      <p className="font-serif text-2xl text-parchment">
-                        {priceFormatter.format(lineTotal)}
-                      </p>
-                      <div className="flex min-h-11 w-max items-center border border-outline">
+                    <div className="flex items-center gap-3 shrink-0 lg:flex-col lg:items-end lg:gap-4">
+                      <div className="hidden lg:block">
+                        <p className="font-serif text-2xl text-parchment">
+                          {priceFormatter.format(lineTotal)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 lg:flex-col lg:items-end">
+                        <div className="flex h-8 items-center border border-outline bg-bg/50 lg:h-11">
+                          <button
+                            type="button"
+                            aria-label="Decrease quantity"
+                            onClick={() =>
+                              updateQuantity(item.variantId, item.quantity - 1)
+                            }
+                            className="focus-gold h-full px-2.5 text-parchment hover:text-gold lg:px-4"
+                          >
+                            -
+                          </button>
+                          <span className="w-6 text-center text-xs text-parchment lg:w-10 lg:text-sm">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Increase quantity"
+                            onClick={() =>
+                              updateQuantity(item.variantId, item.quantity + 1)
+                            }
+                            className="focus-gold h-full px-2.5 text-parchment hover:text-gold lg:px-4"
+                          >
+                            +
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          aria-label="Decrease quantity"
-                          onClick={() =>
-                            updateQuantity(item.variantId, item.quantity - 1)
-                          }
-                          className="focus-gold h-11 px-4 text-parchment hover:text-gold"
+                          onClick={() => removeItem(item.variantId)}
+                          className="label-caps text-[10px] text-on-surface/65 transition-colors hover:text-gold lg:text-xs"
                         >
-                          -
-                        </button>
-                        <span className="w-10 text-center text-sm text-parchment">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Increase quantity"
-                          onClick={() =>
-                            updateQuantity(item.variantId, item.quantity + 1)
-                          }
-                          className="focus-gold h-11 px-4 text-parchment hover:text-gold"
-                        >
-                          +
+                          Remove
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.variantId)}
-                        className="label-caps text-on-surface/65 transition-colors hover:text-gold"
-                      >
-                        Remove
-                      </button>
                     </div>
                   </div>
                 </article>
