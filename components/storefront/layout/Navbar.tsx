@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {usePathname} from "next/navigation";
 import {useLocale, useTranslations} from "next-intl";
-import {useEffect, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 
 type NavKey = "collections" | "fragrances" | "atelier" | "story";
@@ -17,6 +17,10 @@ type NavbarProps = {
   cartCount?: number;
 };
 
+type StoredCartItem = {
+  quantity?: number;
+};
+
 const navLinks: NavLink[] = [
   {key: "collections", href: "/collections"},
   {key: "fragrances", href: "/fragrances"},
@@ -24,7 +28,7 @@ const navLinks: NavLink[] = [
   {key: "story", href: "/our-story"}
 ];
 
-function BagIcon() {
+function BagIcon({className = "h-6 w-6"}: {className?: string}) {
   return (
     <svg
       aria-hidden="true"
@@ -34,7 +38,7 @@ function BagIcon() {
       strokeWidth="1.25"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-6 w-6"
+      className={className}
     >
       <path d="M7 8h10l1 12H6L7 8Z" />
       <path d="M9 8V6a3 3 0 0 1 6 0v2" />
@@ -78,18 +82,24 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
   const locale = useLocale();
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const [scrolled, setScrolled] = useState(false);
+  const [showMini, setShowMini] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [localCartCount, setLocalCartCount] = useState(cartCount);
   const isRtl = locale === "ar";
+  const fullNavRef = useRef<HTMLElement>(null);
 
+  /* ---- Show mini navbar once the full navbar scrolls out of view ---- */
   useEffect(() => {
-    function updateScrolled() {
-      setScrolled(window.scrollY > 80);
+    function handleScroll() {
+      if (!fullNavRef.current) return;
+      const rect = fullNavRef.current.getBoundingClientRect();
+      // Show mini bar when the bottom of the full navbar goes above the viewport
+      setShowMini(rect.bottom < 0);
     }
 
-    updateScrolled();
-    window.addEventListener("scroll", updateScrolled, {passive: true});
-    return () => window.removeEventListener("scroll", updateScrolled);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, {passive: true});
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -99,6 +109,34 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    function readCartCount() {
+      try {
+        const cart = JSON.parse(
+          window.localStorage.getItem("valentro-cart") ?? "[]"
+        ) as StoredCartItem[];
+        setLocalCartCount(
+          cart.reduce((total, item) => total + Number(item.quantity ?? 0), 0)
+        );
+      } catch {
+        setLocalCartCount(cartCount);
+      }
+    }
+
+    readCartCount();
+    window.addEventListener("storage", readCartCount);
+    window.addEventListener("valentro-cart-updated", readCartCount);
+
+    return () => {
+      window.removeEventListener("storage", readCartCount);
+      window.removeEventListener("valentro-cart-updated", readCartCount);
+    };
+  }, [cartCount]);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({top: 0, behavior: "smooth"});
+  }, []);
+
   const activeKey = useMemo<NavKey>(() => {
     const pathWithoutLocale = pathname.replace(new RegExp(`^/${locale}`), "");
     const match = navLinks.find((link) =>
@@ -107,6 +145,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
     return match?.key ?? "fragrances";
   }, [locale, pathname]);
 
+  /* ---- Mobile full-screen menu ---- */
   const mobileMenu = menuOpen
     ? createPortal(
         <div
@@ -147,13 +186,13 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
 
   return (
     <>
+      {/* ================================================================ */}
+      {/* FULL NAVBAR — normal document flow, NOT sticky/fixed             */}
+      {/* ================================================================ */}
       <header
+        ref={fullNavRef}
         dir={isRtl ? "rtl" : "ltr"}
-        className={`w-full border-b transition-all duration-300 ease-in-out ${
-          scrolled
-            ? "border-umber bg-surface/80 backdrop-blur-md"
-            : "border-outline/70 bg-bg/80 backdrop-blur-sm md:border-transparent md:bg-transparent md:backdrop-blur-0"
-        }`}
+        className="w-full bg-transparent"
       >
         <nav className="mx-auto grid h-16 max-w-container grid-cols-[1fr_auto] items-center px-gutter sm:h-[72px] md:h-20 md:grid-cols-[1fr_auto_1fr] lg:px-16">
           <Link
@@ -187,12 +226,12 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           <div className="flex items-center justify-end gap-3 sm:gap-4">
             <Link
               href={`/${locale}/cart`}
-              className="focus-gold relative text-gold transition-colors duration-300 hover:text-parchment"
+              className="focus-gold relative flex h-10 w-10 items-center justify-center border border-gold/35 bg-surface/70 text-gold transition-colors duration-300 hover:border-gold hover:bg-gold/10 hover:text-parchment"
               aria-label={t("cart")}
             >
               <BagIcon />
-              <span className="absolute -end-2 -top-2 flex h-4 min-w-4 items-center justify-center bg-gold px-1 text-[10px] font-semibold leading-none text-parchment">
-                {cartCount}
+              <span className="absolute -end-2 -top-2 flex h-5 min-w-5 items-center justify-center border border-surface bg-parchment px-1 text-[10px] font-semibold leading-none text-surface-hi">
+                {localCartCount}
               </span>
             </Link>
             <button
@@ -207,6 +246,63 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           </div>
         </nav>
       </header>
+
+      {/* ================================================================ */}
+      {/* MINI NAVBAR — fixed, slides in when full navbar leaves viewport  */}
+      {/* ================================================================ */}
+      <div
+        dir={isRtl ? "rtl" : "ltr"}
+        className={`fixed inset-x-0 top-0 z-50 flex justify-center px-4 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          showMini
+            ? "pointer-events-auto translate-y-3 opacity-100"
+            : "pointer-events-none -translate-y-full opacity-0"
+        }`}
+      >
+        <div className="flex h-11 items-center justify-between gap-4 rounded-full border border-gold/20 bg-[#f5efe6]/90 px-4 shadow-[0_6px_24px_rgba(74,47,22,0.15)] backdrop-blur-md sm:h-12 sm:gap-5 sm:px-5">
+          {/* Hamburger — mobile only */}
+          <button
+            type="button"
+            aria-label={t("menu")}
+            onClick={() => setMenuOpen(true)}
+            className="focus-gold text-gold transition-colors duration-300 hover:text-parchment md:hidden"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeLinecap="round"
+              className="h-5 w-5"
+            >
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+
+
+          {/* VALENTRO title — scrolls to top */}
+          <button
+            type="button"
+            onClick={scrollToTop}
+            className="focus-gold font-serif text-base tracking-[0.14em] text-gold transition-colors duration-300 hover:text-parchment sm:text-lg"
+          >
+            VALENTRO
+          </button>
+
+          {/* Cart icon */}
+          <Link
+            href={`/${locale}/cart`}
+            className="focus-gold relative flex h-9 w-9 items-center justify-center border border-gold/35 bg-surface/70 text-gold transition-colors duration-300 hover:border-gold hover:bg-gold/10 hover:text-parchment"
+            aria-label={t("cart")}
+          >
+            <BagIcon className="h-5 w-5" />
+            <span className="absolute -end-2 -top-2 flex h-5 min-w-5 items-center justify-center border border-surface bg-parchment px-1 text-[10px] font-semibold leading-none text-surface-hi">
+              {localCartCount}
+            </span>
+          </Link>
+        </div>
+      </div>
+
       {mobileMenu}
     </>
   );

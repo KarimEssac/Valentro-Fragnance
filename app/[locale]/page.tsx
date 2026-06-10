@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-bg">
-      <div className="fixed inset-x-0 top-0 z-50">
+      <div className="absolute inset-x-0 top-0 z-50">
         <SalesBar />
         <Navbar cartCount={0} />
       </div>

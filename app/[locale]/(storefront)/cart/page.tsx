@@ -1,19 +1,15 @@
-import {getTranslations} from "next-intl/server";
+import CartClient from "@/components/storefront/cart/CartClient";
+import Navbar from "@/components/storefront/layout/Navbar";
+import SalesBar from "@/components/storefront/layout/SalesBar";
 
-type CartPageProps = {
-  params: Promise<{
-    locale: string;
-  }>;
-};
-
-export default async function CartPage({params}: CartPageProps) {
-  const {locale} = await params;
-  const t = await getTranslations({locale, namespace: "pages"});
-
+export default function CartPage() {
   return (
-    <main className="min-h-screen bg-bg px-gutter py-16 text-on-surface sm:py-24 lg:px-16">
-      <h1 className="font-serif text-3xl leading-tight text-parchment sm:text-4xl">{t("cart")}</h1>
-      {/* TODO: Cart line items, coupon application, and COD checkout entry. */}
-    </main>
+    <>
+      <div className="absolute inset-x-0 top-0 z-50">
+        <SalesBar />
+        <Navbar cartCount={0} />
+      </div>
+      <CartClient />
+    </>
   );
 }
