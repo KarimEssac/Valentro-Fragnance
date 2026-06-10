@@ -4,23 +4,23 @@
 
 @layer base {
   :root {
-    --color-bg: #000000;
-    --color-surface: #131410;
-    --color-surface-mid: #20201c;
-    --color-surface-hi: #2a2a26;
-    --color-gold: #debc7e;
-    --color-gold-muted: #c6a45a;
-    --color-umber: #402a08;
-    --color-parchment: #f9f6f0;
-    --color-on-surface: #e5e2dc;
-    --color-outline: #4c4546;
+    --color-bg: #efe2cc;
+    --color-surface: #f7eedf;
+    --color-surface-mid: #e3d2ba;
+    --color-surface-hi: #fff8ec;
+    --color-gold: #6f4618;
+    --color-gold-muted: #5f3d16;
+    --color-umber: #4a2f16;
+    --color-parchment: #2f241b;
+    --color-on-surface: #4a3526;
+    --color-outline: #d2b990;
 
     --font-serif: "Libre Caslon Text", Georgia, serif;
     --font-sans: "Hanken Grotesk", system-ui, sans-serif;
 
     --radius: 0px;
     --container-max: 1440px;
-    --gutter: 24px;
+    --gutter: clamp(16px, 5vw, 24px);
   }
 
   * {
@@ -57,7 +57,7 @@
   }
 
   ::selection {
-    background: rgba(222, 188, 126, 0.32);
+    background: rgba(111, 70, 24, 0.24);
     color: var(--color-parchment);
   }
 }
@@ -80,6 +80,15 @@
   .focus-gold:focus-visible {
     outline-color: var(--color-gold);
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes bottle-float {
@@ -101,6 +110,15 @@
   50% {
     opacity: 1;
     transform: scaleY(1);
+  }
+}
+
+@keyframes marquee-rtl {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-33.333%, 0, 0);
   }
 }
 
@@ -155,6 +173,17 @@
   transform-origin: center bottom;
 }
 
+.marquee-track {
+  animation: marquee-rtl 38s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation-duration: 80s;
+  }
+}
+
 .smoke-stage {
   mix-blend-mode: screen;
 }
@@ -189,4 +218,19 @@
 
 .smoke-path-fast {
   animation-duration: 24s;
+}
+
+@keyframes hero-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-sales-line {
+  animation: hero-fade-in 0.8s ease-out 0.3s both;
 }

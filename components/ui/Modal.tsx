@@ -15,15 +15,15 @@ export default function Modal({isOpen, title, children, onClose}: ModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg/80 px-gutter backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-bg/80 px-gutter py-6 backdrop-blur-md">
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="w-full max-w-lg border border-gold bg-bg p-8 text-on-surface"
+        className="w-full max-w-lg border border-gold bg-bg p-5 text-on-surface sm:p-8"
       >
         <div className="flex items-center justify-between gap-6">
-          <h2 id="modal-title" className="font-serif text-2xl text-parchment">
+          <h2 id="modal-title" className="font-serif text-2xl leading-tight text-parchment">
             {title}
           </h2>
           <button

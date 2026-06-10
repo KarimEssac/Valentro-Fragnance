@@ -67,7 +67,7 @@ export default async function AnnouncementBar({locale}: AnnouncementBarProps) {
         id: announcement.id,
         text: locale === "ar" ? announcement.textAr : announcement.textEn,
         linkUrl: announcement.linkUrl,
-        bgColor: announcement.bgColor || "var(--color-umber)",
+        bgColor: announcement.bgColor || "var(--color-surface)",
         textColor: announcement.textColor || "var(--color-gold)"
       }}
     />

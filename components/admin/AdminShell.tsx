@@ -8,8 +8,8 @@ export interface AdminShellProps {
 export default function AdminShell({title, children}: AdminShellProps) {
   return (
     <section className="space-y-6">
-      <h1 className="font-serif text-4xl text-parchment">{title}</h1>
-      <div className="border border-umber bg-surface p-6 text-on-surface">
+      <h1 className="font-serif text-3xl leading-tight text-parchment sm:text-4xl">{title}</h1>
+      <div className="border border-umber bg-surface p-5 text-on-surface sm:p-6">
         {/* TODO: Replace admin shell placeholder with production admin views. */}
         {children}
       </div>

@@ -1,8 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import {useLocale, useTranslations} from "next-intl";
 import {useCallback, useEffect, useMemo, useState} from "react";
+
+/* ------------------------------------------------------------------ */
+/*  Types & static data                                                */
+/* ------------------------------------------------------------------ */
 
 type SlideKey = "noir" | "oud";
 
@@ -11,134 +14,25 @@ type Slide = {
   collection: string;
   name: string;
   tagline: string;
-  alt: string;
-  imageUrl: string;
+  bgImage: string;
 };
 
 const slideKeys: SlideKey[] = ["noir", "oud"];
 
-const slideImages: Record<SlideKey, string> = {
-  noir: "https://placehold.co/300x500/131410/DEBC7E?text=Valentro",
-  oud: "https://placehold.co/300x500/20201c/DEBC7E?text=Valentro"
+/**
+ * Each slide maps to a full-bleed background image.
+ * The perfume is already in the photo (left side), so we don't render
+ * a separate product <Image>.  Replace these paths with per-fragrance
+ * hero shots when available.
+ */
+const slideBgImages: Record<SlideKey, string> = {
+  noir: "/hero-bg-light.png",
+  oud: "/hero-bg-light.png" // TODO: replace with oud-specific hero image
 };
 
-function ChevronIcon({direction}: {direction: "left" | "right"}) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.25"
-      className="h-10 w-10"
-    >
-      <path d={direction === "left" ? "M15 5 8 12l7 7" : "M9 5l7 7-7 7"} />
-    </svg>
-  );
-}
-
-function SmokeBackdrop() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <svg
-        className="smoke-stage h-full w-full opacity-80"
-        viewBox="0 0 1440 900"
-        preserveAspectRatio="xMidYMid slice"
-        aria-hidden="true"
-      >
-        <defs>
-          <filter
-            id="valentro-smoke-filter"
-            x="-20%"
-            y="-20%"
-            width="140%"
-            height="140%"
-          >
-            <feTurbulence
-              type="fractalNoise"
-              baseFrequency="0.008 0.02"
-              numOctaves="3"
-              seed="17"
-              result="noise"
-            />
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="noise"
-              scale="34"
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-            <feGaussianBlur stdDeviation="0.45" />
-          </filter>
-          <linearGradient id="smoke-gold" x1="0%" y1="20%" x2="100%" y2="80%">
-            <stop offset="0%" stopColor="#DEBC7E" stopOpacity="0" />
-            <stop offset="34%" stopColor="#DEBC7E" stopOpacity="0.28" />
-            <stop offset="62%" stopColor="#e5e2dc" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="#DEBC7E" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id="smoke-ash" x1="10%" y1="90%" x2="90%" y2="10%">
-            <stop offset="0%" stopColor="#e5e2dc" stopOpacity="0" />
-            <stop offset="45%" stopColor="#e5e2dc" stopOpacity="0.12" />
-            <stop offset="100%" stopColor="#DEBC7E" stopOpacity="0.2" />
-          </linearGradient>
-        </defs>
-        <g filter="url(#valentro-smoke-filter)">
-          <g className="smoke-layer smoke-layer-a">
-            <path
-              className="smoke-path smoke-path-slow"
-              d="M254 620C428 594 462 462 600 442c145-21 184 112 337 78 132-30 192-160 334-147"
-              stroke="url(#smoke-gold)"
-              strokeWidth="18"
-              fill="none"
-            />
-            <path
-              className="smoke-path"
-              d="M468 784c-42-170 90-220 148-318 82-139 14-245 132-313 116-67 252-24 336 60"
-              stroke="url(#smoke-ash)"
-              strokeWidth="14"
-              fill="none"
-            />
-          </g>
-          <g className="smoke-layer smoke-layer-b">
-            <path
-              className="smoke-path smoke-path-fast"
-              d="M380 350c134 35 206-42 308-72 155-46 318 10 402 134 54 80 53 163 146 198 70 27 135 2 190-35"
-              stroke="url(#smoke-gold)"
-              strokeWidth="12"
-              fill="none"
-            />
-            <path
-              className="smoke-path smoke-path-slow"
-              d="M550 720c92-52 93-164 175-218 94-62 186 7 282-48 82-47 106-146 159-268"
-              stroke="url(#smoke-ash)"
-              strokeWidth="20"
-              fill="none"
-            />
-          </g>
-          <g className="smoke-layer smoke-layer-c">
-            <path
-              className="smoke-path"
-              d="M142 532c172-52 282-30 365 44 113 101 193 87 297 28 128-72 201-204 351-178 72 13 119 57 157 104"
-              stroke="url(#smoke-gold)"
-              strokeWidth="10"
-              fill="none"
-            />
-            <path
-              className="smoke-path smoke-path-fast"
-              d="M676 120c-80 104 14 185 44 292 37 132-28 232-101 300"
-              stroke="url(#smoke-ash)"
-              strokeWidth="13"
-              fill="none"
-            />
-          </g>
-        </g>
-      </svg>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_55%_48%,rgba(222,188,126,0.08),rgba(0,0,0,0)_42%),linear-gradient(180deg,rgba(0,0,0,0.15),#000_94%)]" />
-    </div>
-  );
-}
+/* ------------------------------------------------------------------ */
+/*  Main component                                                     */
+/* ------------------------------------------------------------------ */
 
 export default function HeroSection() {
   const t = useTranslations("hero");
@@ -147,6 +41,7 @@ export default function HeroSection() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
+  /* Build slides --------------------------------------------------- */
   const slides = useMemo<Slide[]>(
     () =>
       slideKeys.map((key) => ({
@@ -154,137 +49,105 @@ export default function HeroSection() {
         collection: t(`slides.${key}.collection`),
         name: t(`slides.${key}.name`),
         tagline: t(`slides.${key}.tagline`),
-        alt: t(`slides.${key}.alt`),
-        imageUrl: slideImages[key]
+        bgImage: slideBgImages[key]
       })),
     [t]
   );
 
+  /* Carousel navigation -------------------------------------------- */
   const goToNext = useCallback(() => {
     setActiveIndex((current) => (current + 1) % slides.length);
   }, [slides.length]);
 
-  const goToPrevious = useCallback(() => {
-    setActiveIndex((current) => (current - 1 + slides.length) % slides.length);
-  }, [slides.length]);
-
+  /* Auto-advance --------------------------------------------------- */
   useEffect(() => {
-    if (isPaused) {
-      return;
-    }
-
-    const intervalId = window.setInterval(goToNext, 6000);
-    return () => window.clearInterval(intervalId);
+    if (isPaused) return;
+    const id = window.setInterval(goToNext, 6000);
+    return () => window.clearInterval(id);
   }, [goToNext, isPaused]);
 
+  /* Render --------------------------------------------------------- */
   return (
     <section
-      className="relative h-screen min-h-[680px] overflow-hidden bg-bg"
+      className="relative min-h-[100svh] w-full overflow-hidden bg-bg md:h-screen md:min-h-[680px]"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <SmokeBackdrop />
+      {/* ---- Background image slides ---- */}
+      {slides.map((slide, index) => {
+        const isActive = index === activeIndex;
+        return (
+          <div
+            key={slide.key}
+            aria-hidden={!isActive}
+            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+              isActive ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {/* Full-bleed background photo */}
+            <div
+              className="absolute inset-0 bg-cover bg-[position:31%_center] bg-no-repeat sm:bg-[position:33%_center] md:bg-bottom"
+              style={{backgroundImage: `url(${slide.bgImage})`}}
+            />
+            {/* Light overlays preserve the beige hero while keeping copy readable. */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-bg/10 to-bg/75 max-md:hidden" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/70 to-transparent md:from-bg/70 md:via-transparent md:to-bg/30" />
+          </div>
+        );
+      })}
+
+
+
+      {/* ---- Foreground content ---- */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center overflow-hidden px-gutter text-center font-serif text-[clamp(80px,12vw,160px)] leading-none text-[rgba(229,226,220,0.07)]"
+        dir="ltr"
+        className="absolute inset-0 z-10 mx-auto flex max-w-[1600px] items-center justify-center px-gutter py-24 md:items-end md:justify-end md:pb-[18vh] md:pl-gutter md:pr-2 md:pt-0 lg:pr-3 xl:pr-4"
       >
-        VALENTRO
-      </div>
-
-      <button
-        type="button"
-        aria-label={t("previous")}
-        onClick={goToPrevious}
-        className="focus-gold absolute start-4 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-gold transition-colors duration-300 hover:text-parchment md:start-12"
-      >
-        <ChevronIcon direction={isRtl ? "right" : "left"} />
-      </button>
-      <button
-        type="button"
-        aria-label={t("next")}
-        onClick={goToNext}
-        className="focus-gold absolute end-4 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-gold transition-colors duration-300 hover:text-parchment md:end-12"
-      >
-        <ChevronIcon direction={isRtl ? "left" : "right"} />
-      </button>
-
-      <div className="relative z-10 mx-auto h-full max-w-container px-gutter lg:px-16">
-        {slides.map((slide, index) => {
-          const isActive = index === activeIndex;
-          const slideOffset = index < activeIndex ? "-translate-x-8" : "translate-x-8";
-
-          return (
-            <article
-              key={slide.key}
-              aria-hidden={!isActive}
-              className={`absolute inset-0 grid h-full grid-cols-1 content-center gap-10 px-gutter pb-24 pt-36 transition-all duration-300 ease-in-out md:grid-cols-12 md:gap-6 md:px-16 md:pb-20 md:pt-28 ${
-                isActive
-                  ? "translate-x-0 opacity-100"
-                  : `pointer-events-none ${slideOffset} opacity-0`
-              }`}
-            >
+        {/* Text block centered on mobile and positioned right on desktop. */}
+        <div
+          dir={isRtl ? "rtl" : "ltr"}
+          className="flex w-full max-w-[23rem] flex-col items-center bg-bg/85 px-5 py-5 text-center backdrop-blur-[2px] sm:max-w-[28rem] sm:px-6 sm:py-6 md:w-[45%] md:max-w-none md:items-start md:bg-transparent md:p-0 md:text-left md:backdrop-blur-0 lg:w-[36%] xl:w-[30%]"
+        >
+          {slides.map((slide, index) => {
+            const isActive = index === activeIndex;
+            return (
               <div
-                className={`relative z-10 max-w-xl self-center ${
-                  isRtl
-                    ? "text-right md:col-span-5 md:col-start-8"
-                    : "text-left md:col-span-5 md:col-start-2"
+                key={slide.key}
+                aria-hidden={!isActive}
+                className={`flex w-full flex-col items-center md:items-start transition-all duration-700 ease-in-out ${
+                  isActive
+                    ? "relative translate-y-0 opacity-100"
+                    : "pointer-events-none absolute translate-y-6 opacity-0"
                 }`}
               >
-                <p className="label-caps mb-5 text-gold">{slide.collection}</p>
-                <h1 className="font-serif text-5xl leading-tight text-parchment md:text-7xl">
+                <p className="label-caps mb-3 w-full text-center text-gold md:mb-4 md:text-left">{slide.collection}</p>
+                <h1 className="max-w-full text-center font-serif text-[clamp(2.4rem,14vw,4rem)] leading-[0.95] text-parchment md:text-left md:text-5xl md:leading-tight md:whitespace-nowrap lg:text-6xl xl:text-7xl">
                   {slide.name}
                 </h1>
-                <p className="mt-5 max-w-md font-sans text-lg font-light leading-7 text-on-surface">
+                <p className="mx-auto mt-4 max-w-[19rem] text-center font-sans text-sm font-normal leading-6 text-on-surface md:mx-0 md:max-w-md md:text-left md:text-lg md:font-light md:leading-7">
                   {slide.tagline}
                 </p>
-                <div
-                  className={`mt-9 flex flex-wrap gap-4 ${
-                    isRtl ? "justify-end" : "justify-start"
-                  }`}
-                >
+
+                {/* Shop Now CTA */}
+                <div className="mt-6 flex w-full justify-center md:mt-8 md:justify-start">
                   <a
                     href={`/${locale}/fragrances/${slide.key === "noir" ? "noir-vanille" : "oud-imperial"}`}
-                    className="focus-gold bg-gold px-8 py-3 text-sm font-semibold uppercase tracking-widest text-bg transition duration-300 hover:bg-parchment"
+                    className="focus-gold inline-flex min-h-12 w-full items-center justify-center border border-gold px-6 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-gold transition-all duration-300 hover:bg-gold hover:text-parchment hover:shadow-gold sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
                   >
-                    {t("discover")}
+                    {t("shopNow")}
                   </a>
-                  <button
-                    type="button"
-                    className="focus-gold border border-gold px-8 py-3 text-sm font-semibold uppercase tracking-widest text-gold transition duration-300 hover:bg-gold hover:text-bg"
-                  >
-                    {t("addToCart")}
-                  </button>
                 </div>
               </div>
+            );
+          })}
 
-              <div
-                className={`relative z-10 flex items-center justify-center self-center ${
-                  isRtl
-                    ? "md:col-span-4 md:col-start-2"
-                    : "md:col-span-4 md:col-start-8"
-                }`}
-              >
-                <div className="animate-bottle-float relative">
-                  <div className="absolute inset-x-8 bottom-4 h-10 bg-gold/20 blur-3xl" />
-                  <Image
-                    src={slide.imageUrl}
-                    alt={slide.alt}
-                    width={300}
-                    height={500}
-                    priority={index === 0}
-                    unoptimized
-                    className="relative h-[min(50vh,500px)] w-auto object-contain opacity-90 drop-shadow-[0_32px_60px_rgba(222,188,126,0.18)] md:h-[min(58vh,500px)]"
-                  />
-                </div>
-              </div>
-            </article>
-          );
-        })}
+        </div>
       </div>
 
+      {/* Scroll indicator */}
       <div
         aria-hidden="true"
-        className="absolute bottom-8 left-1/2 z-20 h-[60px] w-px -translate-x-1/2 bg-gold/80 animate-scroll-pulse"
+        className="absolute bottom-8 left-1/2 z-20 hidden h-[60px] w-px -translate-x-1/2 bg-gold/80 animate-scroll-pulse md:block"
       />
     </section>
   );

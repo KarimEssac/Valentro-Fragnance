@@ -33,8 +33,8 @@ async function main() {
       textEn: "LIMITED TIME OFFER: DISCOVER OUR PRIVATE COLLECTION",
       textAr: "عرض لفترة محدودة: اكتشف مجموعتنا الخاصة",
       isActive: true,
-      bgColor: "#402A08",
-      textColor: "#DEBC7E"
+      bgColor: "#F7EEDF",
+      textColor: "#A97832"
     }
   });
 

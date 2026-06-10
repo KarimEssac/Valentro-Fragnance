@@ -25,13 +25,13 @@ export default async function AdminLayout({
   ];
 
   return (
-    <main className="min-h-screen bg-bg px-gutter py-10 text-on-surface lg:px-16">
-      <div className="mx-auto grid max-w-container gap-10 lg:grid-cols-[260px_1fr]">
-        <aside className="border border-umber bg-surface p-6">
+    <main className="min-h-screen bg-bg px-gutter py-6 text-on-surface sm:py-10 lg:px-16">
+      <div className="mx-auto grid max-w-container gap-6 lg:grid-cols-[260px_1fr] lg:gap-10">
+        <aside className="border border-umber bg-surface p-5 sm:p-6">
           <Link href={`/${locale}`} className="font-serif text-2xl text-gold">
             VALENTRO
           </Link>
-          <nav className="mt-10 flex flex-col gap-4">
+          <nav className="mt-6 flex flex-wrap gap-3 sm:mt-10 lg:flex-col lg:gap-4">
             {links.map((link) => (
               <Link
                 key={link.href}

@@ -12,9 +12,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-gold text-bg border border-gold hover:bg-parchment hover:border-parchment",
+    "bg-gold text-parchment border border-gold hover:bg-parchment hover:border-parchment",
   ghost:
-    "bg-transparent text-gold border border-gold hover:bg-gold hover:text-bg",
+    "bg-transparent text-gold border border-gold hover:bg-gold hover:text-parchment",
   danger:
     "bg-[#93000a] text-[#ffdad6] border border-[#ffb4ab] hover:bg-[#690005]"
 };
@@ -35,7 +35,7 @@ export default function Button({
   return (
     <button
       type={type}
-      className={`focus-gold font-sans font-semibold uppercase tracking-widest transition duration-300 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`focus-gold inline-flex items-center justify-center text-center font-sans font-semibold uppercase tracking-[0.12em] transition duration-300 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     />
   );

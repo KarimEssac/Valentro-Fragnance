@@ -1,25 +1,21 @@
 import HeroSection from "@/components/storefront/home/HeroSection";
-import AnnouncementBar from "@/components/storefront/layout/AnnouncementBar";
+import NewsTicker from "@/components/storefront/home/NewsTicker";
+import SignatureCollectionSection from "@/components/storefront/home/SignatureCollectionSection";
 import Navbar from "@/components/storefront/layout/Navbar";
+import SalesBar from "@/components/storefront/layout/SalesBar";
 
 export const dynamic = "force-dynamic";
 
-type HomePageProps = {
-  params: Promise<{
-    locale: string;
-  }>;
-};
-
-export default async function HomePage({params}: HomePageProps) {
-  const {locale} = await params;
-
+export default function HomePage() {
   return (
     <main className="min-h-screen bg-bg">
       <div className="fixed inset-x-0 top-0 z-50">
-        <AnnouncementBar locale={locale} />
+        <SalesBar />
         <Navbar cartCount={0} />
       </div>
       <HeroSection />
+      <NewsTicker />
+      <SignatureCollectionSection />
     </main>
   );
 }

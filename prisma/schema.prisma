@@ -106,8 +106,8 @@ model Announcement {
   isActive  Boolean   @default(false)
   startAt   DateTime?
   endAt     DateTime?
-  bgColor   String    @default("#402A08")
-  textColor String    @default("#DEBC7E")
+  bgColor   String    @default("#F7EEDF")
+  textColor String    @default("#A97832")
   createdAt DateTime  @default(now())
 
   @@index([isActive])
