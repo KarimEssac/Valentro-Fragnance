@@ -2,6 +2,8 @@
 
 import {useLocale} from "next-intl";
 import Image from "next/image";
+import Link from "next/link";
+import {useRouter} from "next/navigation";
 import type {FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
@@ -115,6 +117,7 @@ function formatScentProfile(value: string) {
 
 export default function ProductDetailClient({slug}: {slug: string}) {
   const locale = useLocale();
+  const router = useRouter();
   const isArabic = locale === "ar";
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
@@ -231,8 +234,8 @@ export default function ProductDetailClient({slug}: {slug: string}) {
     );
   }
 
-  function addToCart() {
-    if (!product || !selectedVariant) return;
+  function performAddToCart() {
+    if (!product || !selectedVariant) return false;
 
     const item: CartItem = {
       fragranceId: product.id,
@@ -263,7 +266,19 @@ export default function ProductDetailClient({slug}: {slug: string}) {
 
     window.localStorage.setItem("valentro-cart", JSON.stringify(existing));
     window.dispatchEvent(new Event("valentro-cart-updated"));
-    setCartStatus(isArabic ? "تمت الإضافة إلى السلة" : "Added to cart");
+    return true;
+  }
+
+  function addToCart() {
+    if (performAddToCart()) {
+      setCartStatus(isArabic ? "تمت الإضافة إلى السلة" : "Added to cart");
+    }
+  }
+
+  function buyNow() {
+    if (performAddToCart()) {
+      router.push(`/${locale}/checkout`);
+    }
   }
 
   async function submitReview(event: FormEvent<HTMLFormElement>) {
@@ -300,7 +315,10 @@ export default function ProductDetailClient({slug}: {slug: string}) {
 
   if (status === "loading") {
     return (
-      <main className="min-h-screen bg-bg px-gutter pb-24 pt-36 text-parchment lg:px-16">
+      <main
+        data-route-loading="true"
+        className="min-h-screen bg-bg px-gutter pb-24 pt-36 text-parchment lg:px-16"
+      >
         <div className="mx-auto grid max-w-container gap-10 md:grid-cols-12">
           <div className="h-[620px] animate-pulse bg-surface-mid/60 md:col-span-7" />
           <div className="space-y-5 md:col-span-5">
@@ -387,6 +405,27 @@ export default function ProductDetailClient({slug}: {slug: string}) {
           </div>
 
           <div className="flex h-full flex-col justify-center md:col-span-5 md:pl-8 lg:pl-12">
+            <Link
+              href={`/${locale}/fragrances`}
+              className="label-caps mb-5 inline-flex items-center gap-1.5 text-[10px] text-on-surface/70 transition-colors hover:text-gold"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-3.5 w-3.5"
+              >
+                {isArabic ? (
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                ) : (
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                )}
+              </svg>
+              {isArabic ? "العودة إلى التسوق" : "Back to Shopping"}
+            </Link>
             <p className="label-caps mb-4 text-gold">
               {formatScentProfile(product.scentProfile)}
             </p>
@@ -424,35 +463,45 @@ export default function ProductDetailClient({slug}: {slug: string}) {
               </div>
             </div>
 
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row">
-              <div className="flex min-h-12 items-center border border-outline">
+            <div className="mb-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <div className="flex min-h-12 items-center border border-outline">
+                  <button
+                    type="button"
+                    aria-label="Decrease quantity"
+                    onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+                    className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+                  >
+                    -
+                  </button>
+                  <span className="w-10 text-center text-sm text-parchment">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Increase quantity"
+                    onClick={() => setQuantity((value) => value + 1)}
+                    className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+                  >
+                    +
+                  </button>
+                </div>
                 <button
                   type="button"
-                  aria-label="Decrease quantity"
-                  onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                  className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+                  onClick={addToCart}
+                  disabled={selectedVariant.stock < 1}
+                  className="label-caps focus-gold inline-flex min-h-12 flex-1 items-center justify-center gap-3 border border-outline px-8 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  -
-                </button>
-                <span className="w-10 text-center text-sm text-parchment">
-                  {quantity}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Increase quantity"
-                  onClick={() => setQuantity((value) => value + 1)}
-                  className="focus-gold h-12 px-4 text-parchment hover:text-gold"
-                >
-                  +
+                  {isArabic ? "إضافة إلى السلة" : "Add to Cart"}
                 </button>
               </div>
               <button
                 type="button"
-                onClick={addToCart}
+                onClick={buyNow}
                 disabled={selectedVariant.stock < 1}
-                className="label-caps focus-gold inline-flex min-h-12 flex-1 items-center justify-center gap-3 border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+                className="label-caps focus-gold inline-flex min-h-12 w-full items-center justify-center gap-3 border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Add to Cart
+                {isArabic ? "شراء الآن" : "Buy Now"}
                 <ArrowIcon direction={isArabic ? "left" : "right"} />
               </button>
             </div>

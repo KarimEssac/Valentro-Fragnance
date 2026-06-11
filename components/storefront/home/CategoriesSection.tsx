@@ -111,7 +111,7 @@ export default function CategoriesSection() {
           {categories.map((category) => (
             <a
               key={category.title}
-              href={`/${locale}/collections/signature-line?gender=${category.gender}`}
+              href={`/${locale}/fragrances?gender=${category.gender}`}
               data-category-card
               className={`group block w-[82vw] shrink-0 snap-center sm:w-[420px] md:w-auto ${
                 category.offset ? "md:mt-16" : ""

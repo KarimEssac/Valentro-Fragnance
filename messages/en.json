@@ -42,7 +42,7 @@
     "orders": "Orders"
   },
   "pages": {
-    "login": "Admin Login",
+    "login": "Login",
     "cart": "Cart",
     "account": "Account",
     "productDetail": "Product Detail",

@@ -1,4 +1,5 @@
-import {compare} from "bcryptjs";
+import {randomBytes} from "crypto";
+import {compare, hash} from "bcryptjs";
 import type {Role} from "@prisma/client";
 import type {NextAuthOptions, Session, User} from "next-auth";
 import type {JWT} from "next-auth/jwt";
@@ -17,15 +18,22 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: {
         email: {label: "Email", type: "email"},
-        password: {label: "Password", type: "password"}
+        password: {label: "Password", type: "password"},
+        name: {label: "Name", type: "text"}
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) {
+        const email = credentials?.email?.toLowerCase().trim();
+        const password = credentials?.password ?? "";
+        const name = credentials?.name?.trim();
+
+        if (!email) {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: {email: credentials.email.toLowerCase()},
+        const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase().trim();
+
+        const existingUser = await prisma.user.findUnique({
+          where: {email},
           select: {
             id: true,
             email: true,
@@ -35,25 +43,44 @@ export const authOptions: NextAuthOptions = {
           }
         });
 
-        if (!user) {
-          return null;
+        const isSystemAdmin = adminEmail && email === adminEmail;
+        const isDbAdmin = existingUser?.role === "ADMIN";
+
+        if (isSystemAdmin || isDbAdmin) {
+          if (!existingUser) {
+            return null; // Admin user must be seeded in database
+          }
+          const passwordMatches = await compare(password, existingUser.passwordHash);
+          if (!passwordMatches) {
+            return null;
+          }
+          return {
+            id: existingUser.id,
+            email: existingUser.email,
+            name: existingUser.name,
+            role: existingUser.role
+          };
         }
 
-        const passwordMatches = await compare(
-          credentials.password,
-          user.passwordHash
-        );
+        const user = await prisma.user.upsert({
+          where: {email},
+          update: {
+            ...(name ? {name} : {})
+          },
+          create: {
+            email,
+            passwordHash: await hash(randomBytes(32).toString("hex"), 12),
+            name: name || null
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true
+          }
+        });
 
-        if (!passwordMatches) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role
-        };
+        return user;
       }
     })
   ],
@@ -61,7 +88,12 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login"
   },
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 180,
+    updateAge: 60 * 60 * 24
+  },
+  jwt: {
+    maxAge: 60 * 60 * 24 * 180
   },
   callbacks: {
     async jwt({token, user}: {token: JWT; user?: AuthorizedUser}) {

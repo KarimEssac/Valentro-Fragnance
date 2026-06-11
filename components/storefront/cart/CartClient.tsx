@@ -3,7 +3,7 @@
 import {useLocale} from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
-import {useEffect, useMemo, useState} from "react";
+import {useMemo, useState} from "react";
 
 type CartItem = {
   fragranceId: string;
@@ -49,10 +49,14 @@ export default function CartClient() {
   }
 
   function updateQuantity(variantId: string, quantity: number) {
+    if (quantity <= 0) {
+      removeItem(variantId);
+      return;
+    }
     persist(
       items.map((item) =>
         item.variantId === variantId
-          ? {...item, quantity: Math.max(1, quantity)}
+          ? {...item, quantity}
           : item
       )
     );
@@ -80,7 +84,7 @@ export default function CartClient() {
             Add a fragrance from the collection to begin your order.
           </p>
           <Link
-            href={`/${locale}`}
+            href={`/${locale}/fragrances`}
             className="label-caps mt-8 inline-flex min-h-11 items-center justify-center border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold"
           >
             Continue Shopping
@@ -222,14 +226,14 @@ export default function CartClient() {
               <span>Total</span>
               <span>{priceFormatter.format(subtotal)}</span>
             </div>
-            <button
-              type="button"
+            <Link
+              href={`/${locale}/checkout`}
               className="label-caps mt-8 flex min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold"
             >
               Checkout
-            </button>
+            </Link>
             <Link
-              href={`/${locale}`}
+              href={`/${locale}/fragrances`}
               className="label-caps mt-4 flex min-h-11 w-full items-center justify-center border border-outline text-parchment transition-colors hover:border-gold hover:text-gold"
             >
               Continue Shopping

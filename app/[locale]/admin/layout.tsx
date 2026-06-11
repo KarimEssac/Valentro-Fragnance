@@ -1,6 +1,11 @@
 import Link from "next/link";
+import {notFound, redirect} from "next/navigation";
 import {getTranslations} from "next-intl/server";
+import {getServerSession} from "next-auth";
+import type {Session} from "next-auth";
 import type {ReactNode} from "react";
+
+import {authOptions} from "@/lib/auth";
 
 type AdminLayoutProps = {
   children: ReactNode;
@@ -14,6 +19,16 @@ export default async function AdminLayout({
   params
 }: AdminLayoutProps) {
   const {locale} = await params;
+  const session = (await getServerSession(authOptions)) as Session | null;
+
+  if (!session?.user?.id) {
+    redirect(`/${locale}/login?callbackUrl=/${locale}/admin`);
+  }
+
+  if (session.user.role !== "ADMIN") {
+    notFound();
+  }
+
   const t = await getTranslations({locale, namespace: "admin"});
   const links = [
     {href: `/${locale}/admin`, label: t("dashboard")},

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {usePathname} from "next/navigation";
+import {signOut} from "next-auth/react";
 import {useLocale, useTranslations} from "next-intl";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
@@ -21,12 +22,22 @@ type StoredCartItem = {
   quantity?: number;
 };
 
+type SessionResponse = {
+  user?: {
+    role?: string;
+  };
+};
+
 const navLinks: NavLink[] = [
-  {key: "collections", href: "/collections"},
+  {key: "collections", href: "/"},
   {key: "fragrances", href: "/fragrances"},
   {key: "atelier", href: "/atelier"},
   {key: "story", href: "/our-story"}
 ];
+
+function localizedHref(locale: string, href: string) {
+  return href === "/" ? `/${locale}` : `/${locale}${href}`;
+}
 
 function BagIcon({className = "h-6 w-6"}: {className?: string}) {
   return (
@@ -106,6 +117,8 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
   const [showMini, setShowMini] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [localCartCount, setLocalCartCount] = useState(cartCount);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const isRtl = locale === "ar";
   const fullNavRef = useRef<HTMLElement>(null);
 
@@ -154,16 +167,57 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
     };
   }, [cartCount]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/auth/session", {
+          headers: {Accept: "application/json"}
+        });
+        const data = (await response.json()) as SessionResponse;
+
+        if (isMounted) {
+          setIsSignedIn(Boolean(data.user));
+          setIsAdmin(data.user?.role === "ADMIN");
+        }
+      } catch {
+        if (isMounted) {
+          setIsSignedIn(false);
+          setIsAdmin(false);
+        }
+      }
+    }
+
+    loadSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const scrollToTop = useCallback(() => {
     window.scrollTo({top: 0, behavior: "smooth"});
   }, []);
 
-  const activeKey = useMemo<NavKey>(() => {
-    const pathWithoutLocale = pathname.replace(new RegExp(`^/${locale}`), "");
-    const match = navLinks.find((link) =>
-      pathWithoutLocale.startsWith(link.href)
+  const handleLogout = useCallback(() => {
+    setMenuOpen(false);
+    signOut({callbackUrl: pathname});
+  }, [pathname]);
+
+  const activeKey = useMemo<NavKey | null>(() => {
+    const pathWithoutLocale =
+      pathname.replace(new RegExp(`^/${locale}`), "") || "/";
+
+    if (pathWithoutLocale === "/") {
+      return "collections";
+    }
+
+    const match = navLinks.find(
+      (link) => link.href !== "/" && pathWithoutLocale.startsWith(link.href)
     );
-    return match?.key ?? "fragrances";
+
+    return match?.key ?? null;
   }, [locale, pathname]);
 
   /* ---- Mobile full-screen menu ---- */
@@ -190,7 +244,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
             {navLinks.map((link) => (
               <Link
                 key={link.key}
-                href={`/${locale}${link.href}`}
+                href={localizedHref(locale, link.href)}
                 onClick={() => setMenuOpen(false)}
                 className={`font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-parchment transition-colors duration-300 hover:text-gold ${
                   link.key === activeKey ? "text-gold" : ""
@@ -199,6 +253,24 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                 {t(link.key)}
               </Link>
             ))}
+            {isAdmin ? (
+              <Link
+                href={`/${locale}/admin`}
+                onClick={() => setMenuOpen(false)}
+                className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-gold transition-colors duration-300 hover:text-parchment"
+              >
+                Admin Dashboard
+              </Link>
+            ) : null}
+            {isSignedIn && !isAdmin ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-parchment transition-colors duration-300 hover:text-gold"
+              >
+                Log Out
+              </button>
+            ) : null}
           </nav>
         </div>,
         document.body
@@ -231,7 +303,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
               return (
                 <Link
                   key={link.key}
-                  href={`/${locale}${link.href}`}
+                  href={localizedHref(locale, link.href)}
                   className={`font-sans text-xs font-semibold uppercase tracking-[0.08em] text-parchment transition-colors duration-300 hover:text-gold lg:text-sm ${
                     isActive
                       ? "underline decoration-gold decoration-2 underline-offset-4"
@@ -242,6 +314,23 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                 </Link>
               );
             })}
+            {isAdmin ? (
+              <Link
+                href={`/${locale}/admin`}
+                className="font-sans text-xs font-semibold uppercase tracking-[0.08em] text-gold transition-colors duration-300 hover:text-parchment lg:text-sm"
+              >
+                Admin Dashboard
+              </Link>
+            ) : null}
+            {isSignedIn && !isAdmin ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="font-sans text-xs font-semibold uppercase tracking-[0.08em] text-parchment transition-colors duration-300 hover:text-gold lg:text-sm"
+              >
+                Log Out
+              </button>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-end gap-3 sm:gap-4">

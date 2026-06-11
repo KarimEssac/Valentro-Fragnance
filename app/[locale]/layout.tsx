@@ -6,6 +6,7 @@ import {getMessages, getTranslations} from "next-intl/server";
 import type {ReactNode} from "react";
 
 import "../globals.css";
+import RouteLoadingProvider from "@/components/storefront/loading/RouteLoadingProvider";
 import {getTextDirection, isLocale, locales} from "@/lib/i18n";
 
 const serif = Libre_Caslon_Text({
@@ -72,7 +73,7 @@ export default async function LocaleLayout({
     >
       <body>
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <RouteLoadingProvider>{children}</RouteLoadingProvider>
         </NextIntlClientProvider>
       </body>
     </html>

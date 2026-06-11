@@ -92,7 +92,12 @@ export async function GET(
           rating: true,
           messageEn: true,
           messageAr: true,
-          createdAt: true
+          createdAt: true,
+          user: {
+            select: {
+              name: true
+            }
+          }
         }
       }
     }
@@ -139,14 +144,20 @@ export async function GET(
       nameAr: ingredient.nameAr,
       note: ingredient.note
     })),
-    reviews: fragrance.reviews.map((review) => ({
-      id: review.id,
-      reviewerName: review.reviewerName,
-      rating: review.rating,
-      messageEn: review.messageEn,
-      messageAr: review.messageAr,
-      createdAt: review.createdAt.toISOString()
-    }))
+    reviews: fragrance.reviews.map((review) => {
+      const dbName = review.user?.name?.trim();
+      const rawReviewerName = dbName || review.reviewerName;
+      const cleanReviewerName = rawReviewerName.includes("@") ? "Valentro Client" : rawReviewerName;
+
+      return {
+        id: review.id,
+        reviewerName: cleanReviewerName,
+        rating: review.rating,
+        messageEn: review.messageEn,
+        messageAr: review.messageAr,
+        createdAt: review.createdAt.toISOString()
+      };
+    })
   });
 }
 
