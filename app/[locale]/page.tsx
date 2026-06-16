@@ -1,6 +1,7 @@
 import CategoriesSection from "@/components/storefront/home/CategoriesSection";
 import HeroSection from "@/components/storefront/home/HeroSection";
 import NewsTicker from "@/components/storefront/home/NewsTicker";
+import ScentFinder from "@/components/storefront/home/ScentFinder";
 import SignatureCollectionSection from "@/components/storefront/home/SignatureCollectionSection";
 import TestimonialsSection from "@/components/storefront/home/TestimonialsSection";
 import Navbar from "@/components/storefront/layout/Navbar";
@@ -20,6 +21,7 @@ export default function HomePage() {
       <SignatureCollectionSection />
       <CategoriesSection />
       <TestimonialsSection />
+      <ScentFinder />
     </main>
   );
 }

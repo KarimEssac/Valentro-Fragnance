@@ -36,7 +36,7 @@
   "admin": {
     "dashboard": "Dashboard Overview",
     "announcements": "Announcements",
-    "fragrances": "Fragrances",
+    "fragrances": "Inventory",
     "collections": "Collections",
     "coupons": "Coupons",
     "orders": "Orders"

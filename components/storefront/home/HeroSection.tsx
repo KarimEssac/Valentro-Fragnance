@@ -69,6 +69,7 @@ export default function HeroSection() {
   /* Render --------------------------------------------------------- */
   return (
     <section
+      id="hero"
       className="relative min-h-[100svh] w-full overflow-hidden bg-bg md:h-screen md:min-h-[680px]"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -103,11 +104,13 @@ export default function HeroSection() {
         dir="ltr"
         className="absolute inset-0 z-10 mx-auto flex max-w-[1600px] items-center justify-center px-gutter py-24 md:items-end md:justify-end md:pb-[18vh] md:pl-gutter md:pr-2 md:pt-0 lg:pr-3 xl:pr-4"
       >
-        {/* Text block centered on mobile and positioned right on desktop. */}
         <div
           dir={isRtl ? "rtl" : "ltr"}
-          className="flex w-full max-w-[23rem] flex-col items-center bg-bg/85 px-5 py-5 text-center backdrop-blur-[2px] sm:max-w-[28rem] sm:px-6 sm:py-6 md:w-[45%] md:max-w-none md:items-start md:bg-transparent md:p-0 md:text-left md:backdrop-blur-0 lg:w-[36%] xl:w-[30%]"
+          className="relative flex w-full max-w-[23rem] flex-col items-center p-5 text-center sm:max-w-[28rem] sm:p-6 md:w-[45%] md:max-w-none md:items-start md:p-0 md:text-left lg:w-[36%] xl:w-[30%]"
         >
+          {/* Cloud-looking backdrop glow behind the words (visible on all screen sizes to keep text readable against background photos) */}
+          <div className="absolute -inset-x-10 -inset-y-8 md:-inset-x-16 md:-inset-y-12 bg-[radial-gradient(circle,rgba(247,238,223,0.95)_0%,rgba(247,238,223,0.55)_60%,transparent_100%)] blur-3xl pointer-events-none z-0" />
+
           {slides.map((slide, index) => {
             const isActive = index === activeIndex;
             return (
@@ -132,7 +135,7 @@ export default function HeroSection() {
                 <div className="mt-6 flex w-full justify-center md:mt-8 md:justify-start">
                   <a
                     href={`/${locale}/fragrances/${slide.key === "noir" ? "noir-vanille" : "oud-imperial"}`}
-                    className="focus-gold inline-flex min-h-12 w-full items-center justify-center border border-gold px-6 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-gold transition-all duration-300 hover:bg-gold hover:text-parchment hover:shadow-gold sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
+                    className="focus-gold inline-flex min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-6 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-surface-hi transition-all duration-300 hover:bg-gold hover:border-gold hover:text-surface-hi hover:shadow-gold sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
                   >
                     {t("shopNow")}
                   </a>

@@ -41,6 +41,30 @@
     color: var(--color-on-surface);
     font-family: var(--font-sans);
     text-rendering: geometricPrecision;
+    scrollbar-color: rgba(111, 70, 24, 0.58) rgba(247, 238, 223, 0.9);
+    scrollbar-width: thin;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, #f7eedf 0%, #efe2cc 100%);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid #f7eedf;
+    background: linear-gradient(180deg, #8a5a24 0%, #6f4618 100%);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #a97832 0%, #7a4f1d 100%);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: #f7eedf;
   }
 
   button,
@@ -253,4 +277,151 @@
 .loading-progress-auto {
   animation: loading-progress 2.8s cubic-bezier(0.65, 0, 0.35, 1) forwards;
   width: 0%;
+}
+
+@keyframes scent-backdrop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+@keyframes scent-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scent-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scent-option-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sidebar-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sidebar-drawer-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes cart-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cart-drawer-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes cart-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-scent-backdrop-in {
+  animation: scent-backdrop-in 280ms ease-out both;
+}
+
+.animate-scent-modal-in {
+  animation: scent-modal-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scent-step-in {
+  animation: scent-step-in 320ms ease-out both;
+}
+
+.animate-scent-option-in {
+  animation: scent-option-in 300ms ease-out both;
+}
+
+.animate-sidebar-drawer-in {
+  animation: sidebar-drawer-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-sidebar-drawer-out {
+  animation: sidebar-drawer-out 220ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+.animate-cart-drawer-in {
+  animation: cart-drawer-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-cart-drawer-out {
+  animation: cart-drawer-out 260ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+.animate-cart-backdrop-in {
+  animation: cart-backdrop-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scent-backdrop-in,
+  .animate-scent-modal-in,
+  .animate-scent-step-in,
+  .animate-scent-option-in,
+  .animate-sidebar-drawer-in,
+  .animate-sidebar-drawer-out,
+  .animate-cart-drawer-in,
+  .animate-cart-drawer-out,
+  .animate-cart-backdrop-in {
+    animation-duration: 1ms;
+  }
 }

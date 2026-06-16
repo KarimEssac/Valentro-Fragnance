@@ -163,6 +163,7 @@ model Fragrance {
   scentProfile  ScentProfile
   avoidIf       String[]
   bestFor       String[]
+  seasons       String[]              @default([])
   sillage       Sillage
   longevity     Int
   ratingAverage Decimal               @default(0) @db.Decimal(3, 2)

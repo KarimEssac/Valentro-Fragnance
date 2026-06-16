@@ -4,8 +4,11 @@ import Link from "next/link";
 import {usePathname} from "next/navigation";
 import {signOut} from "next-auth/react";
 import {useLocale, useTranslations} from "next-intl";
+import type {MouseEvent} from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
+
+import SideCart from "@/components/storefront/cart/SideCart";
 
 type NavKey = "collections" | "fragrances" | "atelier" | "story";
 
@@ -59,8 +62,8 @@ function BagIcon({className = "h-6 w-6"}: {className?: string}) {
 
 function CartIconWithCount({
   count,
-  iconClassName = "h-7 w-7",
-  countClassName = "top-[60%] text-[10px]"
+  iconClassName = "h-6 w-6",
+  countClassName = "top-[60%] text-[9px]"
 }: {
   count: number;
   iconClassName?: string;
@@ -87,7 +90,7 @@ function MenuIcon() {
       stroke="currentColor"
       strokeWidth="1.25"
       strokeLinecap="round"
-      className="h-7 w-7"
+      className="h-5 w-5"
     >
       <path d="M4 7h16M4 12h16M4 17h16" />
     </svg>
@@ -114,34 +117,72 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
   const locale = useLocale();
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const [showMini, setShowMini] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const [localCartCount, setLocalCartCount] = useState(cartCount);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [visible, setVisible] = useState(true);
   const isRtl = locale === "ar";
-  const fullNavRef = useRef<HTMLElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
 
-  /* ---- Show mini navbar once the full navbar scrolls out of view ---- */
-  useEffect(() => {
-    function handleScroll() {
-      if (!fullNavRef.current) return;
-      const rect = fullNavRef.current.getBoundingClientRect();
-      // Show mini bar when the bottom of the full navbar goes above the viewport
-      setShowMini(rect.bottom < 0);
+  const closeMenu = useCallback(() => {
+    if (!menuOpen || menuClosing) return;
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+
+    if (!isDesktop) {
+      setMenuOpen(false);
+      setMenuClosing(false);
+      return;
     }
 
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, {passive: true});
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    setMenuClosing(true);
+    window.setTimeout(() => {
+      setMenuOpen(false);
+      setMenuClosing(false);
+    }, 240);
+  }, [menuClosing, menuOpen]);
 
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
+    if (!menuOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    const mobileQuery = window.matchMedia("(max-width: 767px)");
+
+    function syncScrollLock() {
+      document.body.style.overflow = mobileQuery.matches ? "hidden" : "";
+    }
+
+    syncScrollLock();
+    mobileQuery.addEventListener("change", syncScrollLock);
+
     return () => {
+      mobileQuery.removeEventListener("change", syncScrollLock);
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+
+      if (!isDesktop) return;
+      if (drawerRef.current?.contains(target)) return;
+      if (navRef.current?.contains(target)) return;
+
+      closeMenu();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [closeMenu, menuOpen]);
 
   useEffect(() => {
     function readCartCount() {
@@ -196,14 +237,51 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
     };
   }, []);
 
-  const scrollToTop = useCallback(() => {
-    window.scrollTo({top: 0, behavior: "smooth"});
+  useEffect(() => {
+    let prevScrollY = window.scrollY;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      // Show if scrolling up OR at the top of the page (offset <= 50)
+      if (currentScrollY <= 50) {
+        setVisible(true);
+      } else if (currentScrollY < prevScrollY) {
+        setVisible(true);
+      } else {
+        setVisible(false);
+      }
+
+      prevScrollY = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, {passive: true});
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   const handleLogout = useCallback(() => {
-    setMenuOpen(false);
+    closeMenu();
     signOut({callbackUrl: pathname});
-  }, [pathname]);
+  }, [closeMenu, pathname]);
+
+  const handleBrandClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      const homePath = `/${locale}`;
+
+      if (pathname === homePath || pathname === `${homePath}/`) {
+        event.preventDefault();
+        closeMenu();
+        document
+          .getElementById("hero")
+          ?.scrollIntoView({behavior: "smooth", block: "start"});
+      } else {
+        closeMenu();
+      }
+    },
+    [closeMenu, locale, pathname]
+  );
 
   const activeKey = useMemo<NavKey | null>(() => {
     const pathWithoutLocale =
@@ -220,198 +298,182 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
     return match?.key ?? null;
   }, [locale, pathname]);
 
-  /* ---- Mobile full-screen menu ---- */
-  const mobileMenu = menuOpen
+  const menu = menuOpen || menuClosing
     ? createPortal(
-        <div
-          dir={isRtl ? "rtl" : "ltr"}
-          className="fixed inset-0 z-[1000] flex min-h-[100svh] w-screen flex-col overflow-y-auto bg-surface px-gutter py-6 shadow-[0_24px_80px_rgba(74,47,22,0.18)] md:hidden"
-        >
-          <div className="flex items-center justify-between">
-            <span className="font-serif text-xl tracking-[0.14em] text-gold">
-              VALENTRO
-            </span>
-            <button
-              type="button"
-              aria-label={t("close")}
-              onClick={() => setMenuOpen(false)}
-              className="focus-gold text-gold"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-          <nav className="flex flex-1 flex-col items-center justify-center gap-6 pb-10 text-center">
-            {navLinks.map((link) => (
+        <>
+          <div
+            dir={isRtl ? "rtl" : "ltr"}
+            className="fixed inset-0 z-[1000] flex min-h-[100svh] w-screen flex-col overflow-y-auto bg-surface px-gutter py-6 shadow-[0_24px_80px_rgba(74,47,22,0.18)] md:hidden"
+          >
+            <div className="flex items-center justify-between">
               <Link
-                key={link.key}
-                href={localizedHref(locale, link.href)}
-                onClick={() => setMenuOpen(false)}
-                className={`font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-parchment transition-colors duration-300 hover:text-gold ${
-                  link.key === activeKey ? "text-gold" : ""
-                }`}
+                href={`/${locale}#hero`}
+                onClick={handleBrandClick}
+                className="focus-gold font-serif text-xl tracking-[0.14em] text-gold transition-colors hover:text-parchment"
+                aria-label="Valentro home"
               >
-                {t(link.key)}
+                VALENTRO
               </Link>
-            ))}
-            {isAdmin ? (
-              <Link
-                href={`/${locale}/admin`}
-                onClick={() => setMenuOpen(false)}
-                className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-gold transition-colors duration-300 hover:text-parchment"
-              >
-                Admin Dashboard
-              </Link>
-            ) : null}
-            {isSignedIn && !isAdmin ? (
               <button
                 type="button"
-                onClick={handleLogout}
-                className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-parchment transition-colors duration-300 hover:text-gold"
+                aria-label={t("close")}
+                onClick={closeMenu}
+                className="focus-gold text-gold"
               >
-                Log Out
+                <CloseIcon />
               </button>
-            ) : null}
-          </nav>
-        </div>,
+            </div>
+            <nav className="flex flex-1 flex-col items-center justify-center gap-6 pb-10 text-center">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.key}
+                  href={localizedHref(locale, link.href)}
+                  onClick={closeMenu}
+                  className={`font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-parchment transition-colors duration-300 hover:text-gold ${
+                    link.key === activeKey ? "text-gold" : ""
+                  }`}
+                >
+                  {t(link.key)}
+                </Link>
+              ))}
+              {isAdmin ? (
+                <Link
+                  href={`/${locale}/admin`}
+                  onClick={closeMenu}
+                  className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-gold transition-colors duration-300 hover:text-parchment"
+                >
+                  Admin Dashboard
+                </Link>
+              ) : null}
+              {isSignedIn && !isAdmin ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-parchment transition-colors duration-300 hover:text-gold"
+                >
+                  Log Out
+                </button>
+              ) : null}
+            </nav>
+          </div>
+
+          <aside
+            ref={drawerRef}
+            dir={isRtl ? "rtl" : "ltr"}
+            aria-label="Main navigation"
+            className={`fixed bottom-0 left-0 top-0 z-[1000] hidden w-[min(360px,calc(100vw-3rem))] flex-col border-r border-outline bg-surface-hi px-8 py-8 shadow-[24px_0_70px_rgba(74,47,22,0.22)] md:flex ${
+              menuClosing ? "animate-sidebar-drawer-out" : "animate-sidebar-drawer-in"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <Link
+                href={`/${locale}#hero`}
+                onClick={handleBrandClick}
+                className="focus-gold font-serif text-xl tracking-[0.14em] text-gold transition-colors hover:text-parchment"
+                aria-label="Valentro home"
+              >
+                VALENTRO
+              </Link>
+              <button
+                type="button"
+                aria-label={t("close")}
+                onClick={closeMenu}
+                className="focus-gold text-gold transition-colors hover:text-parchment"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <nav className="mt-16 flex flex-col gap-5">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.key}
+                  href={localizedHref(locale, link.href)}
+                  onClick={closeMenu}
+                  className={`font-serif text-4xl leading-tight transition-colors duration-300 hover:text-gold ${
+                    link.key === activeKey ? "text-gold" : "text-parchment"
+                  }`}
+                >
+                  {t(link.key)}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="mt-auto border-t border-outline/70 pt-6">
+              {isAdmin ? (
+                <Link
+                  href={`/${locale}/admin`}
+                  onClick={closeMenu}
+                  className="label-caps block text-gold transition-colors duration-300 hover:text-parchment"
+                >
+                  Admin Dashboard
+                </Link>
+              ) : null}
+              {isSignedIn && !isAdmin ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="label-caps text-parchment transition-colors duration-300 hover:text-gold"
+                >
+                  Log Out
+                </button>
+              ) : null}
+            </div>
+          </aside>
+        </>,
         document.body
       )
     : null;
 
   return (
     <>
-      {/* ================================================================ */}
-      {/* FULL NAVBAR — normal document flow, NOT sticky/fixed             */}
-      {/* ================================================================ */}
-      <header
-        ref={fullNavRef}
+      <div
         dir={isRtl ? "rtl" : "ltr"}
-        className="w-full bg-transparent"
+        className={`fixed inset-x-0 top-11 z-50 flex justify-center px-4 sm:top-12 transition-transform duration-300 ease-in-out ${
+          visible ? "translate-y-0" : "-translate-y-[calc(100%+3rem)]"
+        }`}
       >
-        <nav className="mx-auto grid h-16 max-w-container grid-cols-[1fr_auto] items-center px-gutter sm:h-[72px] md:h-20 md:grid-cols-[1fr_auto_1fr] lg:px-16">
+        <div
+          ref={navRef}
+          className="flex h-11 max-w-[calc(100vw-2rem)] items-center justify-between gap-4 rounded-full border border-outline/55 bg-surface-hi px-4 shadow-[0_8px_28px_rgba(74,47,22,0.16)] sm:h-12 sm:gap-5 sm:px-5"
+        >
+          <button
+            type="button"
+            aria-label={t("menu")}
+            aria-expanded={menuOpen}
+            onClick={() => {
+              setMenuClosing(false);
+              setMenuOpen(true);
+            }}
+            className="focus-gold text-gold transition-colors duration-300 hover:text-parchment"
+          >
+            <MenuIcon />
+          </button>
+
           <Link
-            href={`/${locale}`}
-            className="font-serif text-xl tracking-[0.14em] text-gold sm:text-2xl sm:tracking-widest"
+            href={`/${locale}#hero`}
+            onClick={handleBrandClick}
+            className="focus-gold shrink-0 font-serif text-base tracking-[0.14em] text-gold transition-colors duration-300 hover:text-parchment sm:text-lg"
             aria-label="Valentro home"
           >
             VALENTRO
           </Link>
 
-          <div className="hidden items-center gap-6 md:flex lg:gap-10">
-            {navLinks.map((link) => {
-              const isActive = link.key === activeKey;
-
-              return (
-                <Link
-                  key={link.key}
-                  href={localizedHref(locale, link.href)}
-                  className={`font-sans text-xs font-semibold uppercase tracking-[0.08em] text-parchment transition-colors duration-300 hover:text-gold lg:text-sm ${
-                    isActive
-                      ? "underline decoration-gold decoration-2 underline-offset-4"
-                      : ""
-                  }`}
-                >
-                  {t(link.key)}
-                </Link>
-              );
-            })}
-            {isAdmin ? (
-              <Link
-                href={`/${locale}/admin`}
-                className="font-sans text-xs font-semibold uppercase tracking-[0.08em] text-gold transition-colors duration-300 hover:text-parchment lg:text-sm"
-              >
-                Admin Dashboard
-              </Link>
-            ) : null}
-            {isSignedIn && !isAdmin ? (
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="font-sans text-xs font-semibold uppercase tracking-[0.08em] text-parchment transition-colors duration-300 hover:text-gold lg:text-sm"
-              >
-                Log Out
-              </button>
-            ) : null}
-          </div>
-
-          <div className="flex items-center justify-end gap-3 sm:gap-4">
-            <Link
-              href={`/${locale}/cart`}
-              className="focus-gold relative text-gold transition-colors duration-300 hover:text-parchment"
-              aria-label={t("cart")}
-            >
-              <CartIconWithCount count={localCartCount} />
-            </Link>
-            <button
-              type="button"
-              aria-label={t("menu")}
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(true)}
-              className="focus-gold text-gold transition-colors duration-300 hover:text-parchment md:hidden"
-            >
-              <MenuIcon />
-            </button>
-          </div>
-        </nav>
-      </header>
-
-      {/* ================================================================ */}
-      {/* MINI NAVBAR — fixed, slides in when full navbar leaves viewport  */}
-      {/* ================================================================ */}
-      <div
-        dir={isRtl ? "rtl" : "ltr"}
-        className={`fixed inset-x-0 top-0 z-50 flex justify-center px-4 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          showMini
-            ? "pointer-events-auto translate-y-3 opacity-100"
-            : "pointer-events-none -translate-y-full opacity-0"
-        }`}
-      >
-        <div className="flex h-11 items-center justify-between gap-4 rounded-full border border-outline/45 bg-surface px-4 shadow-[0_6px_24px_rgba(74,47,22,0.14)] backdrop-blur-sm sm:h-12 sm:gap-5 sm:px-5">
-          {/* Hamburger — mobile only */}
           <button
             type="button"
-            aria-label={t("menu")}
-            onClick={() => setMenuOpen(true)}
-            className="focus-gold text-gold transition-colors duration-300 hover:text-parchment md:hidden"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.25"
-              strokeLinecap="round"
-              className="h-5 w-5"
-            >
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-
-
-          {/* VALENTRO title — scrolls to top */}
-          <button
-            type="button"
-            onClick={scrollToTop}
-            className="focus-gold font-serif text-base tracking-[0.14em] text-gold transition-colors duration-300 hover:text-parchment sm:text-lg"
-          >
-            VALENTRO
-          </button>
-
-          {/* Cart icon */}
-          <Link
-            href={`/${locale}/cart`}
+            onClick={() => setCartOpen(true)}
             className="focus-gold relative text-gold transition-colors duration-300 hover:text-parchment"
             aria-label={t("cart")}
           >
-            <CartIconWithCount
-              count={localCartCount}
-              iconClassName="h-6 w-6"
-              countClassName="top-[60%] text-[9px]"
-            />
-          </Link>
+            <CartIconWithCount count={localCartCount} />
+          </button>
         </div>
       </div>
 
-      {mobileMenu}
+      <div aria-hidden="true" className="h-24" />
+
+      {menu}
+      <SideCart open={cartOpen} onClose={() => setCartOpen(false)} />
     </>
   );
 }

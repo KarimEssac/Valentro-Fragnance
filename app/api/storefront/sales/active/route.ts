@@ -1,4 +1,5 @@
 import {NextResponse} from "next/server";
+import {prisma} from "@/lib/prisma";
 
 export type ActiveSalesLine = {
   id: string;
@@ -6,20 +7,34 @@ export type ActiveSalesLine = {
   textAr: string;
 };
 
-/**
- * GET /api/storefront/sales/active
- *
- * Returns the currently active sales / promo line for the hero section.
- * For now this returns hardcoded mock data. Once the Sales model is added
- * to Prisma it should query the database just like the announcements route.
- */
-export async function GET(): Promise<NextResponse<ActiveSalesLine | null>> {
-  // TODO: Replace with a Prisma query once the model exists
-  const mock: ActiveSalesLine = {
-    id: "mock-sale-001",
-    textEn: "Up to 30% Off — Limited Collection",
-    textAr: "خصم يصل إلى ٣٠٪ — مجموعة محدودة"
-  };
+export const revalidate = 0; // Dynamic route
 
-  return NextResponse.json(mock);
+export async function GET(): Promise<NextResponse<ActiveSalesLine | null>> {
+  try {
+    const now = new Date();
+    const announcement = await prisma.announcement.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { startAt: null, endAt: null },
+          { startAt: { lte: now }, endAt: { gte: now } },
+          { startAt: { lte: now }, endAt: null },
+          { startAt: null, endAt: { gte: now } }
+        ]
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      select: {
+        id: true,
+        textEn: true,
+        textAr: true
+      }
+    });
+
+    return NextResponse.json(announcement);
+  } catch (error) {
+    console.error("Failed to fetch active storefront sales line:", error);
+    return NextResponse.json(null);
+  }
 }

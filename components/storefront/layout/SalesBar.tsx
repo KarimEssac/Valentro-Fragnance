@@ -2,26 +2,28 @@
 
 import {useEffect, useState} from "react";
 import {useLocale} from "next-intl";
+import Link from "next/link";
 
-type ActiveSalesLine = {
+type ActiveAnnouncement = {
   id: string;
   textEn: string;
   textAr: string;
+  linkUrl?: string | null;
 };
 
 export default function SalesBar() {
   const locale = useLocale();
-  const [sale, setSale] = useState<ActiveSalesLine | null>(null);
+  const [sale, setSale] = useState<ActiveAnnouncement | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     async function fetchSalesLine() {
       try {
-        const res = await fetch("/api/storefront/sales/active", {
+        const res = await fetch("/api/storefront/announcements/active", {
           cache: "no-store"
         });
         if (!res.ok) return;
-        const data = (await res.json()) as ActiveSalesLine | null;
+        const data = (await res.json()) as ActiveAnnouncement | null;
 
         if (data) {
           setSale(data);
@@ -48,11 +50,21 @@ export default function SalesBar() {
     setDismissed(true);
   }
 
+  const content = (
+    <p className="label-caps mx-auto max-w-container text-[10px] leading-4 tracking-[0.12em] text-gold sm:text-[11px] sm:tracking-[0.15em] hover:text-gold-muted transition-colors">
+      {text}
+    </p>
+  );
+
   return (
     <div className="relative z-[60] w-full border-b border-outline bg-surface px-12 py-2 text-center sm:px-gutter">
-      <p className="label-caps mx-auto max-w-container text-[10px] leading-4 tracking-[0.12em] text-gold sm:text-[11px] sm:tracking-[0.15em]">
-        {text}
-      </p>
+      {sale.linkUrl ? (
+        <Link href={sale.linkUrl} className="block focus-gold">
+          {content}
+        </Link>
+      ) : (
+        content
+      )}
       <button
         type="button"
         aria-label="Dismiss sale announcement"

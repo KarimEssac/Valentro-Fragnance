@@ -269,3 +269,77 @@ export async function POST(
 
   return NextResponse.json({message: "Review saved"});
 }
+
+export async function DELETE(
+  request: NextRequest,
+  context: RouteContext
+): Promise<NextResponse<{message: string}>> {
+  const session = (await getServerSession(authOptions)) as {
+    user?: { id?: string; role?: string };
+  } | null;
+
+  if (!session?.user?.id || session.user.role !== "ADMIN") {
+    return NextResponse.json(
+      {message: "You must be an admin to delete a review"},
+      {status: 403}
+    );
+  }
+
+  const {slug} = await context.params;
+  const body = (await request.json()) as {
+    reviewId?: string;
+  };
+  const reviewId = body.reviewId;
+
+  if (!reviewId) {
+    return NextResponse.json(
+      {message: "Review ID is required"},
+      {status: 400}
+    );
+  }
+
+  const review = await prisma.review.findUnique({
+    where: { id: reviewId },
+    select: { fragranceId: true }
+  });
+
+  if (!review) {
+    return NextResponse.json({message: "Review not found"}, {status: 404});
+  }
+
+  // Delete associated testimonial and then the review itself inside a transaction
+  await prisma.$transaction([
+    prisma.testimonial.deleteMany({
+      where: { reviewId }
+    }),
+    prisma.review.delete({
+      where: { id: reviewId }
+    })
+  ]);
+
+  // Recalculate average rating and count for the fragrance
+  const aggregate = await prisma.review.aggregate({
+    where: {
+      fragranceId: review.fragranceId,
+      isPublished: true
+    },
+    _avg: {
+      rating: true
+    },
+    _count: {
+      rating: true
+    }
+  });
+
+  await prisma.fragrance.update({
+    where: {
+      id: review.fragranceId
+    },
+    data: {
+      ratingAverage: (aggregate._avg.rating ?? 0).toFixed(2),
+      ratingCount: aggregate._count.rating
+    }
+  });
+
+  return NextResponse.json({message: "Review deleted successfully"});
+}

@@ -5,7 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
 import type {FormEvent} from "react";
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
+
+import Modal from "@/components/ui/Modal";
 
 type ProductImage = {
   id: string;
@@ -65,6 +67,7 @@ type CartItem = {
 type SessionResponse = {
   user?: {
     id?: string;
+    role?: string;
   };
 };
 
@@ -131,6 +134,9 @@ export default function ProductDetailClient({slug}: {slug: string}) {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewMessage, setReviewMessage] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [reviewToDelete, setReviewToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const priceFormatter = useMemo(
     () =>
@@ -186,10 +192,12 @@ export default function ProductDetailClient({slug}: {slug: string}) {
 
         if (isMounted) {
           setIsSignedIn(Boolean(data.user?.id));
+          setIsAdmin(data.user?.role === "ADMIN");
         }
       } catch {
         if (isMounted) {
           setIsSignedIn(false);
+          setIsAdmin(false);
         }
       }
     }
@@ -312,6 +320,52 @@ export default function ProductDetailClient({slug}: {slug: string}) {
     setShowReviewForm(false);
     setReviewStatus(isArabic ? "تم حفظ التقييم" : "Review saved");
   }
+
+  async function handleDeleteReview() {
+    if (!reviewToDelete) return;
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(`/api/storefront/fragrances/${slug}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          reviewId: reviewToDelete
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete review");
+      }
+
+      // Refresh product data
+      const refreshed = await fetch(`/api/storefront/fragrances/${slug}`, {
+        headers: {Accept: "application/json"}
+      });
+      const data = (await refreshed.json()) as ProductDetail;
+      setProduct(data);
+      setReviewToDelete(null);
+    } catch (error) {
+      console.error(error);
+      alert(isArabic ? "فشل حذف التقييم" : "Failed to delete review");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  const reviewsScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollReviews = (direction: "left" | "right") => {
+    if (reviewsScrollRef.current) {
+      const container = reviewsScrollRef.current;
+      const cardWidth = container.firstElementChild?.getBoundingClientRect().width ?? 300;
+      const scrollAmount = direction === "left" ? -cardWidth - 24 : cardWidth + 24;
+      container.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
 
   if (status === "loading") {
     return (
@@ -536,22 +590,44 @@ export default function ProductDetailClient({slug}: {slug: string}) {
                 </span>
               </div>
             </div>
-            {isSignedIn ? (
-              <button
-                type="button"
-                onClick={() => setShowReviewForm((value) => !value)}
-                className="label-caps min-h-11 border border-parchment px-8 text-parchment transition-colors hover:bg-parchment hover:text-surface-hi"
-              >
-                Write a Review
-              </button>
-            ) : (
-              <a
-                href={`/${locale}/login`}
-                className="label-caps inline-flex min-h-11 items-center justify-center border border-parchment px-8 text-parchment transition-colors hover:bg-parchment hover:text-surface-hi"
-              >
-                Sign in to Review
-              </a>
-            )}
+            <div className="flex items-center gap-4">
+              {product.reviews.length > 3 && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => scrollReviews("left")}
+                    className="focus-gold flex h-9 w-9 items-center justify-center border border-outline text-parchment hover:border-gold hover:text-gold transition-colors"
+                    aria-label="Previous reviews"
+                  >
+                    <ArrowIcon direction={isArabic ? "right" : "left"} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollReviews("right")}
+                    className="focus-gold flex h-9 w-9 items-center justify-center border border-outline text-parchment hover:border-gold hover:text-gold transition-colors"
+                    aria-label="Next reviews"
+                  >
+                    <ArrowIcon direction={isArabic ? "left" : "right"} />
+                  </button>
+                </div>
+              )}
+              {isSignedIn ? (
+                <button
+                  type="button"
+                  onClick={() => setShowReviewForm((value) => !value)}
+                  className="label-caps min-h-11 border border-parchment px-8 text-parchment transition-colors hover:bg-parchment hover:text-surface-hi"
+                >
+                  Write a Review
+                </button>
+              ) : (
+                <a
+                  href={`/${locale}/login`}
+                  className="label-caps inline-flex min-h-11 items-center justify-center border border-parchment px-8 text-parchment transition-colors hover:bg-parchment hover:text-surface-hi"
+                >
+                  Sign in to Review
+                </a>
+              )}
+            </div>
           </div>
 
           {showReviewForm ? (
@@ -599,7 +675,10 @@ export default function ProductDetailClient({slug}: {slug: string}) {
           ) : null}
 
           {product.reviews.length > 0 ? (
-            <div className="grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-12">
+            <div
+              ref={reviewsScrollRef}
+              className="no-scrollbar flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory flex-nowrap pb-4"
+            >
               {product.reviews.map((review) => {
                 const reviewMessage =
                   isArabic && review.messageAr
@@ -607,7 +686,20 @@ export default function ProductDetailClient({slug}: {slug: string}) {
                     : review.messageEn;
 
                 return (
-                  <article key={review.id} className="flex flex-col">
+                  <article
+                    key={review.id}
+                    className="relative flex flex-col p-5 border border-outline/20 bg-surface/30 snap-start shrink-0 w-full sm:w-[calc(50%-12px)] md:w-[calc(33.333%-16px)]"
+                  >
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => setReviewToDelete(review.id)}
+                        className={`absolute top-4 ${isArabic ? "left-4" : "right-4"} text-on-surface/50 hover:text-red-400 transition-colors text-lg font-bold leading-none`}
+                        title={isArabic ? "حذف التقييم" : "Delete review"}
+                      >
+                        ×
+                      </button>
+                    ) : null}
                     <div className="mb-4 flex gap-1">
                       {[1, 2, 3, 4, 5].map((value) => (
                         <StarIcon key={value} filled={value <= review.rating} />
@@ -630,6 +722,39 @@ export default function ProductDetailClient({slug}: {slug: string}) {
           )}
         </section>
       </div>
+      <Modal
+        isOpen={Boolean(reviewToDelete)}
+        title={isArabic ? "حذف التقييم" : "Delete Review"}
+        onClose={() => setReviewToDelete(null)}
+      >
+        <div className="space-y-6">
+          <p className="text-sm leading-6 text-on-surface/80">
+            {isArabic
+              ? "هل أنت متأكد من رغبتك في حذف هذا التقييم نهائياً؟ سيتم حذف جميع البيانات المرتبطة به أيضاً."
+              : "Are you sure you want to delete this review entirely? This will also remove any related info associated with it."}
+          </p>
+          <div className="flex justify-end gap-4">
+            <button
+              type="button"
+              onClick={() => setReviewToDelete(null)}
+              className="label-caps min-h-11 border border-outline px-6 text-parchment hover:bg-surface-mid transition-colors"
+              disabled={isDeleting}
+            >
+              {isArabic ? "إلغاء" : "Cancel"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteReview}
+              className="label-caps min-h-11 border border-red-500/30 bg-red-950/20 px-6 text-red-400 hover:border-red-500 hover:bg-red-950/60 hover:text-red-200 transition-colors disabled:opacity-50"
+              disabled={isDeleting}
+            >
+              {isDeleting
+                ? (isArabic ? "جاري الحذف..." : "Deleting...")
+                : (isArabic ? "نعم، احذف" : "Yes, Delete")}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </main>
   );
 }

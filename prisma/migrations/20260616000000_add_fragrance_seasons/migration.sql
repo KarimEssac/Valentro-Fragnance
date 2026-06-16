@@ -1,0 +1,1 @@
+ALTER TABLE "Fragrance" ADD COLUMN "seasons" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
