@@ -3,6 +3,14 @@ import {PrismaClient} from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const cloudinaryImages = {
+  hero: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613527/valentro/site/hero-bg.webp",
+  heroLight: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613528/valentro/site/hero-bg-light.webp",
+  emporioArmani: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613530/valentro/fragrances/emporio-armani.webp",
+  ultraMale: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613535/valentro/fragrances/ultra-male.webp",
+  valentinoUomo: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613536/valentro/fragrances/valentino-uomo.webp"
+};
+
 async function main() {
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
@@ -74,7 +82,7 @@ async function main() {
           "The fragrance settles with a quiet confidence: warm, polished, and unmistakably refined from the first hour to the last.",
         messageAr:
           "يستقر العطر بثقة هادئة: دافئ ومصقول وراقي بوضوح من الساعة الأولى حتى الأخيرة.",
-        imageUrl: "/uploads/fragrances/emporio-armani.png",
+        imageUrl: cloudinaryImages.emporioArmani,
         imageAltEn: "Valentro fragrance bottle in warm light",
         rating: 5,
         imageAltAr: "زجاجة عطر فالنترو في ضوء دافئ",
@@ -86,7 +94,7 @@ async function main() {
           "It feels composed rather than loud, leaving a memorable trail that makes evening wear feel complete.",
         messageAr:
           "يشعر بأنه متوازن لا صاخب، ويترك أثرا لا ينسى يجعل إطلالة المساء مكتملة.",
-        imageUrl: "/uploads/fragrances/valentino-uomo.png",
+        imageUrl: cloudinaryImages.valentinoUomo,
         imageAltEn: "Deep-toned Valentro fragrance bottle",
         rating: 4,
         imageAltAr: "زجاجة عطر فالنترو بدرجات عميقة",
@@ -98,7 +106,7 @@ async function main() {
           "A smooth, elegant scent with enough character to feel personal and enough restraint to wear every day.",
         messageAr:
           "عطر ناعم وأنيق، فيه شخصية كافية ليبدو خاصا واتزان كاف لاستخدامه يوميا.",
-        imageUrl: "/uploads/fragrances/ultra-male.png",
+        imageUrl: cloudinaryImages.ultraMale,
         imageAltEn: "Valentro fragrance bottle with refined styling",
         rating: 5,
         imageAltAr: "زجاجة عطر فالنترو بتنسيق راق",
@@ -116,7 +124,7 @@ async function main() {
       descriptionEn:
         "Limited compositions built around resin, smoke, and polished warmth.",
       descriptionAr: "تركيبات محدودة من الراتنج والدخان والدفء المصقول.",
-      coverImage: "/uploads/collections/private-collection.jpg",
+      coverImage: cloudinaryImages.hero,
       position: 1,
       isPublished: true
     }
@@ -130,7 +138,7 @@ async function main() {
       descriptionEn:
         "Everyday luxury fragrances with modern projection and refined texture.",
       descriptionAr: "عطور فاخرة يومية بانتشار عصري وملمس راق.",
-      coverImage: "/uploads/collections/signature-line.jpg",
+      coverImage: cloudinaryImages.heroLight,
       position: 2,
       isPublished: true
     }
@@ -185,7 +193,7 @@ async function main() {
       images: {
         create: [
           {
-            url: "/uploads/fragrances/emporio-armani.png",
+            url: cloudinaryImages.emporioArmani,
             altEn: "Emporio Armani fragrance bottle",
             altAr: "زجاجة عطر نوار فانيلا",
             position: 1,
@@ -259,7 +267,7 @@ async function main() {
       images: {
         create: [
           {
-            url: "/uploads/fragrances/valentino-uomo.png",
+            url: cloudinaryImages.valentinoUomo,
             altEn: "Valentino Umo fragrance bottle",
             altAr: "زجاجة عطر عود إمبريال",
             position: 1,
@@ -333,7 +341,7 @@ async function main() {
       images: {
         create: [
           {
-            url: "/uploads/fragrances/ultra-male.png",
+            url: cloudinaryImages.ultraMale,
             altEn: "Ultra Male fragrance bottle",
             altAr: "زجاجة عطر فلورال مسك",
             position: 1,

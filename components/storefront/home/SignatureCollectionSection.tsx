@@ -120,7 +120,7 @@ export default function SignatureCollectionSection() {
               onClick={() => scrollCarousel("previous")}
               className="focus-gold flex h-12 w-12 items-center justify-center border border-gold/40 text-xl text-parchment transition-colors hover:border-gold hover:bg-gold/10"
             >
-              {isArabic ? "→" : "←"}
+              {isArabic ? "\u2192" : "\u2190"}
             </button>
             <button
               type="button"
@@ -128,7 +128,7 @@ export default function SignatureCollectionSection() {
               onClick={() => scrollCarousel("next")}
               className="focus-gold flex h-12 w-12 items-center justify-center border border-gold text-xl text-parchment transition-colors hover:bg-gold/10"
             >
-              {isArabic ? "←" : "→"}
+              {isArabic ? "\u2190" : "\u2192"}
             </button>
           </div>
         </div>
@@ -178,7 +178,7 @@ export default function SignatureCollectionSection() {
                   key={fragrance.id}
                   href={`/${locale}/fragrances/${fragrance.slug}`}
                   data-card
-                  className="group w-[82vw] shrink-0 snap-start sm:w-[360px] lg:w-[calc((100%-3rem)/3)]"
+                  className="group w-[82vw] shrink-0 snap-start sm:w-[360px] lg:w-[calc((100%_-_3rem)/3)]"
                 >
                   <div className="relative mb-6 flex aspect-[3/4] items-center justify-center overflow-hidden border border-outline bg-surface">
                     {fragrance.primaryImage ? (

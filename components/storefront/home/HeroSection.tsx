@@ -26,8 +26,8 @@ const slideKeys: SlideKey[] = ["noir", "oud"];
  * hero shots when available.
  */
 const slideBgImages: Record<SlideKey, string> = {
-  noir: "/hero-bg-light.png",
-  oud: "/hero-bg-light.png" // TODO: replace with oud-specific hero image
+  noir: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613528/valentro/site/hero-bg-light.webp",
+  oud: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613528/valentro/site/hero-bg-light.webp" // TODO: replace with oud-specific hero image
 };
 
 /* ------------------------------------------------------------------ */

@@ -16,8 +16,7 @@ export default async function AdminInventoryPage({
     orderBy: [{position: "asc"}, {createdAt: "desc"}],
     include: {
       images: {
-        orderBy: [{isPrimary: "desc"}, {position: "asc"}],
-        take: 1
+        orderBy: [{isPrimary: "desc"}, {position: "asc"}]
       },
       variants: {
         orderBy: [{sizeML: "asc"}]
@@ -63,6 +62,7 @@ export default async function AdminInventoryPage({
       longevity: fragrance.longevity,
       isPublished: fragrance.isPublished,
       isFeatured: fragrance.isFeatured,
+      position: fragrance.position,
       totalStock: fragrance.variants.reduce(
         (sum, variant) => sum + variant.stock,
         0
@@ -76,6 +76,14 @@ export default async function AdminInventoryPage({
             altAr: primaryImage.altAr
           }
         : null,
+      images: fragrance.images.map((image) => ({
+        id: image.id,
+        url: image.url,
+        altEn: image.altEn,
+        altAr: image.altAr,
+        position: image.position,
+        isPrimary: image.isPrimary
+      })),
       collections: fragrance.collections.map(({collection}) =>
         locale === "ar" ? collection.nameAr : collection.nameEn
       ),

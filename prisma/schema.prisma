@@ -137,17 +137,22 @@ model Testimonial {
 model Collection {
   id            String                @id @default(cuid())
   slug          String                @unique
+  code          String?               @unique
   nameEn        String
   nameAr        String
   descriptionEn String
   descriptionAr String
   coverImage    String
+  offerPrice    Decimal?              @db.Decimal(10, 2)
+  isOffer       Boolean               @default(false)
   position      Int                   @default(0)
   isPublished   Boolean               @default(false)
   createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @default(now()) @updatedAt
   fragrances    FragranceCollection[]
 
   @@index([isPublished, position])
+  @@index([isOffer, isPublished, position])
 }
 
 model Fragrance {
@@ -263,13 +268,19 @@ model Coupon {
   maxUses        Int?
   usedCount      Int                 @default(0)
   isActive       Boolean             @default(false)
+  startsAt       DateTime?
   expiresAt      DateTime?
+  audienceRule   String?
+  audiencePercent Int?
   createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @default(now()) @updatedAt
   applicableTo   CouponApplicability @default(ALL)
   users          User[]              @relation("CouponUsers")
   orders         Order[]
 
   @@index([isActive])
+  @@index([startsAt])
+  @@index([expiresAt])
   @@index([applicableTo])
 }
 

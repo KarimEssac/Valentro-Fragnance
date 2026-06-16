@@ -8,6 +8,7 @@ import {useEffect, useMemo, useState} from "react";
 export type ShopFragrance = {
   id: string;
   slug: string;
+  position: number;
   nameEn: string;
   nameAr: string;
   taglineEn: string;
@@ -29,15 +30,47 @@ export type ShopFragrance = {
   };
 };
 
+export type ShopCollectionOffer = {
+  id: string;
+  slug: string;
+  position: number;
+  code: string | null;
+  nameEn: string;
+  nameAr: string;
+  descriptionEn: string;
+  descriptionAr: string;
+  coverImage: string;
+  offerPrice: string | null;
+  combinedValue: string;
+  discountPercent: number;
+  products: {
+    id: string;
+    slug: string;
+    nameEn: string;
+    nameAr: string;
+    image: {
+      url: string;
+      altEn: string;
+      altAr: string;
+    } | null;
+  }[];
+};
+
 type ShopClientProps = {
   locale: string;
   fragrances: ShopFragrance[];
+  collections: ShopCollectionOffer[];
 };
 
 const genderOptions = [
   {value: "HER", label: "For Her"},
   {value: "HIM", label: "For Him"},
   {value: "UNISEX", label: "Unisex"}
+];
+
+const itemTypeOptions = [
+  {value: "fragrance", label: "Fragrances"},
+  {value: "collection", label: "Collections"}
 ];
 
 const genderValues = genderOptions.map((option) => option.value);
@@ -68,6 +101,38 @@ function priceNumber(value: string | null) {
   return Number.isFinite(number) ? number : 0;
 }
 
+type CatalogItem =
+  | {
+      kind: "fragrance";
+      position: number;
+      fragrance: ShopFragrance;
+    }
+  | {
+      kind: "collection";
+      position: number;
+      collection: ShopCollectionOffer;
+    };
+
+function itemName(item: CatalogItem, isArabic: boolean) {
+  if (item.kind === "collection") {
+    return isArabic ? item.collection.nameAr : item.collection.nameEn;
+  }
+
+  return isArabic ? item.fragrance.nameAr : item.fragrance.nameEn;
+}
+
+function itemMinPrice(item: CatalogItem) {
+  return item.kind === "collection"
+    ? priceNumber(item.collection.offerPrice)
+    : priceNumber(item.fragrance.priceRange.min);
+}
+
+function itemMaxPrice(item: CatalogItem) {
+  return item.kind === "collection"
+    ? priceNumber(item.collection.offerPrice)
+    : priceNumber(item.fragrance.priceRange.max);
+}
+
 function CheckboxFilter({
   checked,
   label,
@@ -90,7 +155,11 @@ function CheckboxFilter({
   );
 }
 
-export default function ShopClient({locale, fragrances}: ShopClientProps) {
+export default function ShopClient({
+  locale,
+  fragrances,
+  collections
+}: ShopClientProps) {
   const isArabic = locale === "ar";
   const searchParams = useSearchParams();
   const requestedGender = searchParams.get("gender")?.toUpperCase() ?? "";
@@ -98,6 +167,7 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
     ? requestedGender
     : "";
   const [query, setQuery] = useState("");
+  const [selectedItemTypes, setSelectedItemTypes] = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>(
     initialGender ? [initialGender] : []
   );
@@ -141,11 +211,65 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
     [fragrances, isArabic]
   );
 
-  const filteredFragrances = useMemo(() => {
+  const catalogItems = useMemo<CatalogItem[]>(
+    () => [
+      ...fragrances.map((fragrance) => ({
+        kind: "fragrance" as const,
+        position: fragrance.position,
+        fragrance
+      })),
+      ...collections.map((collection) => ({
+        kind: "collection" as const,
+        position: collection.position,
+        collection
+      }))
+    ],
+    [collections, fragrances]
+  );
+
+  const filteredCatalogItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return fragrances
-      .filter((fragrance) => {
+    return catalogItems
+      .filter((item) => {
+        if (
+          selectedItemTypes.length > 0 &&
+          !selectedItemTypes.includes(item.kind)
+        ) {
+          return false;
+        }
+
+        if (item.kind === "collection") {
+          const collection = item.collection;
+          const name = isArabic ? collection.nameAr : collection.nameEn;
+          const description = isArabic
+            ? collection.descriptionAr
+            : collection.descriptionEn;
+          const productNames = collection.products.flatMap((product) => [
+            product.nameEn,
+            product.nameAr
+          ]);
+          const haystack = [
+            name,
+            description,
+            collection.code ?? "",
+            collection.slug,
+            ...productNames
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          const matchesSearch =
+            !normalizedQuery || haystack.includes(normalizedQuery);
+          const fragranceOnlyFilters =
+            selectedGenders.length > 0 ||
+            selectedScents.length > 0 ||
+            selectedNotes.length > 0;
+
+          return matchesSearch && !fragranceOnlyFilters;
+        }
+
+        const fragrance = item.fragrance;
         const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
         const tagline = isArabic ? fragrance.taglineAr : fragrance.taglineEn;
         const notes = fragrance.ingredients.map((ingredient) =>
@@ -176,24 +300,28 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
         return matchesSearch && matchesGender && matchesScent && matchesNotes;
       })
       .sort((a, b) => {
+        if (sort === "position") {
+          return a.position - b.position;
+        }
         if (sort === "price-asc") {
-          return priceNumber(a.priceRange.min) - priceNumber(b.priceRange.min);
+          return itemMinPrice(a) - itemMinPrice(b);
         }
         if (sort === "price-desc") {
-          return priceNumber(b.priceRange.max) - priceNumber(a.priceRange.max);
+          return itemMaxPrice(b) - itemMaxPrice(a);
         }
         if (sort === "name") {
-          const aName = isArabic ? a.nameAr : a.nameEn;
-          const bName = isArabic ? b.nameAr : b.nameEn;
+          const aName = itemName(a, isArabic);
+          const bName = itemName(b, isArabic);
           return aName.localeCompare(bName);
         }
         return 0;
       });
   }, [
-    fragrances,
+    catalogItems,
     isArabic,
     query,
     selectedGenders,
+    selectedItemTypes,
     selectedNotes,
     selectedScents,
     sort
@@ -201,12 +329,14 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
 
   const hasFilters =
     query ||
+    selectedItemTypes.length > 0 ||
     selectedGenders.length > 0 ||
     selectedScents.length > 0 ||
     selectedNotes.length > 0 ||
     sort !== "position";
 
   const activeFilterCount =
+    selectedItemTypes.length +
     selectedGenders.length +
     selectedScents.length +
     selectedNotes.length +
@@ -223,6 +353,7 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
 
   function resetFilters() {
     setQuery("");
+    setSelectedItemTypes([]);
     setSelectedGenders([]);
     setSelectedScents([]);
     setSelectedNotes([]);
@@ -237,6 +368,16 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
     if (!max || min === max) return priceFormatter.format(min);
 
     return `${priceFormatter.format(min)} - ${priceFormatter.format(max)}`;
+  }
+
+  function formatOfferPrice(collection: ShopCollectionOffer) {
+    const price = priceNumber(collection.offerPrice);
+    const combined = priceNumber(collection.combinedValue);
+
+    return {
+      price: price ? priceFormatter.format(price) : "Price on request",
+      combined: combined ? priceFormatter.format(combined) : ""
+    };
   }
 
   const filterControls = (
@@ -284,6 +425,26 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
       </div>
 
       <div className="space-y-8">
+        <div>
+          <h2 className="label-caps mb-4 border-b border-outline/70 pb-3 text-parchment">
+            Type
+          </h2>
+          <div className="space-y-3">
+            {itemTypeOptions.map((option) => (
+              <CheckboxFilter
+                key={option.value}
+                label={option.label}
+                checked={selectedItemTypes.includes(option.value)}
+                onChange={() =>
+                  setSelectedItemTypes((values) =>
+                    toggleValue(values, option.value)
+                  )
+                }
+              />
+            ))}
+          </div>
+        </div>
+
         <div>
           <h2 className="label-caps mb-4 border-b border-outline/70 pb-3 text-parchment">
             Category
@@ -369,7 +530,7 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
               </h1>
             </div>
             <div className="label-caps text-on-surface/70">
-              {filteredFragrances.length} of {fragrances.length} products
+              {filteredCatalogItems.length} of {catalogItems.length} items
             </div>
           </div>
         </div>
@@ -397,7 +558,7 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
             {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
           </button>
           <span className="label-caps text-on-surface/70">
-            {filteredFragrances.length} shown
+            {filteredCatalogItems.length} shown
           </span>
         </div>
 
@@ -449,7 +610,7 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
                 onClick={() => setFiltersOpen(false)}
                 className="label-caps mt-6 min-h-12 w-full border border-parchment bg-parchment px-5 text-surface-hi transition-colors hover:border-gold hover:bg-gold"
               >
-                Show {filteredFragrances.length} Products
+                Show {filteredCatalogItems.length} Items
               </button>
             </div>
           </div>
@@ -463,65 +624,34 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
           </aside>
 
           <div>
-            {filteredFragrances.length > 0 ? (
+            {filteredCatalogItems.length > 0 ? (
               <div className="grid grid-cols-2 gap-x-4 gap-y-12 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4 lg:gap-y-14">
-                {filteredFragrances.map((fragrance, index) => {
-                  const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
-                  const tagline = isArabic
-                    ? fragrance.taglineAr
-                    : fragrance.taglineEn;
-                  const imageAlt = fragrance.primaryImage
-                    ? isArabic
-                      ? fragrance.primaryImage.altAr
-                      : fragrance.primaryImage.altEn
-                    : name;
-
-                  return (
-                    <Link
-                      key={fragrance.id}
-                      href={`/${locale}/fragrances/${fragrance.slug}`}
-                      className="group block"
-                    >
-                      <div className="relative mb-4 aspect-[3/4] overflow-hidden bg-surface">
-                        {fragrance.primaryImage ? (
-                          <Image
-                            src={fragrance.primaryImage.url}
-                            alt={imageAlt}
-                            fill
-                            unoptimized
-                            loading={index < 8 ? "eager" : "lazy"}
-                            sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 24vw, (min-width: 768px) 30vw, 50vw"
-                            className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
-                          />
-                        ) : null}
-                        {!fragrance.primaryImage ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,248,236,0.96),rgba(227,210,186,0.72))] px-5 text-center font-serif text-2xl leading-tight text-parchment/45">
-                            {name}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="text-center">
-                        <p className="label-caps mb-2 text-gold">
-                          {formatEnum(fragrance.scentProfile)}
-                        </p>
-                        <h2 className="font-serif text-[clamp(1.35rem,2.6vw,1.9rem)] leading-tight text-parchment">
-                          {name}
-                        </h2>
-                        <p className="mx-auto mt-2 line-clamp-2 min-h-10 max-w-[17rem] text-sm leading-5 text-on-surface/70">
-                          {tagline}
-                        </p>
-                        <p className="label-caps mt-3 text-on-surface/70">
-                          {formatPrice(fragrance)}
-                        </p>
-                      </div>
-                    </Link>
-                  );
-                })}
+                {filteredCatalogItems.map((item, index) =>
+                  item.kind === "fragrance" ? (
+                    <FragranceCard
+                      key={`fragrance-${item.fragrance.id}`}
+                      fragrance={item.fragrance}
+                      index={index}
+                      locale={locale}
+                      isArabic={isArabic}
+                      formatPrice={formatPrice}
+                    />
+                  ) : (
+                    <CollectionCard
+                      key={`collection-${item.collection.id}`}
+                      collection={item.collection}
+                      index={index}
+                      locale={locale}
+                      isArabic={isArabic}
+                      formatOfferPrice={formatOfferPrice}
+                    />
+                  )
+                )}
               </div>
             ) : (
               <div className="border border-outline bg-surface px-6 py-10 text-center">
                 <h2 className="font-serif text-3xl text-parchment">
-                  No fragrances found
+                  No catalogue items found
                 </h2>
                 <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-on-surface/70">
                   Adjust the search or remove a few filters to return to the
@@ -540,5 +670,152 @@ export default function ShopClient({locale, fragrances}: ShopClientProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+function FragranceCard({
+  fragrance,
+  index,
+  locale,
+  isArabic,
+  formatPrice
+}: {
+  fragrance: ShopFragrance;
+  index: number;
+  locale: string;
+  isArabic: boolean;
+  formatPrice: (fragrance: ShopFragrance) => string;
+}) {
+  const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
+  const tagline = isArabic ? fragrance.taglineAr : fragrance.taglineEn;
+  const imageAlt = fragrance.primaryImage
+    ? isArabic
+      ? fragrance.primaryImage.altAr
+      : fragrance.primaryImage.altEn
+    : name;
+
+  return (
+    <Link href={`/${locale}/fragrances/${fragrance.slug}`} className="group block">
+      <div className="relative mb-4 aspect-[3/4] overflow-hidden bg-surface">
+        {fragrance.primaryImage ? (
+          <Image
+            src={fragrance.primaryImage.url}
+            alt={imageAlt}
+            fill
+            unoptimized
+            loading={index < 8 ? "eager" : "lazy"}
+            sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 24vw, (min-width: 768px) 30vw, 50vw"
+            className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+          />
+        ) : null}
+        {!fragrance.primaryImage ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,248,236,0.96),rgba(227,210,186,0.72))] px-5 text-center font-serif text-2xl leading-tight text-parchment/45">
+            {name}
+          </div>
+        ) : null}
+      </div>
+      <div className="text-center">
+        <p className="label-caps mb-2 text-gold">{formatEnum(fragrance.scentProfile)}</p>
+        <h2 className="font-serif text-[clamp(1.35rem,2.6vw,1.9rem)] leading-tight text-parchment">
+          {name}
+        </h2>
+        <p className="mx-auto mt-2 line-clamp-2 min-h-10 max-w-[17rem] text-sm leading-5 text-on-surface/70">
+          {tagline}
+        </p>
+        <p className="label-caps mt-3 text-on-surface/70">{formatPrice(fragrance)}</p>
+      </div>
+    </Link>
+  );
+}
+
+function CollectionCard({
+  collection,
+  index,
+  locale,
+  isArabic,
+  formatOfferPrice
+}: {
+  collection: ShopCollectionOffer;
+  index: number;
+  locale: string;
+  isArabic: boolean;
+  formatOfferPrice: (collection: ShopCollectionOffer) => {
+    price: string;
+    combined: string;
+  };
+}) {
+  const name = isArabic ? collection.nameAr : collection.nameEn;
+  const description = isArabic ? collection.descriptionAr : collection.descriptionEn;
+  const prices = formatOfferPrice(collection);
+
+  return (
+    <Link href={`/${locale}/collections/${collection.slug}`} className="group block">
+      <div className="relative mb-4 aspect-[3/4] overflow-hidden border border-gold/50 bg-surface">
+        <Image
+          src={collection.coverImage}
+          alt={name}
+          fill
+          unoptimized
+          loading={index < 8 ? "eager" : "lazy"}
+          sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 24vw, (min-width: 768px) 30vw, 50vw"
+          className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+        />
+        <div className="absolute left-3 top-3 label-caps bg-parchment px-3 py-2 text-surface-hi">
+          Collection
+        </div>
+        {collection.discountPercent > 0 ? (
+          <div className="absolute right-3 top-3 label-caps bg-gold px-3 py-2 text-surface-hi">
+            {collection.discountPercent}% off
+          </div>
+        ) : null}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-bg/90 via-bg/45 to-transparent p-4 pt-16">
+          <div className="flex -space-x-2">
+            {collection.products.slice(0, 3).map((product) => {
+              const productName = isArabic ? product.nameAr : product.nameEn;
+              const productAlt = product.image
+                ? isArabic
+                  ? product.image.altAr
+                  : product.image.altEn
+                : productName;
+
+              return (
+                <span
+                  key={product.id}
+                  className="relative block h-10 w-10 overflow-hidden border border-parchment bg-surface-mid"
+                >
+                  {product.image ? (
+                    <Image
+                      src={product.image.url}
+                      alt={productAlt}
+                      fill
+                      unoptimized
+                      sizes="40px"
+                      className="object-cover"
+                    />
+                  ) : null}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="label-caps mb-2 text-gold">
+          {collection.products.length} piece collection
+        </p>
+        <h2 className="font-serif text-[clamp(1.35rem,2.6vw,1.9rem)] leading-tight text-parchment">
+          {name}
+        </h2>
+        <p className="mx-auto mt-2 line-clamp-2 min-h-10 max-w-[17rem] text-sm leading-5 text-on-surface/70">
+          {description || "A limited bundle curated by Valentro."}
+        </p>
+        <p className="label-caps mt-3 text-on-surface/70">
+          {prices.price}
+          {prices.combined ? (
+            <span className="ml-2 text-on-surface/45 line-through">{prices.combined}</span>
+          ) : null}
+        </p>
+      </div>
+    </Link>
   );
 }

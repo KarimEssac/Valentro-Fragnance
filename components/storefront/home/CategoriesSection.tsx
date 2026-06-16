@@ -16,20 +16,20 @@ const categories: Category[] = [
   {
     title: "For Her",
     gender: "HER",
-    image: "/uploads/fragrances/emporio-armani.png",
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613530/valentro/fragrances/emporio-armani.webp",
     alt: "Warm vanilla fragrance ingredients for her"
   },
   {
     title: "For Him",
     gender: "HIM",
-    image: "/uploads/fragrances/valentino-uomo.png",
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613536/valentro/fragrances/valentino-uomo.webp",
     alt: "Aromatic woody fragrance ingredients for him",
     offset: true
   },
   {
     title: "Unisex",
     gender: "UNISEX",
-    image: "/uploads/fragrances/ultra-male.png",
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613535/valentro/fragrances/ultra-male.webp",
     alt: "Balanced aromatic gourmand fragrance ingredients"
   }
 ];

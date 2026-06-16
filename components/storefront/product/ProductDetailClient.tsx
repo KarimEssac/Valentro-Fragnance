@@ -137,6 +137,7 @@ export default function ProductDetailClient({slug}: {slug: string}) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [reviewToDelete, setReviewToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
   const priceFormatter = useMemo(
     () =>
@@ -211,10 +212,13 @@ export default function ProductDetailClient({slug}: {slug: string}) {
 
   const images = product?.images ?? [];
   const selectedImage = images[activeImage] ?? images[0] ?? null;
-  const selectedVariant =
-    product?.variants.find((variant) => variant.sizeML === 50) ??
-    product?.variants[0] ??
-    null;
+  const selectedVariant = useMemo(() => {
+    if (!product || product.variants.length === 0) return null;
+    if (selectedVariantId) {
+      return product.variants.find((v) => v.id === selectedVariantId) ?? product.variants[0];
+    }
+    return product.variants.find((v) => v.sizeML === 50) ?? product.variants[0];
+  }, [product, selectedVariantId]);
   const productName = product
     ? isArabic
       ? product.nameAr
@@ -251,7 +255,7 @@ export default function ProductDetailClient({slug}: {slug: string}) {
       slug: product.slug,
       name: productName,
       image: selectedImage?.url ?? null,
-      sizeML: 50,
+      sizeML: selectedVariant.sizeML,
       price: selectedVariant.price,
       quantity
     };
@@ -499,21 +503,30 @@ export default function ProductDetailClient({slug}: {slug: string}) {
             <div className="my-8 h-px w-1/3 bg-outline/70" />
 
             <div className="mb-8">
-              <p className="label-caps mb-4 text-parchment">Select Size</p>
+              <p className="label-caps mb-4 text-parchment">
+                {isArabic ? "اختر الحجم" : "Select Size"}
+              </p>
               <div className="flex flex-wrap gap-4">
-                <button
-                  type="button"
-                  className="label-caps min-h-11 border border-parchment bg-parchment px-8 text-surface-hi"
-                >
-                  50ml
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="label-caps min-h-11 cursor-not-allowed border border-outline/60 px-8 text-on-surface/45"
-                >
-                  100ml Soon
-                </button>
+                {product.variants.map((variant) => {
+                  const isSelected = selectedVariant?.id === variant.id;
+                  return (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedVariantId(variant.id);
+                        setCartStatus("");
+                      }}
+                      className={`label-caps min-h-11 border px-8 transition-colors ${
+                        isSelected
+                          ? "border-parchment bg-parchment text-surface-hi"
+                          : "border-outline hover:border-gold hover:text-gold text-parchment"
+                      }`}
+                    >
+                      {variant.sizeML}ml
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

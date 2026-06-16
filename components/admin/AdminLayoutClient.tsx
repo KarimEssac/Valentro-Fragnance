@@ -129,7 +129,7 @@ function AdminSidebar({
         <div className="flex items-center gap-3">
           <div className="relative h-11 w-11 overflow-hidden border border-outline/70 bg-surface">
             <Image
-              src="/uploads/fragrances/emporio-armani.png"
+              src="https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613530/valentro/fragrances/emporio-armani.webp"
               alt="Valentro admin"
               fill
               sizes="44px"

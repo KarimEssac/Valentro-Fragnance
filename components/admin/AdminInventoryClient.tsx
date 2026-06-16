@@ -19,10 +19,19 @@ export type InventoryProduct = {
   longevity: number;
   isPublished: boolean;
   isFeatured: boolean;
+  position: number;
   totalStock: number;
   minPrice: string | null;
   maxPrice: string | null;
   primaryImage: {url: string; altEn: string; altAr: string} | null;
+  images: {
+    id: string;
+    url: string;
+    altEn: string;
+    altAr: string;
+    position: number;
+    isPrimary: boolean;
+  }[];
   collections: string[];
   variants: {id: string; sku: string; sizeML: number; price: string; stock: number}[];
   ingredients: {nameEn: string; note: string}[];
@@ -92,6 +101,16 @@ type VariantDraft = {
   sizeML: string;
   price: string;
   stock: string;
+};
+
+type ImageDraft = {
+  id: string;
+  url: string;
+  altEn: string;
+  altAr: string;
+  position: string;
+  isPrimary: boolean;
+  delete: boolean;
 };
 
 function formatEnum(value: string) {
@@ -229,7 +248,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
           <table className="w-full min-w-[980px] border-collapse text-left">
             <thead>
               <tr className="border-b border-outline/60">
-                {["Image", "Fragrance Name", "Collection", "Stock Level", "Price", "Actions"].map((head) => (
+                {["Image", "Fragrance Name", "Order", "Collection", "Stock Level", "Price", "Actions"].map((head) => (
                   <th key={head} className={`label-caps p-5 text-on-surface/70 ${head === "Actions" ? "text-right" : ""}`}>{head}</th>
                 ))}
               </tr>
@@ -251,6 +270,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
                       <p className="font-serif text-xl leading-tight text-parchment">{name}</p>
                       <p className="mt-1 text-sm text-on-surface/60">SKU: {product.variants[0]?.sku ?? "No variants"}</p>
                     </td>
+                    <td className="p-5 text-sm text-parchment">{product.position}</td>
                     <td className="p-5">
                       <span className="label-caps bg-surface-mid px-3 py-1 text-parchment">{product.collections[0] ?? "Unassigned"}</span>
                     </td>
@@ -313,6 +333,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
                 <Field label="Scent Profile"><select name="scentProfile" className={inputClass()}>{scents.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
                 <Field label="Sillage"><select name="sillage" className={inputClass()}>{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
                 <Field label="Longevity Hours"><input name="longevity" type="number" min="1" defaultValue="8" required className={inputClass()} /></Field>
+                <Field label="Display Order"><input name="position" type="number" min="1" placeholder="1 displays first" className={inputClass()} /></Field>
                 <Field label="Product Images">
                   <input name="images" type="file" accept="image/*" multiple className="w-full text-sm text-on-surface/80 file:mr-4 file:border file:border-parchment file:bg-transparent file:px-4 file:py-2 file:text-parchment file:transition-colors hover:file:border-gold hover:file:text-gold" />
                 </Field>
@@ -476,6 +497,17 @@ function EditProductForm({
     product.ingredients.map((ingredient) => ingredient.nameEn)
   );
   const [selectedAvoidIf, setSelectedAvoidIf] = useState<string[]>(product.avoidIf);
+  const [images, setImages] = useState<ImageDraft[]>(
+    product.images.map((image, index) => ({
+      id: image.id,
+      url: image.url,
+      altEn: image.altEn,
+      altAr: image.altAr,
+      position: image.position.toString(),
+      isPrimary: image.isPrimary || index === 0,
+      delete: false
+    }))
+  );
   const [variants, setVariants] = useState<VariantDraft[]>(
     product.variants.length > 0
       ? product.variants.map((variant) => ({
@@ -492,6 +524,25 @@ function EditProductForm({
       items.map((variant, variantIndex) =>
         variantIndex === index ? {...variant, [key]: value} : variant
       )
+    );
+  }
+
+  function updateImage(index: number, key: keyof ImageDraft, value: string | boolean) {
+    setImages((items) =>
+      items.map((image, imageIndex) => {
+        if (imageIndex !== index) return image;
+        return {...image, [key]: value};
+      })
+    );
+  }
+
+  function setPrimaryImage(index: number) {
+    setImages((items) =>
+      items.map((image, imageIndex) => ({
+        ...image,
+        isPrimary: imageIndex === index,
+        delete: imageIndex === index ? false : image.delete
+      }))
     );
   }
 
@@ -513,17 +564,32 @@ function EditProductForm({
       scentProfile: form.get("scentProfile"),
       sillage: form.get("sillage"),
       longevity: form.get("longevity"),
+      position: form.get("position"),
       ingredients: selectedIngredients,
       avoidIf: selectedAvoidIf,
       seasons: selectedSeasons,
-      variants
+      variants,
+      images: images.map((image, index) => ({
+        id: image.id,
+        altEn: image.altEn,
+        altAr: image.altAr,
+        position: Number(image.position) || index + 1,
+        isPrimary: image.isPrimary,
+        delete: image.delete
+      }))
     };
+    const body = new FormData();
+    body.set("payload", JSON.stringify(payload));
+    form.getAll("newImages").forEach((file) => {
+      if (file instanceof File && file.size > 0) {
+        body.append("images", file);
+      }
+    });
 
     try {
       const response = await fetch(`/api/admin/fragrances/${product.id}`, {
         method: "PUT",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
+        body
       });
       const result = (await response.json()) as {message?: string};
       if (!response.ok) throw new Error(result.message ?? "Unable to update product");
@@ -547,6 +613,7 @@ function EditProductForm({
         <Field label="Scent Profile"><select name="scentProfile" defaultValue={product.scentProfile} className={inputClass()}>{scents.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
         <Field label="Sillage"><select name="sillage" defaultValue={product.sillage} className={inputClass()}>{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
         <Field label="Longevity Hours"><input name="longevity" type="number" min="1" defaultValue={product.longevity} required className={inputClass()} /></Field>
+        <Field label="Display Order"><input name="position" type="number" min="1" defaultValue={product.position} placeholder="Leave empty to move last" className={inputClass()} /></Field>
       </div>
       <Field label="English Description"><textarea name="descriptionEn" defaultValue={product.descriptionEn} required rows={3} className={inputClass()} /></Field>
       <Field label="Arabic Description (Optional)"><textarea name="descriptionAr" defaultValue={product.descriptionAr === product.descriptionEn ? "" : product.descriptionAr} rows={3} className={inputClass()} /></Field>
@@ -602,6 +669,89 @@ function EditProductForm({
           )
         }
       />
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <p className="label-caps text-gold">Product Images</p>
+          <span className="text-xs text-on-surface/60">Set primary, edit alt text, or remove images</span>
+        </div>
+        <div className="space-y-4">
+          {images.map((image, index) => (
+            <div
+              key={image.id}
+              className={`grid gap-4 border p-4 sm:grid-cols-[96px_1fr] ${
+                image.delete ? "border-red-700/60 opacity-60" : "border-outline/45"
+              }`}
+            >
+              <div className="space-y-3">
+                <div className="relative h-32 w-24 overflow-hidden bg-surface-mid">
+                  <Image src={image.url} alt={image.altEn} fill sizes="96px" className="object-cover" />
+                </div>
+                <label className="label-caps flex items-center gap-2 text-on-surface/80">
+                  <input
+                    type="radio"
+                    name="primaryImage"
+                    checked={image.isPrimary}
+                    disabled={image.delete}
+                    onChange={() => setPrimaryImage(index)}
+                  />
+                  Primary
+                </label>
+                <label className="label-caps flex items-center gap-2 text-red-700">
+                  <input
+                    type="checkbox"
+                    checked={image.delete}
+                    onChange={(event) => updateImage(index, "delete", event.target.checked)}
+                  />
+                  Delete
+                </label>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="English Alt Text">
+                  <input
+                    value={image.altEn}
+                    onChange={(event) => updateImage(index, "altEn", event.target.value)}
+                    disabled={image.delete}
+                    className={inputClass()}
+                  />
+                </Field>
+                <Field label="Arabic Alt Text (Optional)">
+                  <input
+                    value={image.altAr}
+                    onChange={(event) => updateImage(index, "altAr", event.target.value)}
+                    disabled={image.delete}
+                    placeholder={image.altEn}
+                    className={inputClass()}
+                  />
+                </Field>
+                <Field label="Position">
+                  <input
+                    type="number"
+                    min="1"
+                    value={image.position}
+                    onChange={(event) => updateImage(index, "position", event.target.value)}
+                    disabled={image.delete}
+                    className={inputClass()}
+                  />
+                </Field>
+              </div>
+            </div>
+          ))}
+          {images.length === 0 ? (
+            <p className="border border-outline/45 p-4 text-sm text-on-surface/70">
+              This product does not have images yet.
+            </p>
+          ) : null}
+        </div>
+        <Field label="Add New Images">
+          <input
+            name="newImages"
+            type="file"
+            accept="image/*"
+            multiple
+            className="w-full text-sm text-on-surface/80 file:mr-4 file:border file:border-parchment file:bg-transparent file:px-4 file:py-2 file:text-parchment file:transition-colors hover:file:border-gold hover:file:text-gold"
+          />
+        </Field>
+      </div>
       {status ? <p className="text-sm text-gold">{status}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <button type="button" onClick={onClose} className="label-caps min-h-12 border border-outline px-6 text-parchment transition-colors hover:border-gold hover:text-gold">Cancel</button>

@@ -5,7 +5,11 @@ import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
 
 import {authOptions} from "@/lib/auth";
+import {deleteCloudinaryImageByUrl} from "@/lib/cloudinary";
+import {uploadFragranceImages} from "@/lib/fragrance-images";
 import {prisma} from "@/lib/prisma";
+
+export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{
@@ -23,6 +27,15 @@ type VariantInput = {
   sizeML: number;
   price: string;
   stock: number;
+};
+
+type ImageInput = {
+  id: string;
+  altEn: string;
+  altAr: string;
+  position: number;
+  isPrimary: boolean;
+  delete: boolean;
 };
 
 function stringValue(data: Record<string, unknown>, key: string, label: string, max = 240) {
@@ -53,6 +66,22 @@ function stringArray(data: Record<string, unknown>, key: string) {
 
 function intValue(data: Record<string, unknown>, key: string, label: string, min = 0) {
   const value = Number(data[key]);
+  if (!Number.isInteger(value) || value < min) {
+    throw new Error(`${label} is invalid`);
+  }
+  return value;
+}
+
+function optionalIntValue(
+  data: Record<string, unknown>,
+  key: string,
+  label: string,
+  min = 1
+) {
+  const raw = data[key];
+  if (raw === null || raw === undefined || raw === "") return null;
+
+  const value = Number(raw);
   if (!Number.isInteger(value) || value < min) {
     throw new Error(`${label} is invalid`);
   }
@@ -114,6 +143,64 @@ function variantInputs(data: Record<string, unknown>): VariantInput[] {
   });
 }
 
+function imageInputs(data: Record<string, unknown>): ImageInput[] {
+  const images = data.images;
+  if (!Array.isArray(images)) return [];
+
+  return images.map((image, index) => {
+    if (!image || typeof image !== "object") {
+      throw new Error("Image data is invalid");
+    }
+
+    const record = image as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id : "";
+    if (!id) throw new Error("Image data is invalid");
+
+    return {
+      id,
+      altEn:
+        typeof record.altEn === "string" && record.altEn.trim()
+          ? record.altEn.trim().slice(0, 240)
+          : "Fragrance image",
+      altAr:
+        typeof record.altAr === "string" && record.altAr.trim()
+          ? record.altAr.trim().slice(0, 240)
+          : typeof record.altEn === "string" && record.altEn.trim()
+            ? record.altEn.trim().slice(0, 240)
+            : "Fragrance image",
+      position: Number.isInteger(Number(record.position)) ? Number(record.position) : index + 1,
+      isPrimary: record.isPrimary === true,
+      delete: record.delete === true
+    };
+  });
+}
+
+async function requestData(request: NextRequest) {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData();
+    const payload = form.get("payload");
+    let data: Record<string, unknown>;
+
+    try {
+      data = typeof payload === "string" ? (JSON.parse(payload) as Record<string, unknown>) : {};
+    } catch {
+      throw new Error("Product data is invalid");
+    }
+
+    return {
+      data,
+      files: form.getAll("images").filter((value): value is File => value instanceof File)
+    };
+  }
+
+  return {
+    data: (await request.json()) as Record<string, unknown>,
+    files: []
+  };
+}
+
 export async function PUT(request: NextRequest, context: RouteContext) {
   const session = (await getServerSession(authOptions)) as Session | null;
 
@@ -123,11 +210,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   const {id} = await context.params;
   let data: Record<string, unknown>;
+  let files: File[];
 
   try {
-    data = (await request.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({message: "Invalid request"}, {status: 400});
+    const parsed = await requestData(request);
+    data = parsed.data;
+    files = parsed.files;
+  } catch (error) {
+    return NextResponse.json(
+      {message: error instanceof Error ? error.message : "Invalid request"},
+      {status: 400}
+    );
   }
 
   try {
@@ -141,7 +234,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const gender = stringValue(data, "gender", "Gender") as Gender;
     const scentProfile = stringValue(data, "scentProfile", "Scent profile") as ScentProfile;
     const sillage = stringValue(data, "sillage", "Sillage") as Sillage;
+    const position = optionalIntValue(data, "position", "Display order", 1);
     const variants = variantInputs(data);
+    const imageEdits = imageInputs(data);
     const selectedSeasons = stringArray(data, "seasons").filter((season) =>
       seasonValues.has(season)
     );
@@ -150,6 +245,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!scentValues.has(scentProfile)) throw new Error("Scent profile is invalid");
     if (!sillageValues.has(sillage)) throw new Error("Sillage is invalid");
 
+    const uploadedImages = await uploadFragranceImages(files, slug);
+
+    const deletedImageUrls: string[] = [];
+
     const saved = await prisma.$transaction(async (tx) => {
       const existing = await tx.fragrance.findUnique({
         where: {id},
@@ -157,6 +256,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           id: true,
           variants: {
             select: {id: true}
+          },
+          images: {
+            select: {id: true, url: true}
           }
         }
       });
@@ -167,6 +269,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       const keptVariantIds = variants
         .map((variant) => variant.id)
         .filter((variantId): variantId is string => Boolean(variantId));
+      const existingImageIds = new Set(existing.images.map((image) => image.id));
 
       await tx.fragrance.update({
         where: {id},
@@ -235,11 +338,105 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         });
       }
 
+      const imageDeleteIds = imageEdits
+        .filter((image) => image.delete && existingImageIds.has(image.id))
+        .map((image) => image.id);
+
+      if (imageDeleteIds.length > 0) {
+        deletedImageUrls.push(
+          ...existing.images
+            .filter((image) => imageDeleteIds.includes(image.id))
+            .map((image) => image.url)
+        );
+        await tx.fragranceImage.deleteMany({
+          where: {
+            fragranceId: id,
+            id: {in: imageDeleteIds}
+          }
+        });
+      }
+
+      const keptImageEdits = imageEdits.filter(
+        (image) => !image.delete && existingImageIds.has(image.id)
+      );
+
+      for (const image of keptImageEdits) {
+        await tx.fragranceImage.update({
+          where: {id: image.id},
+          data: {
+            altEn: image.altEn,
+            altAr: image.altAr,
+            position: image.position,
+            isPrimary: false
+          }
+        });
+      }
+
+      const createdImageIds: string[] = [];
+      for (const [index, url] of uploadedImages.entries()) {
+        const created = await tx.fragranceImage.create({
+          data: {
+            fragranceId: id,
+            url,
+            altEn: `${nameEn} fragrance bottle`,
+            altAr: `${nameAr} fragrance bottle`,
+            position: keptImageEdits.length + index + 1,
+            isPrimary: false
+          },
+          select: {id: true}
+        });
+        createdImageIds.push(created.id);
+      }
+
+      const requestedPrimary = keptImageEdits.find((image) => image.isPrimary)?.id;
+      let primaryImageId = requestedPrimary;
+
+      if (!primaryImageId) {
+        const firstImage = await tx.fragranceImage.findFirst({
+          where: {fragranceId: id},
+          orderBy: [{position: "asc"}, {id: "asc"}],
+          select: {id: true}
+        });
+        primaryImageId = firstImage?.id ?? createdImageIds[0];
+      }
+
+      await tx.fragranceImage.updateMany({
+        where: {fragranceId: id},
+        data: {isPrimary: false}
+      });
+
+      if (primaryImageId) {
+        await tx.fragranceImage.update({
+          where: {id: primaryImageId},
+          data: {isPrimary: true}
+        });
+      }
+
+      const orderedProducts = await tx.fragrance.findMany({
+        where: {id: {not: id}},
+        orderBy: [{position: "asc"}, {createdAt: "asc"}],
+        select: {id: true}
+      });
+      const orderedIds = orderedProducts.map((product) => product.id);
+      const targetIndex = position ? Math.min(position - 1, orderedIds.length) : orderedIds.length;
+      orderedIds.splice(targetIndex, 0, id);
+
+      for (const [index, fragranceId] of orderedIds.entries()) {
+        await tx.fragrance.update({
+          where: {id: fragranceId},
+          data: {position: index + 1}
+        });
+      }
+
       return tx.fragrance.findUnique({
         where: {id},
         select: {id: true}
       });
     });
+
+    await Promise.allSettled(
+      deletedImageUrls.map((url) => deleteCloudinaryImageByUrl(url))
+    );
 
     return NextResponse.json({message: "Product updated", id: saved?.id});
   } catch (error) {

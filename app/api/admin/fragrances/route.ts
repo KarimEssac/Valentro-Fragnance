@@ -1,5 +1,3 @@
-import {mkdir, writeFile} from "fs/promises";
-import path from "path";
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {FragranceNote, Gender, ScentProfile, Sillage} from "@prisma/client";
@@ -7,7 +5,10 @@ import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
 
 import {authOptions} from "@/lib/auth";
+import {uploadFragranceImages} from "@/lib/fragrance-images";
 import {prisma} from "@/lib/prisma";
+
+export const runtime = "nodejs";
 
 const genderValues = new Set(Object.values(Gender));
 const scentValues = new Set(Object.values(ScentProfile));
@@ -39,6 +40,17 @@ function values(form: FormData, key: string) {
 function positiveInt(form: FormData, key: string, label: string) {
   const number = Number(form.get(key));
   if (!Number.isInteger(number) || number < 0) {
+    throw new Error(`${label} is invalid`);
+  }
+  return number;
+}
+
+function optionalPositiveInt(form: FormData, key: string, label: string) {
+  const value = form.get(key);
+  if (value === null || value === "") return null;
+
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1) {
     throw new Error(`${label} is invalid`);
   }
   return number;
@@ -106,34 +118,6 @@ function variantsFrom(form: FormData, slug: string) {
   });
 }
 
-async function saveImages(files: File[], slug: string) {
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "fragrances");
-  await mkdir(uploadDir, {recursive: true});
-
-  const saved = [];
-
-  for (const [index, file] of files.entries()) {
-    if (!file.size) continue;
-    if (!file.type.startsWith("image/")) {
-      throw new Error("Only image files can be uploaded");
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error("Each image must be 5MB or less");
-    }
-
-    const extension = file.name.split(".").pop()?.toLowerCase() || "png";
-    const safeName = `${slug}-${Date.now()}-${index}.${extension}`.replace(
-      /[^a-zA-Z0-9._-]/g,
-      "-"
-    );
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(uploadDir, safeName), bytes);
-    saved.push(`/uploads/fragrances/${safeName}`);
-  }
-
-  return saved;
-}
-
 export async function GET() {
   return NextResponse.json({message: "Use the admin inventory page"});
 }
@@ -164,13 +148,14 @@ export async function POST(request: NextRequest) {
     const gender = text(form, "gender", "Gender") as Gender;
     const scentProfile = text(form, "scentProfile", "Scent profile") as ScentProfile;
     const sillage = text(form, "sillage", "Sillage") as Sillage;
+    const displayOrder = optionalPositiveInt(form, "position", "Display order");
 
     if (!genderValues.has(gender)) throw new Error("Gender is invalid");
     if (!scentValues.has(scentProfile)) throw new Error("Scent profile is invalid");
     if (!sillageValues.has(sillage)) throw new Error("Sillage is invalid");
 
     const variants = variantsFrom(form, slug);
-    const uploadedImages = await saveImages(
+    const uploadedImages = await uploadFragranceImages(
       form.getAll("images").filter((value): value is File => value instanceof File),
       slug
     );
@@ -181,48 +166,82 @@ export async function POST(request: NextRequest) {
       ? ["ALL_YEAR"]
       : selectedSeasons;
     const ingredients = values(form, "ingredients");
+    const signatureCollection = await prisma.collection.findUnique({
+      where: {slug: "signature-line"},
+      select: {id: true}
+    });
+    await prisma.$transaction(async (tx) => {
+      const fragrance = await tx.fragrance.create({
+        data: {
+          slug,
+          nameEn,
+          nameAr,
+          taglineEn,
+          taglineAr,
+          descriptionEn,
+          descriptionAr,
+          gender,
+          scentProfile,
+          avoidIf: values(form, "avoidIf"),
+          bestFor: [],
+          seasons: finalSeasons,
+          sillage,
+          longevity: positiveInt(form, "longevity", "Longevity"),
+          position: 0,
+          isPublished: true,
+          variants: {
+            create: variants
+          },
+          ingredients: {
+            create: ingredients.map((ingredient, index) => ({
+              nameEn: ingredient,
+              nameAr: ingredient,
+              note:
+                index === 0
+                  ? FragranceNote.TOP
+                  : index === ingredients.length - 1
+                    ? FragranceNote.BASE
+                    : FragranceNote.MIDDLE
+            }))
+          },
+          images: {
+            create: uploadedImages.map((url, index) => ({
+              url,
+              altEn: `${nameEn} fragrance bottle`,
+              altAr: `${nameAr} fragrance bottle`,
+              position: index + 1,
+              isPrimary: index === 0
+            }))
+          },
+          collections: signatureCollection
+            ? {
+                create: {
+                  collection: {
+                    connect: {id: signatureCollection.id}
+                  }
+                }
+              }
+            : undefined
+        },
+        select: {id: true}
+      });
 
-    await prisma.fragrance.create({
-      data: {
-        slug,
-        nameEn,
-        nameAr,
-        taglineEn,
-        taglineAr,
-        descriptionEn,
-        descriptionAr,
-        gender,
-        scentProfile,
-        avoidIf: values(form, "avoidIf"),
-        bestFor: [],
-        seasons: finalSeasons,
-        sillage,
-        longevity: positiveInt(form, "longevity", "Longevity"),
-        isPublished: true,
-        variants: {
-          create: variants
-        },
-        ingredients: {
-          create: ingredients.map((ingredient, index) => ({
-            nameEn: ingredient,
-            nameAr: ingredient,
-            note:
-              index === 0
-                ? FragranceNote.TOP
-                : index === ingredients.length - 1
-                  ? FragranceNote.BASE
-                  : FragranceNote.MIDDLE
-          }))
-        },
-        images: {
-          create: uploadedImages.map((url, index) => ({
-            url,
-            altEn: `${nameEn} fragrance bottle`,
-            altAr: `${nameAr} fragrance bottle`,
-            position: index + 1,
-            isPrimary: index === 0
-          }))
-        }
+      const orderedProducts = await tx.fragrance.findMany({
+        where: {id: {not: fragrance.id}},
+        orderBy: [{position: "asc"}, {createdAt: "asc"}],
+        select: {id: true}
+      });
+      const orderedIds = orderedProducts.map((product) => product.id);
+      const targetIndex = displayOrder
+        ? Math.min(displayOrder - 1, orderedIds.length)
+        : orderedIds.length;
+      orderedIds.splice(targetIndex, 0, fragrance.id);
+
+      for (const [index, fragranceId] of orderedIds.entries()) {
+        await tx.fragrance.update({
+          where: {id: fragranceId},
+          data: {position: index + 1}
+        });
       }
     });
 

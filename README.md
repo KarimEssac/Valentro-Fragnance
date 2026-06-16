@@ -57,6 +57,9 @@ Valentro is a luxury fragrance e-commerce application built with Next.js App Rou
    NEXTAUTH_SECRET=replace-with-a-long-random-secret
    NEXTAUTH_URL=https://yourdomain.com
    NEXT_PUBLIC_SITE_URL=https://yourdomain.com
+   CLOUDINARY_CLOUD_NAME=your-cloud-name
+   CLOUDINARY_API_KEY=your-api-key
+   CLOUDINARY_API_SECRET=your-api-secret
    ```
 
 3. Install dependencies and build:
@@ -79,7 +82,7 @@ Valentro is a luxury fragrance e-commerce application built with Next.js App Rou
    npm run start
    ```
 
-6. Point the domain proxy to the Next.js process. Keep uploads under `public/uploads` on the same VPS filesystem so product imagery remains Hostinger-compatible.
+6. Point the domain proxy to the Next.js process. Product imagery is optimized to WebP during upload, stored in Cloudinary, and referenced from PostgreSQL by secure Cloudinary URL.
 
 ## Current Phase
 
