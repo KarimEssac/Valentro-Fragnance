@@ -11,12 +11,16 @@ type FragrancesPageProps = {
   params: Promise<{
     locale: string;
   }>;
+  searchParams: Promise<{
+    type?: string;
+  }>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function FragrancesPage({params}: FragrancesPageProps) {
+export default async function FragrancesPage({params, searchParams}: FragrancesPageProps) {
   const {locale} = await params;
+  const {type = ""} = await searchParams;
   const [fragrances, collections] = await Promise.all([
     prisma.fragrance.findMany({
       where: {
@@ -154,6 +158,7 @@ export default async function FragrancesPage({params}: FragrancesPageProps) {
       <SalesBar />
       <Navbar cartCount={0} />
       <ShopClient
+        key={type}
         locale={locale}
         fragrances={products}
         collections={collectionOffers}

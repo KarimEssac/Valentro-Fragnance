@@ -74,6 +74,7 @@ const itemTypeOptions = [
 ];
 
 const genderValues = genderOptions.map((option) => option.value);
+const itemTypeValues = itemTypeOptions.map((option) => option.value);
 
 const sortOptions = [
   {value: "position", label: "Curated"},
@@ -166,8 +167,14 @@ export default function ShopClient({
   const initialGender = genderValues.includes(requestedGender)
     ? requestedGender
     : "";
+  const requestedItemType = searchParams.get("type")?.toLowerCase() ?? "";
+  const initialItemType = itemTypeValues.includes(requestedItemType)
+    ? requestedItemType
+    : "";
   const [query, setQuery] = useState("");
-  const [selectedItemTypes, setSelectedItemTypes] = useState<string[]>([]);
+  const [selectedItemTypes, setSelectedItemTypes] = useState<string[]>(
+    initialItemType ? [initialItemType] : []
+  );
   const [selectedGenders, setSelectedGenders] = useState<string[]>(
     initialGender ? [initialGender] : []
   );

@@ -114,6 +114,14 @@ model Announcement {
   @@index([isActive])
 }
 
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model Testimonial {
   id          String   @id @default(cuid())
   messageEn   String

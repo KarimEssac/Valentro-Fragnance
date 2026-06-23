@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -112,6 +113,11 @@
 
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    font-family: 'Material Symbols Outlined';
   }
 }
 
@@ -424,4 +430,49 @@
   .animate-cart-backdrop-in {
     animation-duration: 1ms;
   }
+}
+
+/* ─── Footer Social Link Hover Effects ─── */
+
+.footer-social-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  color: var(--color-muted-brass, #A89060);
+  transition: color 400ms cubic-bezier(0.33, 1, 0.68, 1),
+              transform 400ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* Soft golden underline that grows on hover */
+.footer-social-link::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 1.5px;
+  background: #D4AF37;
+  border-radius: 1px;
+  transition: width 400ms cubic-bezier(0.33, 1, 0.68, 1),
+              left 400ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.footer-social-link:hover {
+  color: #D4AF37;
+  transform: translateY(-3px);
+}
+
+.footer-social-link:hover::after {
+  width: 100%;
+  left: 0;
+}
+
+.footer-social-link .footer-social-icon {
+  transition: filter 400ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.footer-social-link:hover .footer-social-icon {
+  filter: drop-shadow(0 3px 10px rgba(212, 175, 55, 0.45));
 }

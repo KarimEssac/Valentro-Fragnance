@@ -47,5 +47,136 @@
     "account": "Account",
     "productDetail": "Product Detail",
     "collectionDetail": "Collection Detail"
+  },
+  "footer": {
+    "brandDescription": "Crafting olfactory masterpieces since our inception in Grasse. A legacy of rare botanicals and uncompromising artistry, distilled into timeless elegance.",
+    "collections": {
+      "title": "Collections",
+      "all": "Collections",
+      "fragrances": "Fragrances",
+      "story": "Our Story",
+      "atelier": "The Atelier"
+    },
+    "assistance": {
+      "title": "Assistance",
+      "privacyPolicy": "Privacy Policy",
+      "termsConditions": "Terms and Conditions",
+      "refundPolicy": "Refund Policy"
+    },
+    "newsletter": {
+      "title": "Join the Inner Circle",
+      "description": "Subscribe for exclusive invitations to private viewings and new olfactory reveals.",
+      "placeholder": "Your email address",
+      "button": "Subscribe",
+      "success": "Thank you for subscribing!",
+      "error": "Unable to subscribe right now. Please try again."
+    },
+    "rights": "© 2026 VALENTRO ATELIER. ALL RIGHTS RESERVED.",
+    "origin": "Made in Egypt"
+  },
+  "privacy": {
+    "metaTitle": "Privacy Policy - VALENTRO",
+    "metaDescription": "VALENTRO Atelier Privacy Policy. Learn about how we manage and protect your data.",
+    "subtitle": "Policy of Discretion",
+    "title": "The Maison's Commitment",
+    "introduction": "In the realm of haute parfumerie, discretion is as vital as the rarest absolute. At Valentro, we regard your personal information with the same reverence and meticulous care as our most precious essences. This document outlines our steadfast dedication to preserving the sanctity of your digital footprint, ensuring that your journey with our Maison remains entirely yours.",
+    "sections": {
+      "essence": {
+        "title": "The Essence of Information",
+        "intro": "To curate an experience worthy of the Valentro name, we gather specific notes of information, blended seamlessly to anticipate your desires without intrusion.",
+        "card1": {
+          "title": "Identity & Contact",
+          "desc": "The fundamental signatures—your name, atelier address, and means of correspondence—allowing us to recognize you across all touchpoints."
+        },
+        "card2": {
+          "title": "Scent Profile",
+          "desc": "Your olfactory preferences, past acquisitions, and bespoke consultations, meticulously archived to refine future recommendations."
+        },
+        "card3": {
+          "title": "Technical Impressions",
+          "desc": "Subtle digital echoes—IP addresses, browser comportment, and device signatures—utilized strictly to optimize the architecture of our digital boutique and ensure an immaculate browsing experience."
+        }
+      },
+      "curate": {
+        "title": "How We Curate Your Experience",
+        "item1": {
+          "title": "Bespoke Curation",
+          "desc": "Your data serves as the foundation for a deeply personalized relationship. It allows us to present you with early access to limited reserves, invite you to exclusive atelier events, and tailor our digital displays to reflect your distinct aesthetic."
+        },
+        "item2": {
+          "title": "Fulfillment & Execution",
+          "desc": "We utilize your information to flawlessly execute the delivery of your acquisitions, from the meticulous packaging in our Parisian atelier to the white-glove arrival at your residence."
+        },
+        "item3": {
+          "title": "The Inner Circle",
+          "desc": "With your explicit consent, we invite you into our Inner Circle, a sanctum of private correspondence where we share the inspiration behind new creations and stories from the perfumer's bench."
+        }
+      },
+      "sovereignty": {
+        "title": "Your Sovereignty",
+        "intro": "You hold absolute dominion over your personal narrative. We honor your right to direct how your information is engaged within our Maison.",
+        "button": "CONTACT OUR DPO",
+        "right1": {
+          "title": "The Right of Access",
+          "desc": "Request a comprehensive ledger of the data we hold, presented with clarity and transparency."
+        },
+        "right2": {
+          "title": "The Right of Erasure",
+          "desc": "Command the immediate removal of your presence from our archives, returning to anonymity."
+        },
+        "right3": {
+          "title": "The Right of Rectification",
+          "desc": "Amend or refine your details at any moment, ensuring our records remain an accurate reflection of your current state."
+        }
+      },
+      "bastion": {
+        "title": "Our Bastion of Privacy",
+        "desc1": "The architecture of our digital presence is fortified with enterprise-grade encryption and rigorous access protocols. We employ state-of-the-art cryptographic measures to shield your data from unauthorized observation, ensuring that the enclave of your personal information remains impenetrable.",
+        "desc2": "Our commitment to security is an ongoing pursuit, continually reviewed and refined by independent auditors to meet the most exacting global standards of digital luxury and discretion."
+      }
+    }
+  },
+  "refund": {
+    "metaTitle": "Refund Policy - VALENTRO",
+    "metaDescription": "VALENTRO Atelier Refund Policy. Understand our policies on returns and refunds.",
+    "subtitle": "Valentro Policies",
+    "title": "The Art of Return",
+    "introduction": "A Graceful Return. We handle your changing desires with the same reverence as our scent creation. Our commitment to your olfactory journey remains absolute, even when a path diverges.",
+    "sections": {
+      "window": {
+        "title": "The 30-Day Window",
+        "desc1": "Time is essential in truly experiencing a fragrance, but decisions require clarity. We offer a generous 30-day window from the date of receipt to request a return for any eligible Valentro creation.",
+        "desc2": "This period allows you to consider your acquisition in the comfort of your home, ensuring the piece resonates with your personal aesthetic and intentions.",
+        "timelineTitle": "Timeline Details",
+        "bullet1": "30 days from delivery confirmation.",
+        "bullet2": "Funds returned to original payment method.",
+        "bullet3": "Processing takes 5-7 business days upon receipt."
+      },
+      "sanctuary": {
+        "title": "The Sanctuary of Scent",
+        "desc": "For the integrity of our creations and the safety of our clientele, all returned fragrances must remain unopened, entirely sealed within their original cellophane, and in pristine condition.",
+        "protocolTitle": "The Complimentary Sample Protocol",
+        "protocolDesc": "To ensure absolute confidence in your selection, every full-sized fragrance order includes a complimentary 2ml sample vial of the identical scent. We invite you to experience the sample first. If the olfactory narrative does not align with your spirit, the unopened full bottle may be returned."
+      },
+      "path": {
+        "title": "The Path to Resolution",
+        "intro": "Initiating a return is a curated, effortless process designed to respect your time.",
+        "step1Title": "Initiate",
+        "step1Desc": "Navigate to your Atelier account or contact our Concierge to request a Return Authorization code.",
+        "step2Title": "Prepare",
+        "step2Desc": "Carefully package the unopened item in its original shipping materials, including all documentation.",
+        "step3Title": "Dispatch",
+        "step3Desc": "Affix the provided prepaid shipping label and tender the parcel to our designated premium courier."
+      },
+      "exclusions": {
+        "title": "Exclusions of Rarity",
+        "intro": "Certain creations are bound to their initial patron and cannot traverse backward.",
+        "card1Title": "Bespoke Commissions",
+        "card1Desc": "Fragrances crafted through our personalized Bespoke service, tailored precisely to your unique specifications and engraved with your moniker, are final sale. Their intimate nature precludes any possibility of return.",
+        "card2Title": "Discovery Sets",
+        "card2Desc": "Due to the exploratory and consumable nature of our curated Discovery Sets and individual sample vials, these items are ineligible for return or exchange once dispatched from our Maison.",
+        "button": "Contact Concierge"
+      }
+    }
   }
 }
