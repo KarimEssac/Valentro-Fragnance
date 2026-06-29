@@ -146,7 +146,7 @@ export default function TestimonialsSection() {
 
         {status === "loading" ? (
           <div className="grid gap-10 md:grid-cols-12 md:items-center">
-            <div className="h-[420px] animate-pulse bg-surface-mid/60 md:col-span-5" />
+            <div className="hidden h-[420px] animate-pulse bg-surface-mid/60 md:col-span-5 md:block" />
             <div className="space-y-6 md:col-span-6 md:col-start-7">
               <div className="h-4 w-28 animate-pulse bg-surface-mid/60" />
               <div className="h-8 w-full animate-pulse bg-surface-mid/60" />
@@ -178,10 +178,10 @@ export default function TestimonialsSection() {
               return (
                 <article
                   key={testimonial.id}
-                  className="grid w-full shrink-0 snap-start gap-10 md:grid-cols-12 md:items-center md:gap-6"
+                  className="grid w-full shrink-0 snap-start md:grid-cols-12 md:items-center md:gap-6"
                 >
                   <div
-                    className={`relative aspect-[4/5] overflow-hidden bg-surface-mid md:col-span-5 lg:col-span-5 ${
+                    className={`relative hidden aspect-[4/5] overflow-hidden bg-surface-mid md:block md:col-span-5 lg:col-span-5 ${
                       isEven
                         ? "md:col-start-1"
                         : "md:col-start-8 md:order-2"
@@ -191,7 +191,7 @@ export default function TestimonialsSection() {
                       src={testimonial.image.url}
                       alt={imageAlt}
                       fill
-                      sizes="(min-width: 1024px) 36vw, (min-width: 768px) 42vw, 100vw"
+                      sizes="(min-width: 1024px) 36vw, (min-width: 768px) 42vw"
                       className="object-cover object-center"
                     />
                     <div className="absolute inset-0 bg-parchment/5" />
@@ -217,10 +217,19 @@ export default function TestimonialsSection() {
                     </p>
                     {testimonial.fragrance ? (
                       <>
-                        <p className="label-caps mt-6 text-gold">
+                        <p className="label-caps mt-6 flex items-center gap-3 text-gold">
                           {isArabic
                             ? `لهذا العطر: ${fragranceName}`
                             : `For fragrance: ${fragranceName}`}
+                          <span className="relative h-12 w-10 shrink-0 overflow-hidden bg-surface-mid md:hidden">
+                            <Image
+                              src={testimonial.image.url}
+                              alt={imageAlt}
+                              fill
+                              sizes="40px"
+                              className="object-cover object-center"
+                            />
+                          </span>
                         </p>
                         <a
                           href={`/${locale}/fragrances/${testimonial.fragrance.slug}`}

@@ -10,7 +10,7 @@ import {createPortal} from "react-dom";
 
 import SideCart from "@/components/storefront/cart/SideCart";
 
-type NavKey = "collections" | "fragrances" | "atelier" | "story";
+type NavKey = "collections" | "fragrances" | "story";
 
 type NavLink = {
   key: NavKey;
@@ -34,8 +34,7 @@ type SessionResponse = {
 const navLinks: NavLink[] = [
   {key: "collections", href: "/"},
   {key: "fragrances", href: "/fragrances"},
-  {key: "atelier", href: "/atelier"},
-  {key: "story", href: "/our-story"}
+  {key: "story", href: "/about-us"}
 ];
 
 function localizedHref(locale: string, href: string) {
@@ -116,6 +115,7 @@ function CloseIcon() {
 export default function Navbar({cartCount = 0}: NavbarProps) {
   const locale = useLocale();
   const t = useTranslations("nav");
+  const pagesT = useTranslations("pages");
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
@@ -323,7 +323,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                 <CloseIcon />
               </button>
             </div>
-            <nav className="flex flex-1 flex-col items-center justify-center gap-6 pb-10 text-center">
+            <nav className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
               {navLinks.map((link) => (
                 <Link
                   key={link.key}
@@ -336,6 +336,9 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                   {t(link.key)}
                 </Link>
               ))}
+            </nav>
+
+            <div className="border-t border-outline/70 pb-4 pt-6 text-center">
               {isAdmin ? (
                 <Link
                   href={`/${locale}/admin`}
@@ -343,6 +346,15 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                   className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-gold transition-colors duration-300 hover:text-parchment"
                 >
                   Admin Dashboard
+                </Link>
+              ) : null}
+              {!isSignedIn ? (
+                <Link
+                  href={`/${locale}/login`}
+                  onClick={closeMenu}
+                  className="font-serif text-[clamp(2rem,11vw,3rem)] leading-tight text-gold transition-colors duration-300 hover:text-parchment"
+                >
+                  {pagesT("login")}
                 </Link>
               ) : null}
               {isSignedIn && !isAdmin ? (
@@ -354,7 +366,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                   Log Out
                 </button>
               ) : null}
-            </nav>
+            </div>
           </div>
 
           <aside
@@ -407,6 +419,15 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
                   className="label-caps block text-gold transition-colors duration-300 hover:text-parchment"
                 >
                   Admin Dashboard
+                </Link>
+              ) : null}
+              {!isSignedIn ? (
+                <Link
+                  href={`/${locale}/login`}
+                  onClick={closeMenu}
+                  className="label-caps block text-gold transition-colors duration-300 hover:text-parchment"
+                >
+                  {pagesT("login")}
                 </Link>
               ) : null}
               {isSignedIn && !isAdmin ? (

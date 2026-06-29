@@ -209,7 +209,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
 
   return (
     <section className="mx-auto max-w-container px-gutter py-10 text-parchment sm:py-12 lg:px-16">
-      <header className="sticky top-16 z-20 -mx-gutter mb-10 border-b border-outline/60 bg-surface-hi/95 px-gutter py-5 backdrop-blur-sm lg:top-0 lg:-mx-16 lg:px-16">
+      <header className="mb-10 border-b border-outline/60 pb-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="label-caps mb-3 text-gold">Admin Console</p>

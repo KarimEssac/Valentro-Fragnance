@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {useLocale} from "next-intl";
-import {useEffect, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 
 type CartItem = {
@@ -34,6 +34,42 @@ type Recommendation = {
     stock: number;
   }[];
 };
+
+type CollectionRecommendation = {
+  id: string;
+  slug: string;
+  code: string | null;
+  nameEn: string;
+  nameAr: string;
+  descriptionEn: string;
+  descriptionAr: string;
+  coverImage: string;
+  offerPrice: string | null;
+  combinedValue: string;
+  discountPercent: number;
+  products: {
+    id: string;
+    slug: string;
+    nameEn: string;
+    nameAr: string;
+    image: {
+      url: string;
+      altEn: string;
+      altAr: string;
+    } | null;
+    price: string | null;
+  }[];
+};
+
+type SuggestedItem =
+  | {
+      kind: "collection";
+      collection: CollectionRecommendation;
+    }
+  | {
+      kind: "fragrance";
+      fragrance: Recommendation;
+    };
 
 type SideCartProps = {
   open: boolean;
@@ -71,12 +107,35 @@ function CloseIcon() {
   );
 }
 
+function ArrowIcon({direction}: {direction: "left" | "right"}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.35"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      {direction === "left" ? (
+        <path d="M15 6l-6 6 6 6" />
+      ) : (
+        <path d="M9 6l6 6-6 6" />
+      )}
+    </svg>
+  );
+}
+
 export default function SideCart({open, onClose}: SideCartProps) {
   const locale = useLocale();
   const isArabic = locale === "ar";
   const [items, setItems] = useState<CartItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [collections, setCollections] = useState<CollectionRecommendation[]>([]);
   const [isClosing, setIsClosing] = useState(false);
+  const recommendationsCarouselRef = useRef<HTMLDivElement>(null);
 
   const isVisible = open || isClosing;
 
@@ -120,14 +179,26 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
     async function loadRecommendations() {
       try {
-        const response = await fetch(
-          "/api/storefront/fragrances?featured=true&limit=4",
-          {headers: {Accept: "application/json"}}
-        );
-        if (!response.ok) return;
+        const [fragrancesResponse, collectionsResponse] = await Promise.all([
+          fetch("/api/storefront/fragrances?featured=true&limit=4", {
+            headers: {Accept: "application/json"}
+          }),
+          fetch("/api/storefront/collections", {
+            headers: {Accept: "application/json"}
+          })
+        ]);
 
-        const data = (await response.json()) as Recommendation[];
-        if (isMounted) setRecommendations(data);
+        if (isMounted && fragrancesResponse.ok) {
+          const data = (await fragrancesResponse.json()) as Recommendation[];
+          setRecommendations(data);
+        }
+
+        if (isMounted && collectionsResponse.ok) {
+          const data = (await collectionsResponse.json()) as {
+            collections: CollectionRecommendation[];
+          };
+          setCollections(data.collections);
+        }
       } catch {
         // Recommendations are optional.
       }
@@ -192,15 +263,48 @@ export default function SideCart({open, onClose}: SideCartProps) {
     persistCart(existing);
   }
 
+  const scrollRecommendations = useCallback((direction: "previous" | "next") => {
+    const carousel = recommendationsCarouselRef.current;
+    if (!carousel) return;
+
+    const card = carousel.querySelector<HTMLElement>("[data-recommendation-card]");
+    const scrollAmount = card ? card.offsetWidth + 16 : carousel.clientWidth;
+
+    carousel.scrollBy({
+      left: direction === "previous" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  }, []);
+
   const subtotal = items.reduce(
     (total, item) => total + Number(item.price) * item.quantity,
     0
   );
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const cartFragranceIds = new Set(items.map((item) => item.fragranceId));
-  const suggested = recommendations
+  const matchingCollection = collections.find((collection) => {
+    if (cartFragranceIds.size === 0) return false;
+
+    const collectionFragranceIds = new Set(
+      collection.products.map((product) => product.id)
+    );
+
+    return Array.from(cartFragranceIds).every((id) =>
+      collectionFragranceIds.has(id)
+    );
+  });
+  const suggestedFragrances = recommendations
     .filter((recommendation) => !cartFragranceIds.has(recommendation.id))
-    .slice(0, 3);
+    .slice(0, matchingCollection ? 3 : 4);
+  const suggested: SuggestedItem[] = [
+    ...(matchingCollection
+      ? [{kind: "collection" as const, collection: matchingCollection}]
+      : []),
+    ...suggestedFragrances.map((fragrance) => ({
+      kind: "fragrance" as const,
+      fragrance
+    }))
+  ];
 
   if (!isVisible) return null;
 
@@ -336,9 +440,93 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
           {suggested.length > 0 ? (
             <section className="mt-8 border-t border-outline/60 pt-6">
-              <h3 className="label-caps mb-4 text-gold">You might also like</h3>
-              <div className="space-y-4">
-                {suggested.map((fragrance) => {
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <h3 className="label-caps text-gold">You might also like</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Previous recommendation"
+                    onClick={() => scrollRecommendations("previous")}
+                    className="focus-gold flex h-9 w-9 items-center justify-center border border-gold/40 text-parchment transition-colors hover:border-gold hover:bg-gold/10"
+                  >
+                    <ArrowIcon direction={isArabic ? "right" : "left"} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next recommendation"
+                    onClick={() => scrollRecommendations("next")}
+                    className="focus-gold flex h-9 w-9 items-center justify-center border border-gold text-parchment transition-colors hover:bg-gold/10"
+                  >
+                    <ArrowIcon direction={isArabic ? "left" : "right"} />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                ref={recommendationsCarouselRef}
+                className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2"
+              >
+                {suggested.map((suggestion) => {
+                  if (suggestion.kind === "collection") {
+                    const collection = suggestion.collection;
+                    const name = isArabic ? collection.nameAr : collection.nameEn;
+                    const description = isArabic
+                      ? collection.descriptionAr
+                      : collection.descriptionEn;
+                    const price = Number(collection.offerPrice);
+
+                    return (
+                      <article
+                        key={`collection-${collection.id}`}
+                        data-recommendation-card
+                        className="grid w-[184px] shrink-0 snap-start grid-rows-[104px_1fr_auto] border border-gold/55 bg-surface/70"
+                      >
+                        <Link
+                          href={`/${locale}/collections/${collection.slug}`}
+                          onClick={requestClose}
+                          className="relative overflow-hidden bg-surface-mid"
+                        >
+                          <Image
+                            src={collection.coverImage}
+                            alt={name}
+                            fill
+                            unoptimized
+                            sizes="184px"
+                            className="object-cover"
+                          />
+                          <span className="label-caps absolute left-2 top-2 bg-parchment px-2 py-1 text-[9px] text-surface-hi">
+                            Collection
+                          </span>
+                        </Link>
+                        <div className="min-w-0 px-3 pb-2 pt-3">
+                          <Link
+                            href={`/${locale}/collections/${collection.slug}`}
+                            onClick={requestClose}
+                            className="line-clamp-2 font-serif text-base leading-tight transition-colors hover:text-gold"
+                          >
+                            {name}
+                          </Link>
+                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-on-surface/65">
+                            {description || "A limited bundle curated by Valentro."}
+                          </p>
+                          <p className="label-caps mt-2 text-on-surface/65">
+                            {Number.isFinite(price) && price > 0
+                              ? priceFormatter.format(price)
+                              : "View collection"}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/${locale}/collections/${collection.slug}`}
+                          onClick={requestClose}
+                          className="label-caps mx-3 mb-3 flex min-h-9 items-center justify-center border border-parchment px-3 text-parchment transition-colors hover:border-gold hover:text-gold"
+                        >
+                          View
+                        </Link>
+                      </article>
+                    );
+                  }
+
+                  const fragrance = suggestion.fragrance;
                   const variant = fragrance.variants[0];
                   const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
                   const imageAlt = fragrance.primaryImage
@@ -349,29 +537,30 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
                   return (
                     <article
-                      key={fragrance.id}
-                      className="grid grid-cols-[72px_1fr_auto] items-center gap-4 border border-outline/45 bg-surface/70 p-3"
+                      key={`fragrance-${fragrance.id}`}
+                      data-recommendation-card
+                      className="grid w-[184px] shrink-0 snap-start grid-rows-[104px_1fr_auto] border border-outline/45 bg-surface/70"
                     >
                       <Link
                         href={`/${locale}/fragrances/${fragrance.slug}`}
                         onClick={requestClose}
-                        className="relative h-24 overflow-hidden bg-surface-mid"
+                        className="relative overflow-hidden bg-surface-mid"
                       >
                         {fragrance.primaryImage ? (
                           <Image
                             src={fragrance.primaryImage.url}
                             alt={imageAlt}
                             fill
-                            sizes="72px"
+                            sizes="184px"
                             className="object-cover"
                           />
                         ) : null}
                       </Link>
-                      <div className="min-w-0">
+                      <div className="min-w-0 px-3 pb-2 pt-3">
                         <Link
                           href={`/${locale}/fragrances/${fragrance.slug}`}
                           onClick={requestClose}
-                          className="font-serif text-lg leading-tight transition-colors hover:text-gold"
+                          className="line-clamp-2 font-serif text-base leading-tight transition-colors hover:text-gold"
                         >
                           {name}
                         </Link>
@@ -383,7 +572,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
                         type="button"
                         onClick={() => addRecommendation(fragrance)}
                         disabled={!variant}
-                        className="label-caps min-h-10 border border-parchment px-3 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-45"
+                        className="label-caps mx-3 mb-3 min-h-9 border border-parchment px-3 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         Add
                       </button>

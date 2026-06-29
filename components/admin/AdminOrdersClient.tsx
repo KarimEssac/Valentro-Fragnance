@@ -2,16 +2,42 @@
 
 import {useMemo, useState} from "react";
 
+type AdminOrderItem = {
+  fragranceName: string;
+  sizeML: number;
+  quantity: number;
+  unitPrice: string;
+  totalPrice: string;
+};
+
+type AddressSnapshot = {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  address?: string;
+  apartment?: string | null;
+  city?: string;
+  governorate?: string;
+  postalCode?: string | null;
+  phone?: string;
+  country?: string;
+};
+
 export type AdminOrderRow = {
   id: string;
   shortId: string;
   createdAt: string;
   customerName: string;
   customerEmail: string;
+  subtotal: string;
+  discountAmount: string;
   total: string;
   status: string;
   itemCount: number;
   itemsPreview: string;
+  addressSnapshot: unknown;
+  notes: string | null;
+  items: AdminOrderItem[];
 };
 
 type OrderSummary = {
@@ -37,6 +63,8 @@ const statusOptions = [
   "DELIVERED",
   "CANCELLED"
 ];
+
+const editableStatuses = statusOptions.filter((option) => option !== "ALL");
 
 function StatusBadge({status}: {status: string}) {
   const classes: Record<string, string> = {
@@ -69,7 +97,7 @@ function SummaryCard({
   tone?: "default" | "gold";
 }) {
   return (
-    <div className="flex h-28 sm:h-36 flex-col justify-between border border-outline/55 bg-surface/70 p-4 sm:p-6 transition-colors hover:border-gold/70">
+    <div className="flex h-28 flex-col justify-between border border-outline/55 bg-surface/70 p-4 transition-colors hover:border-gold/70 sm:h-36 sm:p-6">
       <p
         className={`label-caps text-[10px] sm:text-xs ${
           tone === "gold" ? "text-gold" : "text-on-surface/70"
@@ -77,9 +105,17 @@ function SummaryCard({
       >
         {label}
       </p>
-      <p className="font-serif text-2xl sm:text-4xl leading-tight text-parchment">{value}</p>
+      <p className="font-serif text-2xl leading-tight text-parchment sm:text-4xl">
+        {value}
+      </p>
     </div>
   );
+}
+
+function addressFromSnapshot(value: unknown): AddressSnapshot {
+  if (!value || typeof value !== "object") return {};
+
+  return value as AddressSnapshot;
 }
 
 export default function AdminOrdersClient({
@@ -87,8 +123,15 @@ export default function AdminOrdersClient({
   orders,
   summary
 }: AdminOrdersClientProps) {
+  const [orderRows, setOrderRows] = useState(orders);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(
+    orders[0]?.id ?? null
+  );
+  const [message, setMessage] = useState("");
+  const [updatingOrderId, setUpdatingOrderId] = useState("");
+
   const dateFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -108,10 +151,14 @@ export default function AdminOrdersClient({
     [locale]
   );
 
+  const selectedOrder = orderRows.find((order) => order.id === selectedOrderId) ??
+    orderRows[0] ??
+    null;
+
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return orders.filter((order) => {
+    return orderRows.filter((order) => {
       const matchesStatus = status === "ALL" || order.status === status;
       const haystack = [
         order.id,
@@ -127,7 +174,170 @@ export default function AdminOrdersClient({
 
       return matchesStatus && matchesQuery;
     });
-  }, [orders, query, status]);
+  }, [orderRows, query, status]);
+
+  const currentSummary = useMemo(
+    () => ({
+      total: orderRows.length,
+      pending: orderRows.filter((order) => order.status === "PENDING").length,
+      processing: orderRows.filter((order) =>
+        ["CONFIRMED", "PROCESSING"].includes(order.status)
+      ).length,
+      shipped: orderRows.filter((order) => order.status === "SHIPPED").length,
+      delivered: orderRows.filter((order) => order.status === "DELIVERED").length
+    }),
+    [orderRows]
+  );
+
+  async function updateOrderStatus(orderId: string, nextStatus: string) {
+    setUpdatingOrderId(orderId);
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}`, {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status: nextStatus})
+      });
+      const result = (await response.json()) as {
+        message?: string;
+        order?: {status: string};
+      };
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to update order status");
+      }
+
+      setOrderRows((current) =>
+        current.map((order) =>
+          order.id === orderId
+            ? {...order, status: result.order?.status ?? nextStatus}
+            : order
+        )
+      );
+      setMessage("Order status updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update order");
+    } finally {
+      setUpdatingOrderId("");
+    }
+  }
+
+  function renderDetails(order: AdminOrderRow) {
+    const address = addressFromSnapshot(order.addressSnapshot);
+
+    return (
+      <aside className="border border-outline/60 bg-surface/70 p-5 xl:sticky xl:top-8">
+        <div className="border-b border-outline/60 pb-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="label-caps mb-2 text-gold">Order Details</p>
+              <h2 className="font-serif text-3xl leading-tight">{order.shortId}</h2>
+            </div>
+            <StatusBadge status={order.status} />
+          </div>
+          <p className="mt-3 text-sm text-on-surface/70">
+            {dateFormatter.format(new Date(order.createdAt))}
+          </p>
+        </div>
+
+        <div className="border-b border-outline/60 py-5">
+          <label className="block">
+            <span className="label-caps mb-2 block text-on-surface/70">
+              Move Status
+            </span>
+            <select
+              value={order.status}
+              disabled={updatingOrderId === order.id}
+              onChange={(event) => updateOrderStatus(order.id, event.target.value)}
+              className="label-caps min-h-11 w-full border border-outline bg-surface-hi px-3 text-parchment outline-none focus:border-gold"
+            >
+              {editableStatuses.map((option) => (
+                <option key={option} value={option}>
+                  {option.toLowerCase().replace("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="border-b border-outline/60 py-5">
+          <p className="label-caps mb-3 text-gold">Customer</p>
+          <p className="font-semibold text-parchment">{order.customerName}</p>
+          <p className="mt-1 break-all text-sm text-on-surface/70">
+            {order.customerEmail}
+          </p>
+          <p className="mt-3 text-sm text-on-surface/75">
+            {[address.firstName, address.lastName].filter(Boolean).join(" ")}
+          </p>
+          <p className="mt-1 text-sm text-on-surface/75">{address.phone}</p>
+        </div>
+
+        <div className="border-b border-outline/60 py-5">
+          <p className="label-caps mb-3 text-gold">Delivery Address</p>
+          <div className="space-y-1 text-sm leading-6 text-on-surface/75">
+            <p>{address.address}</p>
+            {address.apartment ? <p>{address.apartment}</p> : null}
+            <p>
+              {[address.city, address.governorate, address.postalCode]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+            <p>{address.country ?? "Egypt"}</p>
+          </div>
+        </div>
+
+        <div className="border-b border-outline/60 py-5">
+          <p className="label-caps mb-3 text-gold">Items</p>
+          <div className="space-y-4">
+            {order.items.map((item, index) => (
+              <div
+                key={`${item.fragranceName}-${item.sizeML}-${index}`}
+                className="grid grid-cols-[1fr_auto] gap-4 text-sm"
+              >
+                <div>
+                  <p className="font-semibold text-parchment">
+                    {item.fragranceName}
+                  </p>
+                  <p className="mt-1 text-on-surface/65">
+                    {item.sizeML}ml × {item.quantity} ·{" "}
+                    {currencyFormatter.format(Number(item.unitPrice))}
+                  </p>
+                </div>
+                <p className="font-semibold">
+                  {currencyFormatter.format(Number(item.totalPrice))}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 py-5 text-sm text-on-surface/75">
+          <div className="flex justify-between gap-4">
+            <span>Subtotal</span>
+            <span>{currencyFormatter.format(Number(order.subtotal))}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span>Discount</span>
+            <span>{currencyFormatter.format(Number(order.discountAmount))}</span>
+          </div>
+          <div className="flex justify-between gap-4 text-parchment">
+            <span className="label-caps">Total</span>
+            <span className="font-serif text-2xl">
+              {currencyFormatter.format(Number(order.total))}
+            </span>
+          </div>
+        </div>
+
+        {order.notes ? (
+          <div className="border-t border-outline/60 pt-5">
+            <p className="label-caps mb-2 text-gold">Notes</p>
+            <p className="text-sm leading-6 text-on-surface/75">{order.notes}</p>
+          </div>
+        ) : null}
+      </aside>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-container px-gutter py-10 text-parchment sm:py-12 lg:px-16">
@@ -143,11 +353,11 @@ export default function AdminOrdersClient({
         aria-label="Order status summary"
         className="mb-12 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 xl:grid-cols-5"
       >
-        <SummaryCard label="Total Orders" value={summary.total} />
-        <SummaryCard label="Pending" value={summary.pending} tone="gold" />
-        <SummaryCard label="Processing" value={summary.processing} />
-        <SummaryCard label="Shipped" value={summary.shipped} />
-        <SummaryCard label="Delivered" value={summary.delivered} />
+        <SummaryCard label="Total Orders" value={currentSummary.total || summary.total} />
+        <SummaryCard label="Pending" value={currentSummary.pending} tone="gold" />
+        <SummaryCard label="Processing" value={currentSummary.processing} />
+        <SummaryCard label="Shipped" value={currentSummary.shipped} />
+        <SummaryCard label="Delivered" value={currentSummary.delivered} />
       </section>
 
       <section className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -172,11 +382,11 @@ export default function AdminOrdersClient({
           </svg>
         </div>
 
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="label-caps min-h-10 cursor-pointer border border-outline bg-surface px-8 pr-12 text-parchment transition-colors focus:border-gold outline-none appearance-none"
+            className="label-caps min-h-10 w-full cursor-pointer appearance-none border border-outline bg-surface py-2 pl-4 pr-12 text-left text-parchment outline-none transition-colors focus:border-gold sm:w-auto sm:min-w-48"
             aria-label="Filter orders by status"
           >
             {statusOptions.map((option) => (
@@ -199,77 +409,165 @@ export default function AdminOrdersClient({
         </div>
       </section>
 
-      <section className="border-t border-parchment pt-2">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-outline/70">
-                <th className="label-caps py-5 pr-6 text-on-surface/70">Order ID</th>
-                <th className="label-caps px-6 py-5 text-on-surface/70">Date</th>
-                <th className="label-caps px-6 py-5 text-on-surface/70">Customer</th>
-                <th className="label-caps px-6 py-5 text-on-surface/70">Items</th>
-                <th className="label-caps px-6 py-5 text-right text-on-surface/70">Total</th>
-                <th className="label-caps px-6 py-5 text-on-surface/70">Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm text-parchment">
-              {filteredOrders.length > 0 ? (
-                filteredOrders.map((order) => (
-                  <tr
-                    key={order.id}
-                    className="border-b border-outline/35 transition-colors hover:bg-surface/70"
-                  >
-                    <td className="py-5 pr-6 font-serif text-lg">{order.shortId}</td>
-                    <td className="px-6 py-5 text-on-surface/70">
-                      {dateFormatter.format(new Date(order.createdAt))}
-                    </td>
-                    <td className="px-6 py-5">
-                      <p>{order.customerName}</p>
-                      <p className="mt-1 text-xs text-on-surface/60">
-                        {order.customerEmail}
+      {message ? (
+        <p className="mb-6 border border-outline/60 bg-surface px-4 py-3 text-sm text-on-surface">
+          {message}
+        </p>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="border-t border-parchment pt-2">
+          <div className="space-y-3 md:hidden">
+            {filteredOrders.length > 0 ? (
+              filteredOrders.map((order) => (
+                <article
+                  key={order.id}
+                  className={`border border-outline/50 bg-surface/70 p-4 ${
+                    selectedOrder?.id === order.id ? "border-gold" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-serif text-xl leading-tight">
+                        {order.shortId}
                       </p>
-                    </td>
-                    <td className="max-w-[260px] px-6 py-5 text-on-surface/75">
-                      <p className="truncate">{order.itemsPreview}</p>
-                      <p className="mt-1 text-xs">{order.itemCount} items</p>
-                    </td>
-                    <td className="px-6 py-5 text-right font-serif text-lg">
+                      <p className="mt-1 text-xs text-on-surface/65">
+                        {dateFormatter.format(new Date(order.createdAt))}
+                      </p>
+                    </div>
+                    <StatusBadge status={order.status} />
+                  </div>
+
+                  <div className="mt-4 min-w-0">
+                    <p className="font-semibold text-parchment">
+                      {order.customerName}
+                    </p>
+                    <p className="mt-1 break-all text-xs text-on-surface/65">
+                      {order.customerEmail}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-[1fr_auto] gap-4 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate text-on-surface/75">
+                        {order.itemsPreview}
+                      </p>
+                      <p className="mt-1 text-xs text-on-surface/60">
+                        {order.itemCount} items
+                      </p>
+                    </div>
+                    <p className="font-serif text-lg">
                       {currencyFormatter.format(Number(order.total))}
-                    </td>
-                    <td className="px-6 py-5">
-                      <StatusBadge status={order.status} />
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderId(order.id)}
+                    className="label-caps mt-4 min-h-10 w-full border border-outline text-gold transition-colors hover:border-gold hover:text-parchment"
+                  >
+                    View Details
+                  </button>
+                </article>
+              ))
+            ) : (
+              <div className="border border-outline/50 bg-surface/70 px-4 py-10 text-center text-sm text-on-surface/70">
+                No orders match the current search.
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[980px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-outline/70">
+                  <th className="label-caps py-5 pr-6 text-on-surface/70">Order ID</th>
+                  <th className="label-caps px-6 py-5 text-on-surface/70">Date</th>
+                  <th className="label-caps px-6 py-5 text-on-surface/70">Customer</th>
+                  <th className="label-caps px-6 py-5 text-on-surface/70">Items</th>
+                  <th className="label-caps px-6 py-5 text-right text-on-surface/70">Total</th>
+                  <th className="label-caps px-6 py-5 text-on-surface/70">Status</th>
+                  <th className="label-caps py-5 pl-6 text-on-surface/70">Action</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm text-parchment">
+                {filteredOrders.length > 0 ? (
+                  filteredOrders.map((order) => (
+                    <tr
+                      key={order.id}
+                      className={`border-b border-outline/35 transition-colors hover:bg-surface/70 ${
+                        selectedOrder?.id === order.id ? "bg-surface/70" : ""
+                      }`}
+                    >
+                      <td className="py-5 pr-6 font-serif text-lg">{order.shortId}</td>
+                      <td className="px-6 py-5 text-on-surface/70">
+                        {dateFormatter.format(new Date(order.createdAt))}
+                      </td>
+                      <td className="px-6 py-5">
+                        <p>{order.customerName}</p>
+                        <p className="mt-1 text-xs text-on-surface/60">
+                          {order.customerEmail}
+                        </p>
+                      </td>
+                      <td className="max-w-[260px] px-6 py-5 text-on-surface/75">
+                        <p className="truncate">{order.itemsPreview}</p>
+                        <p className="mt-1 text-xs">{order.itemCount} items</p>
+                      </td>
+                      <td className="px-6 py-5 text-right font-serif text-lg">
+                        {currencyFormatter.format(Number(order.total))}
+                      </td>
+                      <td className="px-6 py-5">
+                        <StatusBadge status={order.status} />
+                      </td>
+                      <td className="py-5 pl-6">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderId(order.id)}
+                          className="label-caps text-gold transition-colors hover:text-parchment"
+                        >
+                          Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-on-surface/70">
+                      No orders match the current search.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-on-surface/70">
-                    No orders match the current search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-        <div className="mt-6 flex flex-col gap-3 text-on-surface/70 sm:flex-row sm:items-center sm:justify-between">
-          <p className="label-caps">
-            Showing {filteredOrders.length} of {orders.length} orders
-          </p>
-          {(query || status !== "ALL") && (
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("");
-                setStatus("ALL");
-              }}
-              className="label-caps text-gold transition-colors hover:text-parchment"
-            >
-              Clear Filters
-            </button>
-          )}
-        </div>
-      </section>
+          <div className="mt-6 flex flex-col gap-3 text-on-surface/70 sm:flex-row sm:items-center sm:justify-between">
+            <p className="label-caps">
+              Showing {filteredOrders.length} of {orderRows.length} orders
+            </p>
+            {(query || status !== "ALL") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setStatus("ALL");
+                }}
+                className="label-caps text-gold transition-colors hover:text-parchment"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        </section>
+
+        {selectedOrder ? (
+          renderDetails(selectedOrder)
+        ) : (
+          <aside className="border border-outline/60 bg-surface/70 p-5 text-sm text-on-surface/70">
+            Select an order to view details.
+          </aside>
+        )}
+      </div>
     </section>
   );
 }

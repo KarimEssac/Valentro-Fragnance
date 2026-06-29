@@ -34,7 +34,10 @@ export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
             select: {
               fragranceNameEn: true,
               fragranceNameAr: true,
-              quantity: true
+              sizeML: true,
+              quantity: true,
+              unitPrice: true,
+              totalPrice: true
             }
           }
         }
@@ -64,9 +67,21 @@ export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
       customerName: order.user.name ?? order.user.email,
       customerEmail: order.user.email,
       total: order.total.toString(),
+      subtotal: order.subtotal.toString(),
+      discountAmount: order.discountAmount.toString(),
       status: order.status,
       itemCount,
-      itemsPreview
+      itemsPreview,
+      addressSnapshot: order.addressSnapshot,
+      notes: order.notes,
+      items: order.items.map((item) => ({
+        fragranceName:
+          locale === "ar" ? item.fragranceNameAr : item.fragranceNameEn,
+        sizeML: item.sizeML,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice.toString(),
+        totalPrice: item.totalPrice.toString()
+      }))
     };
   });
 

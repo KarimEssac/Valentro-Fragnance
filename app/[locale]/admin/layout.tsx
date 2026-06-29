@@ -36,7 +36,8 @@ export default async function AdminLayout({
     {href: `/${locale}/admin/fragrances`, label: t("fragrances"), icon: "fragrances"},
     {href: `/${locale}/admin/collections`, label: t("collections"), icon: "collections"},
     {href: `/${locale}/admin/coupons`, label: t("coupons"), icon: "coupons"},
-    {href: `/${locale}/admin/announcements`, label: t("announcements"), icon: "announcements"}
+    {href: `/${locale}/admin/announcements`, label: t("announcements"), icon: "announcements"},
+    {href: `/${locale}/admin/community`, label: t("community"), icon: "community"}
   ];
 
   return (

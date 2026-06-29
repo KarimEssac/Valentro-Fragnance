@@ -1,6 +1,6 @@
 "use client";
 
-import {useState, useMemo, useEffect} from "react";
+import {useState, useMemo} from "react";
 import {useRouter} from "next/navigation";
 
 export type AnnouncementDraft = {
@@ -123,11 +123,6 @@ export default function AdminAnnouncementsClient({
   // Preview State
   const [previewLanguage, setPreviewLanguage] = useState<"en" | "ar">("en");
 
-  // Keep state in sync with server props
-  useEffect(() => {
-    setAnnouncements(initialAnnouncements);
-  }, [initialAnnouncements]);
-
   const activeAnnouncement = useMemo(() => {
     return announcements.find((ann) => getAnnouncementStatus(ann) === "ACTIVE");
   }, [announcements]);
@@ -194,6 +189,16 @@ export default function AdminAnnouncementsClient({
       const result = await res.json();
       if (!res.ok) throw new Error(result.message ?? "Something went wrong");
 
+      const savedAnnouncement = result as AnnouncementSerialized;
+      setAnnouncements((current) => {
+        const normalizedCurrent = savedAnnouncement.isActive
+          ? current.map((ann) => ({...ann, isActive: ann.id === savedAnnouncement.id ? ann.isActive : false}))
+          : current;
+
+        return editingId
+          ? normalizedCurrent.map((ann) => (ann.id === savedAnnouncement.id ? savedAnnouncement : ann))
+          : [savedAnnouncement, ...normalizedCurrent];
+      });
       resetForm();
       router.refresh();
       setStatus(editingId ? "Announcement updated successfully!" : "Announcement created successfully!");
@@ -212,6 +217,7 @@ export default function AdminAnnouncementsClient({
       const result = await res.json();
       if (!res.ok) throw new Error(result.message ?? "Failed to delete");
 
+      setAnnouncements((current) => current.filter((ann) => ann.id !== id));
       setDeletingId(null);
       router.refresh();
     } catch (err) {
@@ -234,11 +240,20 @@ export default function AdminAnnouncementsClient({
         })
       });
 
+      const result = await res.json();
+
       if (!res.ok) {
-        const result = await res.json();
         throw new Error(result.message ?? "Failed to toggle status");
       }
 
+      const updatedAnnouncement = result as AnnouncementSerialized;
+      setAnnouncements((current) => current.map((item) => {
+        if (item.id === updatedAnnouncement.id) {
+          return updatedAnnouncement;
+        }
+
+        return updatedAnnouncement.isActive ? {...item, isActive: false} : item;
+      }));
       router.refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to toggle status");
@@ -316,11 +331,11 @@ export default function AdminAnnouncementsClient({
       </section>
 
       {/* Main Grid: Form Left, Active & History Right */}
-      <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr]">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         
         {/* Creation/Edit Form Section */}
-        <section id="announcement-form-section" className="border border-outline/55 bg-surface/70 p-6 self-start">
-          <div className="mb-6 flex items-center justify-between">
+        <section id="announcement-form-section" className="min-w-0 border border-outline/55 bg-surface/70 p-4 self-start sm:p-6">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-serif text-2xl text-parchment">
               {editingId ? "Edit Announcement" : "New Announcement"}
             </h2>
@@ -440,7 +455,7 @@ export default function AdminAnnouncementsClient({
               </p>
             )}
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
               <button
                 type="submit"
                 disabled={submitting}
@@ -460,23 +475,23 @@ export default function AdminAnnouncementsClient({
         </section>
 
         {/* Right Section: Active & History list */}
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           
           {/* Active Banner Showcase */}
-          <section className="border border-outline/65 bg-surface-hi/80 p-6 shadow-[0_0_24px_rgba(111,70,24,0.05)]">
+          <section className="min-w-0 border border-outline/65 bg-surface-hi/80 p-4 shadow-[0_0_24px_rgba(111,70,24,0.05)] sm:p-6">
             <p className="label-caps mb-2 text-gold">Current Active Banner</p>
             {activeAnnouncement ? (
               <div className="space-y-4">
-                <div className="border border-outline bg-surface p-4 text-center text-xs text-gold font-semibold tracking-wider">
+                <div className="break-words border border-outline bg-surface p-4 text-center text-xs text-gold font-semibold tracking-wider">
                   {isArabic ? activeAnnouncement.textAr : activeAnnouncement.textEn}
                 </div>
-                <div className="text-xs text-on-surface/70 space-y-1">
+                <div className="space-y-1 overflow-hidden break-words text-xs text-on-surface/70">
                   <p><span className="font-semibold">English:</span> {activeAnnouncement.textEn}</p>
                   <p><span className="font-semibold">Arabic:</span> {activeAnnouncement.textAr}</p>
                   {activeAnnouncement.linkUrl && (
                     <p>
                       <span className="font-semibold">Link URL:</span>{" "}
-                      <a href={activeAnnouncement.linkUrl} target="_blank" rel="noopener noreferrer" className="underline text-gold hover:text-gold-muted">
+                      <a href={activeAnnouncement.linkUrl} target="_blank" rel="noopener noreferrer" className="break-all underline text-gold hover:text-gold-muted">
                         {activeAnnouncement.linkUrl}
                       </a>
                     </p>
@@ -516,7 +531,7 @@ export default function AdminAnnouncementsClient({
               <p className="text-xs text-on-surface/70">Log of all promotions and scheduling status</p>
             </div>
             
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[650px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-outline/50 bg-surface-mid/20">
@@ -619,6 +634,106 @@ export default function AdminAnnouncementsClient({
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="divide-y divide-outline/25 md:hidden">
+              {announcements.length > 0 ? (
+                announcements.map((ann) => {
+                  const status = getAnnouncementStatus(ann);
+                  const isCurrentlyEditing = editingId === ann.id;
+
+                  return (
+                    <article
+                      key={ann.id}
+                      className={`space-y-4 p-4 ${isCurrentlyEditing ? "bg-surface-hi/60" : ""}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="min-w-0 break-words text-sm font-semibold text-parchment">
+                            {ann.textEn}
+                          </h3>
+                          <span className={`shrink-0 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${getStatusBadgeClass(status)}`}>
+                            {formatStatus(status)}
+                          </span>
+                        </div>
+                        {ann.textAr && (
+                          <p className="break-words text-xs text-on-surface/60">
+                            {ann.textAr}
+                          </p>
+                        )}
+                        {ann.linkUrl && (
+                          <a
+                            href={ann.linkUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block break-all text-[11px] text-gold underline"
+                          >
+                            {ann.linkUrl}
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="border border-outline/35 bg-surface-mid/20 p-3 text-xs text-on-surface/75">
+                        {ann.startAt || ann.endAt ? (
+                          <div className="space-y-1">
+                            <div><span className="text-on-surface/50">From:</span> {formatDateString(ann.startAt) || "Immediate"}</div>
+                            <div><span className="text-on-surface/50">To:</span> {formatDateString(ann.endAt) || "Indefinite"}</div>
+                          </div>
+                        ) : (
+                          <span className="italic text-on-surface/60">Indefinite / Manual</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(ann)}
+                          className="label-caps min-h-10 border border-outline px-2 text-[10px] text-gold"
+                        >
+                          {ann.isActive ? "Off" : "On"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(ann)}
+                          className="label-caps min-h-10 border border-outline px-2 text-[10px] text-parchment"
+                        >
+                          Edit
+                        </button>
+                        {deletingId === ann.id ? (
+                          <div className="grid grid-cols-2 border border-outline">
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(ann.id)}
+                              className="text-xs font-bold text-red-700"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingId(null)}
+                              className="text-xs text-on-surface"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeletingId(ann.id)}
+                            className="label-caps min-h-10 border border-outline px-2 text-[10px] text-on-surface/70"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="p-8 text-center text-sm text-on-surface/50 italic">
+                  No announcements created yet.
+                </p>
+              )}
             </div>
           </section>
 

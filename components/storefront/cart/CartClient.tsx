@@ -3,7 +3,7 @@
 import {useLocale} from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
-import {useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
 type CartItem = {
   fragranceId: string;
@@ -16,6 +16,60 @@ type CartItem = {
   quantity: number;
 };
 
+type Recommendation = {
+  id: string;
+  slug: string;
+  nameEn: string;
+  nameAr: string;
+  primaryImage: {
+    url: string;
+    altEn: string;
+    altAr: string;
+  } | null;
+  variants: {
+    id: string;
+    sizeML: number;
+    price: string;
+    stock: number;
+  }[];
+};
+
+type CollectionRecommendation = {
+  id: string;
+  slug: string;
+  code: string | null;
+  nameEn: string;
+  nameAr: string;
+  descriptionEn: string;
+  descriptionAr: string;
+  coverImage: string;
+  offerPrice: string | null;
+  combinedValue: string;
+  discountPercent: number;
+  products: {
+    id: string;
+    slug: string;
+    nameEn: string;
+    nameAr: string;
+    image: {
+      url: string;
+      altEn: string;
+      altAr: string;
+    } | null;
+    price: string | null;
+  }[];
+};
+
+type SuggestedItem =
+  | {
+      kind: "collection";
+      collection: CollectionRecommendation;
+    }
+  | {
+      kind: "fragrance";
+      fragrance: Recommendation;
+    };
+
 function readCart() {
   try {
     return JSON.parse(
@@ -26,11 +80,36 @@ function readCart() {
   }
 }
 
+function ArrowIcon({direction}: {direction: "left" | "right"}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.35"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      {direction === "left" ? (
+        <path d="M15 6l-6 6 6 6" />
+      ) : (
+        <path d="M9 6l6 6-6 6" />
+      )}
+    </svg>
+  );
+}
+
 export default function CartClient() {
   const locale = useLocale();
+  const isArabic = locale === "ar";
+  const recommendationsCarouselRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<CartItem[]>(() =>
     typeof window === "undefined" ? [] : readCart()
   );
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [collections, setCollections] = useState<CollectionRecommendation[]>([]);
 
   const priceFormatter = useMemo(
     () =>
@@ -66,11 +145,115 @@ export default function CartClient() {
     persist(items.filter((item) => item.variantId !== variantId));
   }
 
+  function addRecommendation(recommendation: Recommendation) {
+    const variant = recommendation.variants.find((item) => item.stock > 0) ??
+      recommendation.variants[0];
+    if (!variant) return;
+
+    const name = isArabic ? recommendation.nameAr : recommendation.nameEn;
+    const itemIndex = items.findIndex((item) => item.variantId === variant.id);
+    const nextItems = [...items];
+
+    if (itemIndex >= 0) {
+      nextItems[itemIndex] = {
+        ...nextItems[itemIndex],
+        quantity: nextItems[itemIndex].quantity + 1
+      };
+    } else {
+      nextItems.push({
+        fragranceId: recommendation.id,
+        variantId: variant.id,
+        slug: recommendation.slug,
+        name,
+        image: recommendation.primaryImage?.url ?? null,
+        sizeML: variant.sizeML,
+        price: variant.price,
+        quantity: 1
+      });
+    }
+
+    persist(nextItems);
+  }
+
+  const scrollRecommendations = useCallback((direction: "previous" | "next") => {
+    const carousel = recommendationsCarouselRef.current;
+    if (!carousel) return;
+
+    const card = carousel.querySelector<HTMLElement>("[data-recommendation-card]");
+    const scrollAmount = card ? card.offsetWidth + 24 : carousel.clientWidth;
+
+    carousel.scrollBy({
+      left: direction === "previous" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRecommendations() {
+      try {
+        const [fragrancesResponse, collectionsResponse] = await Promise.all([
+          fetch("/api/storefront/fragrances?featured=true&limit=8", {
+            headers: {Accept: "application/json"}
+          }),
+          fetch("/api/storefront/collections", {
+            headers: {Accept: "application/json"}
+          })
+        ]);
+
+        if (isMounted && fragrancesResponse.ok) {
+          const data = (await fragrancesResponse.json()) as Recommendation[];
+          setRecommendations(data);
+        }
+
+        if (isMounted && collectionsResponse.ok) {
+          const data = (await collectionsResponse.json()) as {
+            collections: CollectionRecommendation[];
+          };
+          setCollections(data.collections);
+        }
+      } catch {
+        // Recommendations are optional.
+      }
+    }
+
+    loadRecommendations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const subtotal = items.reduce(
     (total, item) => total + Number(item.price) * item.quantity,
     0
   );
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
+  const cartFragranceIds = new Set(items.map((item) => item.fragranceId));
+  const matchingCollection = collections.find((collection) => {
+    if (cartFragranceIds.size === 0) return false;
+
+    const collectionFragranceIds = new Set(
+      collection.products.map((product) => product.id)
+    );
+
+    return Array.from(cartFragranceIds).every((id) =>
+      collectionFragranceIds.has(id)
+    );
+  });
+  const suggestedFragrances = recommendations
+    .filter((recommendation) => !cartFragranceIds.has(recommendation.id))
+    .slice(0, matchingCollection ? 7 : 8);
+  const suggested: SuggestedItem[] = [
+    ...(matchingCollection
+      ? [{kind: "collection" as const, collection: matchingCollection}]
+      : []),
+    ...suggestedFragrances.map((fragrance) => ({
+      kind: "fragrance" as const,
+      fragrance
+    }))
+  ];
 
   if (items.length === 0) {
     return (
@@ -240,6 +423,150 @@ export default function CartClient() {
             </Link>
           </aside>
         </div>
+
+        {suggested.length > 0 ? (
+          <section className="mt-16 border-t border-outline/70 pt-8">
+            <div className="mb-6 flex items-center justify-between gap-5">
+              <div>
+                <p className="label-caps text-gold">You might also like</p>
+                <h2 className="mt-2 font-serif text-3xl leading-tight text-parchment">
+                  Curated Additions
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Previous recommendation"
+                  onClick={() => scrollRecommendations("previous")}
+                  className="focus-gold flex h-11 w-11 items-center justify-center border border-gold/40 text-parchment transition-colors hover:border-gold hover:bg-gold/10"
+                >
+                  <ArrowIcon direction={isArabic ? "right" : "left"} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next recommendation"
+                  onClick={() => scrollRecommendations("next")}
+                  className="focus-gold flex h-11 w-11 items-center justify-center border border-gold text-parchment transition-colors hover:bg-gold/10"
+                >
+                  <ArrowIcon direction={isArabic ? "left" : "right"} />
+                </button>
+              </div>
+            </div>
+
+            <div
+              ref={recommendationsCarouselRef}
+              className="no-scrollbar flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-3"
+            >
+              {suggested.map((suggestion) => {
+                if (suggestion.kind === "collection") {
+                  const collection = suggestion.collection;
+                  const name = isArabic ? collection.nameAr : collection.nameEn;
+                  const description = isArabic
+                    ? collection.descriptionAr
+                    : collection.descriptionEn;
+                  const price = Number(collection.offerPrice);
+
+                  return (
+                    <article
+                      key={`collection-${collection.id}`}
+                      data-recommendation-card
+                      className="w-[68vw] shrink-0 snap-start border border-gold/55 bg-surface sm:w-[240px]"
+                    >
+                      <Link
+                        href={`/${locale}/collections/${collection.slug}`}
+                        className="relative block aspect-[3/4] overflow-hidden bg-surface-mid"
+                      >
+                        <Image
+                          src={collection.coverImage}
+                          alt={name}
+                          fill
+                          unoptimized
+                          sizes="(min-width: 640px) 240px, 68vw"
+                          className="object-cover transition-transform duration-700 hover:scale-[1.02]"
+                        />
+                        <span className="label-caps absolute left-3 top-3 bg-parchment px-3 py-2 text-surface-hi">
+                          Collection
+                        </span>
+                        {collection.discountPercent > 0 ? (
+                          <span className="label-caps absolute right-3 top-3 bg-gold px-3 py-2 text-surface-hi">
+                            {collection.discountPercent}% off
+                          </span>
+                        ) : null}
+                      </Link>
+                      <div className="p-3 text-center">
+                        <h3 className="font-serif text-xl leading-tight">
+                          {name}
+                        </h3>
+                        <p className="mx-auto mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-on-surface/70">
+                          {description || "A limited bundle curated by Valentro."}
+                        </p>
+                        <p className="label-caps mt-3 text-on-surface/70">
+                          {Number.isFinite(price) && price > 0
+                            ? priceFormatter.format(price)
+                            : "View collection"}
+                        </p>
+                        <Link
+                          href={`/${locale}/collections/${collection.slug}`}
+                          className="label-caps mt-3 flex min-h-9 items-center justify-center border border-parchment text-parchment transition-colors hover:border-gold hover:text-gold"
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </article>
+                  );
+                }
+
+                const fragrance = suggestion.fragrance;
+                const variant = fragrance.variants[0];
+                const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
+                const imageAlt = fragrance.primaryImage
+                  ? isArabic
+                    ? fragrance.primaryImage.altAr
+                    : fragrance.primaryImage.altEn
+                  : name;
+
+                return (
+                  <article
+                    key={`fragrance-${fragrance.id}`}
+                    data-recommendation-card
+                    className="w-[68vw] shrink-0 snap-start border border-outline/70 bg-surface sm:w-[240px]"
+                  >
+                    <Link
+                      href={`/${locale}/fragrances/${fragrance.slug}`}
+                      className="relative block aspect-[3/4] overflow-hidden bg-surface-mid"
+                    >
+                      {fragrance.primaryImage ? (
+                        <Image
+                          src={fragrance.primaryImage.url}
+                          alt={imageAlt}
+                          fill
+                          sizes="(min-width: 640px) 240px, 68vw"
+                          className="object-cover transition-transform duration-700 hover:scale-[1.02]"
+                        />
+                      ) : null}
+                    </Link>
+                    <div className="p-3 text-center">
+                      <h3 className="font-serif text-xl leading-tight">
+                        {name}
+                      </h3>
+                      <p className="label-caps mt-3 text-on-surface/70">
+                        {variant ? priceFormatter.format(Number(variant.price)) : ""}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => addRecommendation(fragrance)}
+                        disabled={!variant}
+                        className="label-caps mt-3 min-h-9 w-full border border-parchment text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );

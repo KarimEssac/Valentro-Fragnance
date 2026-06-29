@@ -73,13 +73,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link className="text-muted-brass hover:text-warm-gold transition-colors duration-300" href={localizedPath("/our-story")}>
+                <Link className="text-muted-brass hover:text-warm-gold transition-colors duration-300" href={localizedPath("/about-us")}>
                   {t("collections.story")}
-                </Link>
-              </li>
-              <li>
-                <Link className="text-muted-brass hover:text-warm-gold transition-colors duration-300" href={localizedPath("/atelier")}>
-                  {t("collections.atelier")}
                 </Link>
               </li>
             </ul>

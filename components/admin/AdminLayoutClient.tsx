@@ -58,6 +58,14 @@ function Icon({name}: {name: string}) {
         <path d="M4 10v4h3l8 4V6l-8 4H4Z" />
         <path d="M18 9a4 4 0 0 1 0 6" />
       </>
+    ),
+    community: (
+      <>
+        <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        <path d="M8 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+        <path d="M3 20a5 5 0 0 1 10 0" />
+        <path d="M12 18a5 5 0 0 1 9 2" />
+      </>
     )
   };
 

@@ -30,6 +30,11 @@ type CheckoutForm = {
   notes: string;
 };
 
+type MissingField = {
+  field: keyof CheckoutForm;
+  label: string;
+};
+
 const governorates = [
   "Cairo",
   "Giza",
@@ -102,6 +107,7 @@ function cleanPostal(value: string) {
 }
 
 function Field({
+  id,
   label,
   value,
   onChange,
@@ -111,6 +117,7 @@ function Field({
   required = true,
   inputMode
 }: {
+  id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -124,6 +131,7 @@ function Field({
     <label className="block">
       <span className="label-caps text-on-surface/75">{label}</span>
       <input
+        id={id}
         required={required}
         type={type}
         value={value}
@@ -146,6 +154,7 @@ export default function CheckoutClient() {
   const [csrfToken, setCsrfToken] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [status, setStatus] = useState("");
+  const [missingFields, setMissingFields] = useState<MissingField[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState("");
 
@@ -218,6 +227,53 @@ export default function CheckoutClient() {
                 );
 
     setForm((current) => ({...current, [field]: cleaned}));
+    setMissingFields((current) =>
+      current.filter((item) => item.field !== field)
+    );
+  }
+
+  function getMissingFields() {
+    const checks: MissingField[] = [];
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(form.email.trim())) {
+      checks.push({field: "email", label: "Email address"});
+    }
+    if (form.firstName.trim().length < 2) {
+      checks.push({field: "firstName", label: "First name"});
+    }
+    if (form.lastName.trim().length < 2) {
+      checks.push({field: "lastName", label: "Last name"});
+    }
+    if (form.address.trim().length < 5) {
+      checks.push({field: "address", label: "Address"});
+    }
+    if (form.city.trim().length < 2) {
+      checks.push({field: "city", label: "City"});
+    }
+    if (!form.governorate.trim()) {
+      checks.push({field: "governorate", label: "Governorate"});
+    }
+    if (form.phone.replace(/[^\d]/g, "").length < 8) {
+      checks.push({field: "phone", label: "Phone"});
+    }
+
+    return checks;
+  }
+
+  function focusMissingField(field: keyof CheckoutForm) {
+    window.requestAnimationFrame(() => {
+      const element = document.getElementById(`checkout-${field}`);
+
+      element?.scrollIntoView({behavior: "smooth", block: "center"});
+      if (
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement ||
+        element instanceof HTMLTextAreaElement
+      ) {
+        element.focus({preventScroll: true});
+      }
+    });
   }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
@@ -225,8 +281,18 @@ export default function CheckoutClient() {
 
     if (items.length === 0) return;
 
+    const nextMissingFields = getMissingFields();
+
+    if (nextMissingFields.length > 0) {
+      setMissingFields(nextMissingFields);
+      setStatus("Complete the missing checkout details.");
+      focusMissingField(nextMissingFields[0].field);
+      return;
+    }
+
     setIsSubmitting(true);
     setStatus("");
+    setMissingFields([]);
 
     const response = await fetch("/api/orders", {
       method: "POST",
@@ -317,7 +383,7 @@ export default function CheckoutClient() {
   return (
     <main className="min-h-screen bg-bg px-gutter pb-16 pt-[96px] text-parchment sm:pt-32 lg:px-16">
       <div className="mx-auto grid max-w-container gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-10">
-        <form id="checkout-form" onSubmit={submitOrder} className="space-y-7">
+        <form id="checkout-form" onSubmit={submitOrder} noValidate className="space-y-7">
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-on-surface/70">
             <Link href={`/${locale}/cart`} className="hover:text-gold">
               Cart
@@ -341,6 +407,7 @@ export default function CheckoutClient() {
               )}
             </div>
             <Field
+              id="checkout-email"
               label="Email Address"
               type="email"
               inputMode="email"
@@ -368,6 +435,7 @@ export default function CheckoutClient() {
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
+                id="checkout-firstName"
                 label="First Name"
                 autoComplete="given-name"
                 value={form.firstName}
@@ -375,6 +443,7 @@ export default function CheckoutClient() {
                 onChange={(value) => updateField("firstName", value)}
               />
               <Field
+                id="checkout-lastName"
                 label="Last Name"
                 autoComplete="family-name"
                 value={form.lastName}
@@ -383,6 +452,7 @@ export default function CheckoutClient() {
               />
             </div>
             <Field
+              id="checkout-address"
               label="Address"
               autoComplete="address-line1"
               value={form.address}
@@ -390,6 +460,7 @@ export default function CheckoutClient() {
               onChange={(value) => updateField("address", value)}
             />
             <Field
+              id="checkout-apartment"
               label="Apartment, suite, etc. (optional)"
               autoComplete="address-line2"
               required={false}
@@ -399,6 +470,7 @@ export default function CheckoutClient() {
             />
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
+                id="checkout-city"
                 label="City"
                 autoComplete="address-level2"
                 value={form.city}
@@ -410,6 +482,7 @@ export default function CheckoutClient() {
                   Governorate
                 </span>
                 <select
+                  id="checkout-governorate"
                   required
                   value={form.governorate}
                   autoComplete="address-level1"
@@ -429,6 +502,7 @@ export default function CheckoutClient() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
+                id="checkout-postalCode"
                 label="Postal Code (optional)"
                 autoComplete="postal-code"
                 required={false}
@@ -438,6 +512,7 @@ export default function CheckoutClient() {
                 onChange={(value) => updateField("postalCode", value)}
               />
               <Field
+                id="checkout-phone"
                 label="Phone"
                 type="tel"
                 inputMode="tel"
@@ -452,6 +527,7 @@ export default function CheckoutClient() {
                 Additional Instructions (optional)
               </span>
               <textarea
+                id="checkout-notes"
                 value={form.notes}
                 maxLength={300}
                 rows={3}
@@ -590,6 +666,24 @@ export default function CheckoutClient() {
               {priceFormatter.format(subtotal)}
             </span>
           </div>
+          {missingFields.length > 0 ? (
+            <div className="mt-5 border border-red-700/45 bg-surface-hi px-4 py-3">
+              <p className="label-caps text-red-700">Missing Details</p>
+              <ul className="mt-2 space-y-1 text-sm text-on-surface/80">
+                {missingFields.map((item) => (
+                  <li key={item.field}>
+                    <button
+                      type="button"
+                      onClick={() => focusMissingField(item.field)}
+                      className="text-left underline decoration-outline underline-offset-4 transition-colors hover:text-gold"
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <button
             type="submit"
             form="checkout-form"

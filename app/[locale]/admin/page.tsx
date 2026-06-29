@@ -28,9 +28,7 @@ function startOfDay(date: Date) {
 }
 
 function addMonths(date: Date, amount: number) {
-  const copy = new Date(date);
-  copy.setMonth(copy.getMonth() + amount);
-  return copy;
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
 function monthStart(date: Date) {

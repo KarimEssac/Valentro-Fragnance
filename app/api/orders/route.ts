@@ -3,6 +3,8 @@ import {NextResponse} from "next/server";
 import {Prisma, PaymentMethod} from "@prisma/client";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
+import {randomBytes} from "crypto";
+import {hash} from "bcryptjs";
 
 import {authOptions} from "@/lib/auth";
 import {validateCsrfToken, csrfCookieName} from "@/lib/csrf";
@@ -207,13 +209,6 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
 export async function POST(request: NextRequest) {
   const session = (await getServerSession(authOptions)) as Session | null;
 
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      {message: "You must be signed in to complete checkout"},
-      {status: 401}
-    );
-  }
-
   let payload: CheckoutPayload;
 
   try {
@@ -248,7 +243,33 @@ export async function POST(request: NextRequest) {
   });
 
   try {
+    const guestPasswordHash = session?.user?.id
+      ? ""
+      : await hash(randomBytes(32).toString("hex"), 12);
+
     const order = await prisma.$transaction(async (tx) => {
+      const sessionUser = session?.user?.id
+        ? await tx.user.findUnique({
+            where: {id: session.user.id},
+            select: {id: true}
+          })
+        : null;
+      const customerId = sessionUser?.id ??
+        (
+          await tx.user.upsert({
+            where: {email: checkout.email},
+            update: {
+              name: `${checkout.firstName} ${checkout.lastName}`.trim()
+            },
+            create: {
+              email: checkout.email,
+              name: `${checkout.firstName} ${checkout.lastName}`.trim(),
+              passwordHash: guestPasswordHash
+            },
+            select: {id: true}
+          })
+        ).id;
+
       const variants = await tx.fragranceVariant.findMany({
         where: {
           id: {in: Array.from(quantities.keys())},
@@ -309,7 +330,7 @@ export async function POST(request: NextRequest) {
 
       return tx.order.create({
         data: {
-          userId: session.user.id,
+          userId: customerId,
           paymentMethod: PaymentMethod.CASH_ON_DELIVERY,
           subtotal: new Prisma.Decimal(subtotal),
           total: new Prisma.Decimal(subtotal),

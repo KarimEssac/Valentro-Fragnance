@@ -4,10 +4,9 @@
     "description": "Luxury fragrance e-commerce for Valentro."
   },
   "nav": {
-    "collections": "Collections",
+    "collections": "Home",
     "fragrances": "Fragrances",
-    "atelier": "The Atelier",
-    "story": "Our Story",
+    "story": "About Us",
     "cart": "Cart",
     "menu": "Menu",
     "close": "Close"
@@ -39,7 +38,8 @@
     "fragrances": "Inventory",
     "collections": "Collections",
     "coupons": "Coupons",
-    "orders": "Orders"
+    "orders": "Orders",
+    "community": "Community"
   },
   "pages": {
     "login": "Login",
@@ -52,10 +52,9 @@
     "brandDescription": "Crafting olfactory masterpieces since our inception in Grasse. A legacy of rare botanicals and uncompromising artistry, distilled into timeless elegance.",
     "collections": {
       "title": "Collections",
-      "all": "Collections",
+      "all": "Home",
       "fragrances": "Fragrances",
-      "story": "Our Story",
-      "atelier": "The Atelier"
+      "story": "About Us"
     },
     "assistance": {
       "title": "Assistance",
