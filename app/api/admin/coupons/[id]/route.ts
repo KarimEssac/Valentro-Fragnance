@@ -60,6 +60,18 @@ function asMoney(value: unknown, label: string, min = 0) {
   return new Prisma.Decimal(number.toFixed(2));
 }
 
+function asOptionalMoney(value: unknown, label: string) {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.trim() === "")
+  ) {
+    return null;
+  }
+
+  return asMoney(value, label, 0);
+}
+
 function normalizeCode(value: unknown) {
   const code = asString(value).toUpperCase().replace(/[^A-Z0-9_-]/g, "");
   if (!code || code.length < 4 || code.length > 32) {
@@ -109,10 +121,7 @@ function parsePayload(payload: CouponUpdatePayload) {
     code: normalizeCode(payload.code),
     type,
     value,
-    minOrderAmount:
-      payload.minOrderAmount === "" || payload.minOrderAmount === null
-        ? null
-        : asMoney(payload.minOrderAmount, "Minimum order", 0),
+    minOrderAmount: asOptionalMoney(payload.minOrderAmount, "Minimum checkout total"),
     maxUses: asOptionalPositiveInt(payload.maxUses, "Maximum uses"),
     startsAt,
     expiresAt,
@@ -141,8 +150,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         expiresAt: parsed.expiresAt,
         isActive: parsed.isActive,
         applicableTo: parsed.applicableTo,
-        audienceRule: null,
-        audiencePercent: null,
         usedCount: asBoolean(payload.resetUses) ? 0 : undefined,
         users: {
           set:
@@ -176,14 +183,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     await assertAdmin();
     const {id} = await context.params;
 
-    await prisma.coupon.update({
-      where: {id},
-      data: {isActive: false}
-    });
+    await prisma.coupon.delete({where: {id}});
 
-    return NextResponse.json({message: "Coupon disabled"});
+    return NextResponse.json({message: "Coupon deleted"});
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to disable coupon";
+    const message = error instanceof Error ? error.message : "Unable to delete coupon";
     return NextResponse.json({message}, {status: message === "Unauthorized" ? 401 : 400});
   }
 }

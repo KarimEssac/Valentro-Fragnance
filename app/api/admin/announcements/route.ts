@@ -1,10 +1,12 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
+import {revalidateTag} from "next/cache";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
 
 import {authOptions} from "@/lib/auth";
 import {prisma} from "@/lib/prisma";
+import {STOREFRONT_ANNOUNCEMENTS_TAG} from "@/lib/storefront-data";
 
 export const revalidate = 0; // Dynamic route
 
@@ -108,6 +110,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, "max");
     return NextResponse.json(announcement, {status: 201});
   } catch (error) {
     console.error("Failed to create admin announcement:", error);

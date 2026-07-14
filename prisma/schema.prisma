@@ -123,18 +123,18 @@ model NewsletterSubscriber {
 }
 
 model Testimonial {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   messageEn   String
   messageAr   String
   imageUrl    String
   imageAltEn  String
   imageAltAr  String
-  rating      Int      @default(5)
+  rating      Int        @default(5)
   fragranceId String?
-  reviewId    String?  @unique
-  position    Int      @default(0)
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  reviewId    String?    @unique
+  position    Int        @default(0)
+  isPublished Boolean    @default(false)
+  createdAt   DateTime   @default(now())
   fragrance   Fragrance? @relation(fields: [fragranceId], references: [id], onDelete: SetNull)
   review      Review?    @relation(fields: [reviewId], references: [id], onDelete: SetNull)
 
@@ -164,36 +164,42 @@ model Collection {
 }
 
 model Fragrance {
-  id            String                @id @default(cuid())
-  slug          String                @unique
-  nameEn        String
-  nameAr        String
-  taglineEn     String
-  taglineAr     String
-  descriptionEn String
-  descriptionAr String
-  gender        Gender
-  scentProfile  ScentProfile
-  avoidIf       String[]
-  bestFor       String[]
-  seasons       String[]              @default([])
-  sillage       Sillage
-  longevity     Int
-  ratingAverage Decimal               @default(0) @db.Decimal(3, 2)
-  ratingCount   Int                   @default(0)
-  isPublished   Boolean               @default(false)
-  isFeatured    Boolean               @default(false)
-  position      Int                   @default(0)
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  variants      FragranceVariant[]
-  ingredients   FragranceIngredient[]
-  images        FragranceImage[]
-  collections   FragranceCollection[]
-  testimonials  Testimonial[]
-  reviews       Review[]
+  id                String                @id @default(cuid())
+  slug              String                @unique
+  nameEn            String
+  nameAr            String
+  taglineEn         String
+  taglineAr         String
+  descriptionEn     String
+  descriptionAr     String
+  gender            Gender
+  scentProfile      ScentProfile
+  avoidIf           String[]
+  bestFor           String[]
+  seasons           String[]              @default([])
+  sillage           Sillage
+  longevity         Int
+  ratingAverage     Decimal               @default(0) @db.Decimal(3, 2)
+  ratingCount       Int                   @default(0)
+  discountType      CouponType?
+  discountValue     Decimal?              @db.Decimal(10, 2)
+  discountIsActive  Boolean               @default(false)
+  discountStartsAt  DateTime?
+  discountExpiresAt DateTime?
+  isPublished       Boolean               @default(false)
+  isFeatured        Boolean               @default(false)
+  position          Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  variants          FragranceVariant[]
+  ingredients       FragranceIngredient[]
+  images            FragranceImage[]
+  collections       FragranceCollection[]
+  testimonials      Testimonial[]
+  reviews           Review[]
 
   @@index([isPublished, isFeatured, position])
+  @@index([discountIsActive, discountStartsAt, discountExpiresAt])
   @@index([gender])
   @@index([scentProfile])
 }
@@ -268,23 +274,23 @@ model FragranceVariant {
 }
 
 model Coupon {
-  id             String              @id @default(cuid())
-  code           String              @unique
-  type           CouponType
-  value          Decimal             @db.Decimal(10, 2)
-  minOrderAmount Decimal?            @db.Decimal(10, 2)
-  maxUses        Int?
-  usedCount      Int                 @default(0)
-  isActive       Boolean             @default(false)
-  startsAt       DateTime?
-  expiresAt      DateTime?
-  audienceRule   String?
+  id              String              @id @default(cuid())
+  code            String              @unique
+  type            CouponType
+  value           Decimal             @db.Decimal(10, 2)
+  minOrderAmount  Decimal?            @db.Decimal(10, 2)
+  maxUses         Int?
+  usedCount       Int                 @default(0)
+  isActive        Boolean             @default(false)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  audienceRule    String?
   audiencePercent Int?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @default(now()) @updatedAt
-  applicableTo   CouponApplicability @default(ALL)
-  users          User[]              @relation("CouponUsers")
-  orders         Order[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now()) @updatedAt
+  applicableTo    CouponApplicability @default(ALL)
+  users           User[]              @relation("CouponUsers")
+  orders          Order[]
 
   @@index([isActive])
   @@index([startsAt])
@@ -315,17 +321,17 @@ model Order {
 }
 
 model OrderItem {
-  id              String            @id @default(cuid())
+  id              String           @id @default(cuid())
   orderId         String
   variantId       String
   fragranceNameEn String
   fragranceNameAr String
   sizeML          Int
   quantity        Int
-  unitPrice       Decimal           @db.Decimal(10, 2)
-  totalPrice      Decimal           @db.Decimal(10, 2)
-  order           Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  variant         FragranceVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  unitPrice       Decimal          @db.Decimal(10, 2)
+  totalPrice      Decimal          @db.Decimal(10, 2)
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant         FragranceVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([variantId])

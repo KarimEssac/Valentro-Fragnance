@@ -2,8 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {useSearchParams} from "next/navigation";
+import {useRouter, useSearchParams} from "next/navigation";
+import type {MouseEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
+
+import {productDiscountBadge} from "@/lib/product-discounts";
+import type {ActiveProductDiscount} from "@/lib/product-discounts";
+import {startProductImageTransition} from "@/lib/product-image-transition";
 
 export type ShopFragrance = {
   id: string;
@@ -28,6 +33,11 @@ export type ShopFragrance = {
     min: string | null;
     max: string | null;
   };
+  originalPriceRange: {
+    min: string | null;
+    max: string | null;
+  };
+  discount: ActiveProductDiscount | null;
 };
 
 export type ShopCollectionOffer = {
@@ -162,6 +172,7 @@ export default function ShopClient({
   collections
 }: ShopClientProps) {
   const isArabic = locale === "ar";
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedGender = searchParams.get("gender")?.toUpperCase() ?? "";
   const initialGender = genderValues.includes(requestedGender)
@@ -178,6 +189,73 @@ export default function ShopClient({
   const [selectedGenders, setSelectedGenders] = useState<string[]>(
     initialGender ? [initialGender] : []
   );
+
+  function navigateToFragrance(
+    event: MouseEvent<HTMLAnchorElement>,
+    fragrance: ShopFragrance,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      !fragrance.primaryImage
+    ) {
+      return;
+    }
+
+    const source = event.currentTarget.querySelector<HTMLElement>(
+      "[data-product-transition-source]"
+    );
+    if (!source) return;
+
+    const href = `/${locale}/fragrances/${fragrance.slug}`;
+    const didStart = startProductImageTransition({
+      slug: fragrance.slug,
+      imageUrl: fragrance.primaryImage.url,
+      imageAlt,
+      source,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
+
+  function navigateToCollection(
+    event: MouseEvent<HTMLAnchorElement>,
+    collection: ShopCollectionOffer,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const source = event.currentTarget.querySelector<HTMLElement>(
+      "[data-product-transition-source]"
+    );
+    if (!source) return;
+
+    const href = `/${locale}/collections/${collection.slug}`;
+    const didStart = startProductImageTransition({
+      slug: collection.slug,
+      imageUrl: collection.coverImage,
+      imageAlt,
+      source,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
   const [selectedScents, setSelectedScents] = useState<string[]>([]);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
   const [sort, setSort] = useState("position");
@@ -367,14 +445,26 @@ export default function ShopClient({
     setSort("position");
   }
 
-  function formatPrice(fragrance: ShopFragrance) {
-    const min = priceNumber(fragrance.priceRange.min);
-    const max = priceNumber(fragrance.priceRange.max);
+  function formatFragrancePriceRange(range: ShopFragrance["priceRange"]) {
+    const min = range.min === null ? Number.NaN : Number(range.min);
+    const max = range.max === null ? Number.NaN : Number(range.max);
 
-    if (!min) return "Price on request";
-    if (!max || min === max) return priceFormatter.format(min);
+    if (!Number.isFinite(min)) return "Price on request";
+    if (!Number.isFinite(max) || min === max) return priceFormatter.format(min);
 
     return `${priceFormatter.format(min)} - ${priceFormatter.format(max)}`;
+  }
+
+  function formatPrice(fragrance: ShopFragrance) {
+    return formatFragrancePriceRange(fragrance.priceRange);
+  }
+
+  function formatOriginalPrice(fragrance: ShopFragrance) {
+    return formatFragrancePriceRange(fragrance.originalPriceRange);
+  }
+
+  function formatDiscountBadge(discount: ActiveProductDiscount) {
+    return productDiscountBadge(discount, (amount) => priceFormatter.format(amount));
   }
 
   function formatOfferPrice(collection: ShopCollectionOffer) {
@@ -642,6 +732,9 @@ export default function ShopClient({
                       locale={locale}
                       isArabic={isArabic}
                       formatPrice={formatPrice}
+                      formatOriginalPrice={formatOriginalPrice}
+                      formatDiscountBadge={formatDiscountBadge}
+                      onNavigate={navigateToFragrance}
                     />
                   ) : (
                     <CollectionCard
@@ -651,6 +744,7 @@ export default function ShopClient({
                       locale={locale}
                       isArabic={isArabic}
                       formatOfferPrice={formatOfferPrice}
+                      onNavigate={navigateToCollection}
                     />
                   )
                 )}
@@ -685,13 +779,23 @@ function FragranceCard({
   index,
   locale,
   isArabic,
-  formatPrice
+  formatPrice,
+  formatOriginalPrice,
+  formatDiscountBadge,
+  onNavigate
 }: {
   fragrance: ShopFragrance;
   index: number;
   locale: string;
   isArabic: boolean;
   formatPrice: (fragrance: ShopFragrance) => string;
+  formatOriginalPrice: (fragrance: ShopFragrance) => string;
+  formatDiscountBadge: (discount: ActiveProductDiscount) => string;
+  onNavigate: (
+    event: MouseEvent<HTMLAnchorElement>,
+    fragrance: ShopFragrance,
+    imageAlt: string
+  ) => void;
 }) {
   const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
   const tagline = isArabic ? fragrance.taglineAr : fragrance.taglineEn;
@@ -702,8 +806,16 @@ function FragranceCard({
     : name;
 
   return (
-    <Link href={`/${locale}/fragrances/${fragrance.slug}`} className="group block">
-      <div className="relative mb-4 aspect-[3/4] overflow-hidden bg-surface">
+    <Link
+      href={`/${locale}/fragrances/${fragrance.slug}`}
+      onClick={(event) => onNavigate(event, fragrance, imageAlt)}
+      data-product-image-transition-link
+      className="group block"
+    >
+      <div
+        data-product-transition-source
+        className="relative mb-4 aspect-[3/4] overflow-hidden bg-surface"
+      >
         {fragrance.primaryImage ? (
           <Image
             src={fragrance.primaryImage.url}
@@ -720,6 +832,11 @@ function FragranceCard({
             {name}
           </div>
         ) : null}
+        {fragrance.discount ? (
+          <span className="label-caps absolute right-3 top-3 z-20 bg-gold px-3 py-2 text-surface-hi">
+            {formatDiscountBadge(fragrance.discount)}
+          </span>
+        ) : null}
       </div>
       <div className="text-center">
         <p className="label-caps mb-2 text-gold">{formatEnum(fragrance.scentProfile)}</p>
@@ -729,7 +846,18 @@ function FragranceCard({
         <p className="mx-auto mt-2 line-clamp-2 min-h-10 max-w-[17rem] text-sm leading-5 text-on-surface/70">
           {tagline}
         </p>
-        <p className="label-caps mt-3 text-on-surface/70">{formatPrice(fragrance)}</p>
+        {fragrance.discount ? (
+          <div className="label-caps mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <span className="text-on-surface/45 line-through decoration-on-surface/45">
+              {formatOriginalPrice(fragrance)}
+            </span>
+            <span className="text-gold">{formatPrice(fragrance)}</span>
+          </div>
+        ) : (
+          <p className="label-caps mt-3 text-on-surface/70">
+            {formatPrice(fragrance)}
+          </p>
+        )}
       </div>
     </Link>
   );
@@ -740,7 +868,8 @@ function CollectionCard({
   index,
   locale,
   isArabic,
-  formatOfferPrice
+  formatOfferPrice,
+  onNavigate
 }: {
   collection: ShopCollectionOffer;
   index: number;
@@ -750,14 +879,27 @@ function CollectionCard({
     price: string;
     combined: string;
   };
+  onNavigate: (
+    event: MouseEvent<HTMLAnchorElement>,
+    collection: ShopCollectionOffer,
+    imageAlt: string
+  ) => void;
 }) {
   const name = isArabic ? collection.nameAr : collection.nameEn;
   const description = isArabic ? collection.descriptionAr : collection.descriptionEn;
   const prices = formatOfferPrice(collection);
 
   return (
-    <Link href={`/${locale}/collections/${collection.slug}`} className="group block">
-      <div className="relative mb-4 aspect-[3/4] overflow-hidden border border-gold/50 bg-surface">
+    <Link
+      href={`/${locale}/collections/${collection.slug}`}
+      onClick={(event) => onNavigate(event, collection, name)}
+      data-product-image-transition-link
+      className="group block"
+    >
+      <div
+        data-product-transition-source
+        className="relative mb-4 aspect-[3/4] overflow-hidden border border-gold/50 bg-surface"
+      >
         <Image
           src={collection.coverImage}
           alt={name}

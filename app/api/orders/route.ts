@@ -7,6 +7,15 @@ import {randomBytes} from "crypto";
 import {hash} from "bcryptjs";
 
 import {authOptions} from "@/lib/auth";
+import {calculateCartPricing} from "@/lib/cart-pricing";
+import {selectBestCheckoutDiscount} from "@/lib/checkout-discounts";
+import {
+  automaticCouponSelect,
+  automaticCouponWhere,
+  couponCodeWhere,
+  normalizeCouponCode,
+  rankAutomaticCouponDiscounts
+} from "@/lib/coupon-discounts";
 import {validateCsrfToken, csrfCookieName} from "@/lib/csrf";
 import {prisma} from "@/lib/prisma";
 
@@ -29,6 +38,7 @@ type CheckoutPayload = {
   notes?: unknown;
   paymentMethod?: unknown;
   billingAddress?: unknown;
+  couponCode?: unknown;
   items?: unknown;
 };
 
@@ -154,6 +164,12 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
     pattern: addressPattern,
     required: false
   });
+  const rawCouponCode = asString(payload.couponCode);
+  const couponCode = normalizeCouponCode(rawCouponCode);
+
+  if (rawCouponCode && couponCode.length < 4) {
+    throw new Error("Coupon code is invalid");
+  }
 
   if (!egyptGovernorates.has(governorate)) {
     throw new Error("Governorate is not supported");
@@ -202,6 +218,7 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
     postalCode,
     phone,
     notes,
+    couponCode,
     items
   };
 }
@@ -270,38 +287,96 @@ export async function POST(request: NextRequest) {
           })
         ).id;
 
-      const variants = await tx.fragranceVariant.findMany({
-        where: {
-          id: {in: Array.from(quantities.keys())},
-          fragrance: {isPublished: true}
-        },
-        include: {
-          fragrance: {
-            select: {
-              nameEn: true,
-              nameAr: true
-            }
-          }
+      const pricingTime = new Date();
+      const pricing = await calculateCartPricing(
+        tx,
+        Array.from(quantities, ([variantId, quantity]) => ({variantId, quantity})),
+        {
+          now: pricingTime,
+          requireAll: true
         }
+      );
+      const subtotal = Number(pricing.originalSubtotal);
+      let couponDiscount:
+        | ReturnType<typeof rankAutomaticCouponDiscounts>[number]
+        | undefined;
+      let explicitCouponId: string | null = null;
+
+      if (checkout.couponCode) {
+        const explicitCoupon = await tx.coupon.findFirst({
+          where: couponCodeWhere(checkout.couponCode, customerId, pricingTime),
+          select: automaticCouponSelect
+        });
+        couponDiscount = explicitCoupon
+          ? rankAutomaticCouponDiscounts([explicitCoupon], subtotal)[0]
+          : undefined;
+
+        if (!couponDiscount) {
+          throw new Error("This coupon is invalid or unavailable for this order");
+        }
+        explicitCouponId = couponDiscount.coupon.id;
+      }
+
+      const automaticCoupons = await tx.coupon.findMany({
+        where: automaticCouponWhere(customerId, pricingTime),
+        select: automaticCouponSelect
+      });
+      let accountDiscounts = rankAutomaticCouponDiscounts(
+        automaticCoupons,
+        subtotal
+      ).filter((candidate) => candidate.coupon.id !== explicitCouponId);
+      let selectedDiscount = selectBestCheckoutDiscount({
+        productDiscountAmount: Number(pricing.productDiscountAmount),
+        couponDiscount,
+        accountDiscounts
       });
 
-      if (variants.length !== quantities.size) {
-        throw new Error("One or more cart items are no longer available");
+      while (selectedDiscount && selectedDiscount.source !== "PRODUCT") {
+        const eligibilityWhere =
+          selectedDiscount.source === "COUPON"
+            ? couponCodeWhere(checkout.couponCode, customerId, pricingTime)
+            : automaticCouponWhere(customerId, pricingTime);
+        const reservation = await tx.coupon.updateMany({
+          where: {
+            id: selectedDiscount.coupon.id,
+            ...eligibilityWhere,
+            ...(selectedDiscount.coupon.maxUses === null
+              ? {}
+              : {usedCount: {lt: selectedDiscount.coupon.maxUses}})
+          },
+          data: {usedCount: {increment: 1}}
+        });
+
+        if (reservation.count === 1) break;
+
+        if (selectedDiscount.source === "COUPON") {
+          couponDiscount = undefined;
+        } else {
+          const unavailableCouponId = selectedDiscount.coupon.id;
+          accountDiscounts = accountDiscounts.filter(
+            (candidate) => candidate.coupon.id !== unavailableCouponId
+          );
+        }
+
+        selectedDiscount = selectBestCheckoutDiscount({
+          productDiscountAmount: Number(pricing.productDiscountAmount),
+          couponDiscount,
+          accountDiscounts
+        });
       }
 
       const orderItems = [];
-      let subtotal = 0;
 
-      for (const variant of variants) {
-        const quantity = quantities.get(variant.id) ?? 0;
+      for (const line of pricing.lines) {
+        const quantity = quantities.get(line.variantId) ?? 0;
 
-        if (variant.stock < quantity) {
-          throw new Error(`${variant.fragrance.nameEn} is low on stock`);
+        if (line.stock < quantity) {
+          throw new Error(`${line.fragranceNameEn} is low on stock`);
         }
 
         const stockUpdate = await tx.fragranceVariant.updateMany({
           where: {
-            id: variant.id,
+            id: line.variantId,
             stock: {gte: quantity}
           },
           data: {
@@ -310,30 +385,35 @@ export async function POST(request: NextRequest) {
         });
 
         if (stockUpdate.count !== 1) {
-          throw new Error(`${variant.fragrance.nameEn} is low on stock`);
+          throw new Error(`${line.fragranceNameEn} is low on stock`);
         }
 
-        const unitPrice = Number(variant.price);
-        const totalPrice = unitPrice * quantity;
-        subtotal += totalPrice;
-
         orderItems.push({
-          variantId: variant.id,
-          fragranceNameEn: variant.fragrance.nameEn,
-          fragranceNameAr: variant.fragrance.nameAr,
-          sizeML: variant.sizeML,
+          variantId: line.variantId,
+          fragranceNameEn: line.fragranceNameEn,
+          fragranceNameAr: line.fragranceNameAr,
+          sizeML: line.sizeML,
           quantity,
-          unitPrice: new Prisma.Decimal(unitPrice),
-          totalPrice: new Prisma.Decimal(totalPrice)
+          unitPrice: new Prisma.Decimal(line.originalPrice),
+          totalPrice: new Prisma.Decimal(line.originalLineTotal)
         });
       }
+
+      const discountAmount = selectedDiscount?.discountAmount ?? 0;
+      const total = Math.max(0, subtotal - discountAmount);
+      const appliedCouponId =
+        selectedDiscount && selectedDiscount.source !== "PRODUCT"
+          ? selectedDiscount.coupon.id
+          : null;
 
       return tx.order.create({
         data: {
           userId: customerId,
           paymentMethod: PaymentMethod.CASH_ON_DELIVERY,
-          subtotal: new Prisma.Decimal(subtotal),
-          total: new Prisma.Decimal(subtotal),
+          subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
+          discountAmount: new Prisma.Decimal(discountAmount.toFixed(2)),
+          total: new Prisma.Decimal(total.toFixed(2)),
+          couponId: appliedCouponId,
           notes: checkout.notes || null,
           addressSnapshot: {
             email: checkout.email,

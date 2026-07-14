@@ -1,6 +1,6 @@
 "use client";
 
-import {usePathname} from "next/navigation";
+import {usePathname, useSearchParams} from "next/navigation";
 import type {ReactNode} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
 
@@ -10,7 +10,9 @@ type RouteLoadingProviderProps = {
   children: ReactNode;
 };
 
-type LoadingState = "visible" | "complete" | "hidden";
+type LoadingState = "pending" | "visible" | "complete" | "hidden";
+
+const LOADING_REVEAL_DELAY_MS = 500;
 
 function isVisibleImage(image: HTMLImageElement) {
   const rect = image.getBoundingClientRect();
@@ -84,48 +86,124 @@ export default function RouteLoadingProvider({
   children
 }: RouteLoadingProviderProps) {
   const pathname = usePathname();
-  const [state, setState] = useState<LoadingState>("visible");
+  const searchParams = useSearchParams();
+  const routeKey = `${pathname}?${searchParams.toString()}`;
+  const [state, setState] = useState<LoadingState>("hidden");
   const [progress, setProgress] = useState(0);
+  const [loadingCycle, setLoadingCycle] = useState(0);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const previousPathRef = useRef(pathname);
-  const loadingRef = useRef(true);
+  const loadingCycleRef = useRef(0);
+  const loadingStateRef = useRef<LoadingState>("hidden");
+  const finishStartedCycleRef = useRef<number | null>(null);
+  const previousRouteRef = useRef(routeKey);
+  const loadingRef = useRef(false);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach((timer) => clearTimeout(timer));
     timersRef.current = [];
   }, []);
 
-  const startLoading = useCallback(() => {
+  const startLoading = useCallback((targetPath?: string) => {
+    const nextCycle = loadingCycleRef.current + 1;
+
+    loadingCycleRef.current = nextCycle;
+    finishStartedCycleRef.current = null;
     clearTimers();
     loadingRef.current = true;
-    setState("visible");
+    loadingStateRef.current = "pending";
+    setLoadingCycle(nextCycle);
+    setState("pending");
     setProgress(0);
 
-    requestAnimationFrame(() => setProgress(8));
-    [
-      [180, 28],
-      [520, 52],
-      [1000, 74],
-      [1700, 88],
-      [2600, 94]
-    ].forEach(([delay, value]) => {
-      timersRef.current.push(
-        setTimeout(() => setProgress(value), delay)
-      );
-    });
+    const isAdminRoute = targetPath
+      ? targetPath.split("/").some((part) => part === "admin")
+      : false;
+    const revealDelay = isAdminRoute ? 3000 : LOADING_REVEAL_DELAY_MS;
+
+    timersRef.current.push(
+      setTimeout(() => {
+        if (
+          nextCycle !== loadingCycleRef.current ||
+          loadingStateRef.current !== "pending"
+        ) {
+          return;
+        }
+
+        loadingStateRef.current = "visible";
+        setState("visible");
+        requestAnimationFrame(() => {
+          if (
+            nextCycle === loadingCycleRef.current &&
+            loadingStateRef.current === "visible"
+          ) {
+            setProgress(8);
+          }
+        });
+
+        [
+          [180, 28],
+          [520, 52],
+          [1000, 74],
+          [1700, 88],
+          [2600, 94]
+        ].forEach(([delay, value]) => {
+          timersRef.current.push(
+            setTimeout(() => {
+              if (
+                nextCycle === loadingCycleRef.current &&
+                loadingStateRef.current === "visible"
+              ) {
+                setProgress(value);
+              }
+            }, delay)
+          );
+        });
+      }, revealDelay)
+    );
   }, [clearTimers]);
 
   const finishLoading = useCallback(async () => {
+    const cycle = loadingCycleRef.current;
+
+    if (
+      !loadingRef.current ||
+      finishStartedCycleRef.current === cycle
+    ) {
+      return;
+    }
+
+    if (loadingStateRef.current === "pending") {
+      clearTimers();
+      loadingRef.current = false;
+      loadingStateRef.current = "hidden";
+      setState("hidden");
+      return;
+    }
+
+    if (loadingStateRef.current !== "visible") return;
+
+    finishStartedCycleRef.current = cycle;
     await waitForContentReady();
+
+    if (cycle !== loadingCycleRef.current || !loadingRef.current) {
+      return;
+    }
+
     clearTimers();
     setProgress(100);
 
     timersRef.current.push(
       setTimeout(() => {
+        if (cycle !== loadingCycleRef.current) return;
+
+        loadingStateRef.current = "complete";
         setState("complete");
         timersRef.current.push(
           setTimeout(() => {
+            if (cycle !== loadingCycleRef.current) return;
+
             loadingRef.current = false;
+            loadingStateRef.current = "hidden";
             setState("hidden");
           }, 500)
         );
@@ -134,25 +212,17 @@ export default function RouteLoadingProvider({
   }, [clearTimers]);
 
   useEffect(() => {
-    const initialTimer = setTimeout(() => {
-      startLoading();
-      finishLoading();
-    }, 0);
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearTimers();
-    };
-  }, [clearTimers, finishLoading, startLoading]);
+    return () => clearTimers();
+  }, [clearTimers]);
 
   useEffect(() => {
-    if (previousPathRef.current === pathname) return;
+    if (previousRouteRef.current === routeKey) return;
 
-    previousPathRef.current = pathname;
+    previousRouteRef.current = routeKey;
     if (loadingRef.current) {
       finishLoading();
     }
-  }, [finishLoading, pathname]);
+  }, [finishLoading, routeKey]);
 
   useEffect(() => {
     function shouldHandleNavigation(event: MouseEvent, anchor: HTMLAnchorElement) {
@@ -164,6 +234,7 @@ export default function RouteLoadingProvider({
         event.shiftKey ||
         event.altKey ||
         anchor.target ||
+        anchor.hasAttribute("data-product-image-transition-link") ||
         anchor.hasAttribute("download")
       ) {
         return false;
@@ -186,22 +257,15 @@ export default function RouteLoadingProvider({
       const anchor = target.closest("a");
       if (!anchor || !shouldHandleNavigation(event, anchor)) return;
 
-      startLoading();
+      startLoading(anchor.pathname);
     }
 
     function handlePopState() {
-      startLoading();
-      timersRef.current.push(
-        setTimeout(() => {
-          if (loadingRef.current) {
-            finishLoading();
-          }
-        }, 0)
-      );
+      startLoading(window.location.pathname);
     }
 
     function handlePageShow(event: PageTransitionEvent) {
-      if (event.persisted || loadingRef.current) {
+      if (event.persisted && loadingRef.current) {
         finishLoading();
       }
     }
@@ -220,8 +284,12 @@ export default function RouteLoadingProvider({
   return (
     <>
       {children}
-      {state !== "hidden" ? (
-        <LoadingScreen progress={progress} complete={state === "complete"} />
+      {state === "visible" || state === "complete" ? (
+        <LoadingScreen
+          key={loadingCycle}
+          progress={progress}
+          complete={state === "complete"}
+        />
       ) : null}
     </>
   );

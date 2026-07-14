@@ -6,15 +6,30 @@ import Link from "next/link";
 import type {FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
-type CartItem = {
-  fragranceId: string;
-  variantId: string;
-  slug: string;
-  name: string;
-  image: string | null;
-  sizeML: number;
-  price: string;
-  quantity: number;
+import {
+  cartOriginalSubtotal,
+  cartSubtotal,
+  mergeCartPricing,
+  readCartItems,
+  requestCartPricing,
+  writeCartItems,
+  type CartItem,
+  type CartPricingQuote
+} from "@/lib/cart-items";
+import {productDiscountBadge} from "@/lib/product-discounts";
+
+type CheckoutDiscount = {
+  code: string;
+  type: "PERCENTAGE" | "FIXED";
+  value: string;
+  discountAmount: number;
+  source: "ACCOUNT" | "COUPON";
+};
+
+type CheckoutDiscountSelection = {
+  source: "PRODUCT" | "ACCOUNT" | "COUPON";
+  discountAmount: number;
+  code: string | null;
 };
 
 type CheckoutForm = {
@@ -78,16 +93,6 @@ const initialForm: CheckoutForm = {
   notes: ""
 };
 
-function readCart() {
-  try {
-    return JSON.parse(
-      window.localStorage.getItem("valentro-cart") ?? "[]"
-    ) as CartItem[];
-  } catch {
-    return [];
-  }
-}
-
 function cleanText(value: string, maxLength: number) {
   return value.replace(/[<>{}[\]$;'"`|\\]/g, "").slice(0, maxLength);
 }
@@ -148,7 +153,7 @@ function Field({
 export default function CheckoutClient() {
   const locale = useLocale();
   const [items, setItems] = useState<CartItem[]>(() =>
-    typeof window === "undefined" ? [] : readCart()
+    typeof window === "undefined" ? [] : readCartItems()
   );
   const [form, setForm] = useState<CheckoutForm>(initialForm);
   const [csrfToken, setCsrfToken] = useState("");
@@ -157,6 +162,14 @@ export default function CheckoutClient() {
   const [missingFields, setMissingFields] = useState<MissingField[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [checkoutDiscount, setCheckoutDiscount] = useState<CheckoutDiscount | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCouponCode, setAppliedCouponCode] = useState("");
+  const [couponOpen, setCouponOpen] = useState(false);
+  const [discountMessage, setDiscountMessage] = useState("");
+  const [discountMessageIsError, setDiscountMessageIsError] = useState(false);
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [discountRequestVersion, setDiscountRequestVersion] = useState(0);
 
   const priceFormatter = useMemo(
     () =>
@@ -199,10 +212,156 @@ export default function CheckoutClient() {
     });
   }, []);
 
-  const subtotal = items.reduce(
-    (total, item) => total + Number(item.price) * item.quantity,
-    0
+  useEffect(() => {
+    const controller = new AbortController();
+    const storedItems = readCartItems();
+
+    if (storedItems.length > 0) {
+      requestCartPricing(storedItems, controller.signal)
+        .then((pricing) => {
+          setItems((current) => {
+            const nextItems = mergeCartPricing(current, pricing);
+            writeCartItems(nextItems, false);
+            return nextItems;
+          });
+        })
+        .catch((error) => {
+          if (!(error instanceof Error && error.name === "AbortError")) {
+            setStatus("Current product prices will be verified before purchase.");
+          }
+        });
+    }
+
+    return () => controller.abort();
+  }, []);
+
+  const subtotal = cartSubtotal(items);
+  const originalSubtotal = cartOriginalSubtotal(items);
+  const productSavings = Math.max(0, originalSubtotal - subtotal);
+  const pricingRequestItems = JSON.stringify(
+    items.map(({variantId, quantity}) => ({variantId, quantity}))
   );
+  const displayedDiscount = subtotal > 0 ? checkoutDiscount : null;
+  const discountAmount = displayedDiscount?.discountAmount ?? 0;
+  const total = Math.max(0, subtotal - discountAmount);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const normalizedEmail = form.email.trim().toLowerCase();
+
+    if (!csrfToken || pricingRequestItems === "[]") {
+      return () => controller.abort();
+    }
+
+    const timer = window.setTimeout(
+      () => {
+        setDiscountLoading(true);
+
+        fetch("/api/orders/discount", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify({
+            csrfToken,
+            items: JSON.parse(pricingRequestItems) as {
+              variantId: string;
+              quantity: number;
+            }[],
+            email: normalizedEmail,
+            couponCode: appliedCouponCode
+          }),
+          signal: controller.signal
+        })
+          .then(async (response) => {
+            const data = (await response.json()) as {
+              discount?: CheckoutDiscount | null;
+              selection?: CheckoutDiscountSelection | null;
+              pricing?: CartPricingQuote;
+              message?: string;
+            };
+
+            if (data.pricing) {
+              setItems((current) => {
+                const nextItems = mergeCartPricing(current, data.pricing as CartPricingQuote);
+                writeCartItems(nextItems, false);
+                return nextItems;
+              });
+            }
+
+            if (data.discount !== undefined) {
+              setCheckoutDiscount(data.discount ?? null);
+            }
+
+            if (!response.ok) {
+              throw new Error(data.message ?? "Unable to apply this discount");
+            }
+
+            if (appliedCouponCode) setDiscountMessageIsError(false);
+            setDiscountMessage((current) => {
+              if (appliedCouponCode) {
+                if (data.selection?.source === "COUPON") {
+                  return `Coupon ${appliedCouponCode} gives the biggest saving and was applied.`;
+                }
+                if (data.selection?.source === "ACCOUNT") {
+                  return `Coupon ${appliedCouponCode} is valid, but your bulk discount saves more. Only the bulk discount was applied.`;
+                }
+                if (data.selection?.source === "PRODUCT") {
+                  return `Coupon ${appliedCouponCode} is valid, but the product discount gives the best price. Only the product discount was applied.`;
+                }
+              }
+              if (data.selection?.source === "ACCOUNT") {
+                return current || "Your bulk discount gives the biggest saving and was applied automatically.";
+              }
+              return current;
+            });
+          })
+          .catch((error) => {
+            if (error instanceof Error && error.name === "AbortError") return;
+            if (appliedCouponCode) setAppliedCouponCode("");
+            setDiscountMessageIsError(true);
+            setDiscountMessage(
+              error instanceof Error ? error.message : "Unable to apply this discount"
+            );
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setDiscountLoading(false);
+          });
+      },
+      appliedCouponCode ? 0 : 450
+    );
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [appliedCouponCode, csrfToken, discountRequestVersion, form.email, pricingRequestItems]);
+
+  function applyCoupon() {
+    const code = couponInput.trim().toUpperCase();
+
+    if (!code) {
+      setDiscountMessageIsError(true);
+      setDiscountMessage("Enter a coupon code first.");
+      return;
+    }
+
+    setCouponInput(code);
+    setAppliedCouponCode(code);
+    setDiscountMessageIsError(false);
+    setDiscountMessage("");
+    setDiscountRequestVersion((version) => version + 1);
+  }
+
+  function removeCoupon() {
+    setCouponInput("");
+    setAppliedCouponCode("");
+    setCheckoutDiscount(null);
+    setDiscountMessageIsError(false);
+    setDiscountMessage("");
+    setDiscountRequestVersion((version) => version + 1);
+  }
 
   function updateField<FieldName extends keyof CheckoutForm>(
     field: FieldName,
@@ -227,6 +386,12 @@ export default function CheckoutClient() {
                 );
 
     setForm((current) => ({...current, [field]: cleaned}));
+    if (field === "email") {
+      setCheckoutDiscount(null);
+      setDiscountMessageIsError(false);
+      setDiscountMessage("");
+      setDiscountLoading(false);
+    }
     setMissingFields((current) =>
       current.filter((item) => item.field !== field)
     );
@@ -303,6 +468,7 @@ export default function CheckoutClient() {
       body: JSON.stringify({
         ...form,
         csrfToken,
+        couponCode: appliedCouponCode,
         paymentMethod: "CASH_ON_DELIVERY",
         billingAddress: "same",
         items: items.map((item) => ({
@@ -602,7 +768,7 @@ export default function CheckoutClient() {
 
           <button
             type="submit"
-            disabled={isSubmitting || !csrfToken}
+            disabled={isSubmitting || !csrfToken || discountLoading}
             className="label-caps flex min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-60 lg:hidden"
           >
             {isSubmitting ? "Placing Order..." : "Complete Purchase"}
@@ -612,43 +778,163 @@ export default function CheckoutClient() {
         <aside className="border border-outline bg-surface p-5 lg:sticky lg:top-28">
           <h2 className="font-serif text-3xl leading-tight">Order Summary</h2>
           <div className="mt-5 space-y-4 border-b border-outline/60 pb-5">
-            {items.map((item) => (
-              <div key={item.variantId} className="flex items-center gap-3">
-                <div className="relative h-16 w-14 shrink-0 border border-outline bg-surface-mid">
-                  {item.image ? (
-                    <Image
-                      src={item.image}
-                      alt={item.name}
-                      fill
-                      sizes="56px"
-                      className="object-cover"
-                    />
-                  ) : null}
-                  <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-parchment text-[10px] font-semibold text-surface-hi">
-                    {item.quantity}
-                  </span>
+            {items.map((item) => {
+              const lineTotal = Number(item.price) * item.quantity;
+              const originalLineTotal =
+                Number(item.originalPrice ?? item.price) * item.quantity;
+              const hasProductDiscount = originalLineTotal > lineTotal + 0.001;
+
+              return (
+                <div key={item.variantId} className="flex items-center gap-3">
+                  <div className="relative h-16 w-14 shrink-0 border border-outline bg-surface-mid">
+                    {item.image ? (
+                      <Image
+                        src={item.image}
+                        alt={item.name}
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                      />
+                    ) : null}
+                    <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-parchment text-[10px] font-semibold text-surface-hi">
+                      {item.quantity}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold uppercase tracking-[0.08em]">
+                      {item.name}
+                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-on-surface/70">
+                      <span>{item.sizeML}ml</span>
+                      {hasProductDiscount && item.discount ? (
+                        <span className="label-caps text-[9px] text-gold">
+                          {productDiscountBadge(item.discount, (amount) =>
+                            priceFormatter.format(amount)
+                          )}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="text-right text-sm">
+                    {hasProductDiscount ? (
+                      <p className="text-xs text-on-surface/55 line-through">
+                        {priceFormatter.format(originalLineTotal)}
+                      </p>
+                    ) : null}
+                    <p className="text-parchment">{priceFormatter.format(lineTotal)}</p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold uppercase tracking-[0.08em]">
-                    {item.name}
-                  </p>
-                  <p className="mt-0.5 text-xs text-on-surface/70">
-                    {item.sizeML}ml
-                  </p>
+              );
+            })}
+          </div>
+          <div className="border-b border-outline/60 py-1">
+            <button
+              type="button"
+              aria-expanded={couponOpen}
+              aria-controls="checkout-coupon-entry"
+              onClick={() => setCouponOpen((open) => !open)}
+              className="flex min-h-11 w-full items-center justify-between gap-4 text-left transition-colors hover:text-gold"
+            >
+              <span className="font-serif text-lg">Have a coupon?</span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+                className={`h-4 w-4 transition-transform ${couponOpen ? "rotate-180" : ""}`}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <p className="pb-3 text-[11px] leading-5 text-on-surface/60">
+              We automatically apply only the single discount that saves you the most. Discounts cannot be combined.
+            </p>
+            {couponOpen ? (
+              <div id="checkout-coupon-entry" className="pb-4 pt-2">
+                <div className="flex gap-2">
+                  <input
+                    value={couponInput}
+                    maxLength={32}
+                    autoComplete="off"
+                    aria-label="Coupon code"
+                    placeholder="Coupon code"
+                    onChange={(event) => setCouponInput(event.target.value.toUpperCase())}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        applyCoupon();
+                      }
+                    }}
+                    className="h-10 min-w-0 flex-1 border border-outline bg-surface-hi px-3 text-xs uppercase tracking-[0.1em] text-parchment outline-none transition-colors placeholder:text-on-surface/45 focus:border-gold"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCoupon}
+                    disabled={discountLoading || !csrfToken || !couponInput.trim()}
+                    className="label-caps min-h-10 border border-parchment bg-parchment px-4 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {discountLoading && appliedCouponCode ? "Applying..." : "Apply"}
+                  </button>
                 </div>
-                <p className="text-sm text-parchment">
-                  {priceFormatter.format(Number(item.price) * item.quantity)}
-                </p>
+                {appliedCouponCode ? (
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    disabled={discountLoading}
+                    className="label-caps mt-3 border-b border-outline pb-1 text-on-surface/70 transition-colors hover:border-gold hover:text-gold disabled:opacity-50"
+                  >
+                    Remove Coupon
+                  </button>
+                ) : null}
+                {discountMessage ? (
+                  <p
+                    role={discountMessageIsError ? "alert" : "status"}
+                    className={`mt-3 text-xs leading-5 ${
+                      discountMessageIsError
+                        ? "text-red-400"
+                        : displayedDiscount
+                          ? "text-gold"
+                          : "text-on-surface/70"
+                    }`}
+                  >
+                    {discountMessage}
+                  </p>
+                ) : null}
               </div>
-            ))}
+            ) : null}
           </div>
           <div className="mt-5 space-y-3 border-b border-outline/60 pb-5 text-sm text-on-surface/75">
+            {productSavings > 0 ? (
+              <>
+                <div className="flex justify-between gap-4">
+                  <span>Original subtotal</span>
+                  <span className="text-on-surface/55 line-through">
+                    {priceFormatter.format(originalSubtotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4 text-gold">
+                  <span>Product discounts</span>
+                  <span>-{priceFormatter.format(productSavings)}</span>
+                </div>
+              </>
+            ) : null}
             <div className="flex justify-between gap-4">
               <span>Subtotal</span>
               <span className="text-parchment">
                 {priceFormatter.format(subtotal)}
               </span>
             </div>
+            {displayedDiscount ? (
+              <div className="flex justify-between gap-4 text-gold">
+                <span>
+                  {displayedDiscount.source === "COUPON" ? "Coupon" : "Bulk Discount"} ({displayedDiscount.code})
+                </span>
+                <span>-{priceFormatter.format(discountAmount)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between gap-4">
               <span>Shipping</span>
               <span className="label-caps text-[10px] text-parchment">
@@ -663,7 +949,7 @@ export default function CheckoutClient() {
           <div className="mt-5 flex items-end justify-between gap-4">
             <span className="label-caps text-on-surface/75">Total</span>
             <span className="font-serif text-4xl leading-none">
-              {priceFormatter.format(subtotal)}
+              {priceFormatter.format(total)}
             </span>
           </div>
           {missingFields.length > 0 ? (
@@ -687,7 +973,7 @@ export default function CheckoutClient() {
           <button
             type="submit"
             form="checkout-form"
-            disabled={isSubmitting || !csrfToken}
+            disabled={isSubmitting || !csrfToken || discountLoading}
             className="label-caps mt-6 hidden min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-60 lg:flex"
           >
             {isSubmitting ? "Placing Order..." : "Complete Purchase"}

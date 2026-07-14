@@ -2,32 +2,33 @@
 
 import {useEffect, useMemo, useState} from "react";
 import {useLocale} from "next-intl";
+import type {ActiveAnnouncement} from "@/lib/storefront-data";
 
-type ActiveSalesLine = {
-  id: string;
-  textEn: string;
-  textAr: string;
-};
-
-export default function NewsTicker() {
+export default function NewsTicker({
+  initialSale
+}: {
+  initialSale?: ActiveAnnouncement | null;
+}) {
   const locale = useLocale();
-  const [sale, setSale] = useState<ActiveSalesLine | null>(null);
+  const [sale, setSale] = useState<ActiveAnnouncement | null>(initialSale ?? null);
 
   useEffect(() => {
+    if (initialSale !== undefined) return;
+
     async function fetchSalesLine() {
       try {
         const res = await fetch("/api/storefront/sales/active", {
           cache: "no-store"
         });
         if (!res.ok) return;
-        setSale((await res.json()) as ActiveSalesLine | null);
+        setSale((await res.json()) as ActiveAnnouncement | null);
       } catch {
         // Silently fail - ticker is non-critical.
       }
     }
 
     fetchSalesLine();
-  }, []);
+  }, [initialSale]);
 
   const text = sale ? (locale === "ar" ? sale.textAr : sale.textEn) : null;
   const repeatedItems = useMemo(

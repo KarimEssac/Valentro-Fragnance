@@ -3,20 +3,33 @@
 import {useEffect, useState} from "react";
 import {useLocale} from "next-intl";
 import Link from "next/link";
+import type {ActiveAnnouncement} from "@/lib/storefront-data";
 
-type ActiveAnnouncement = {
-  id: string;
-  textEn: string;
-  textAr: string;
-  linkUrl?: string | null;
-};
-
-export default function SalesBar() {
+export default function SalesBar({
+  initialSale
+}: {
+  initialSale?: ActiveAnnouncement | null;
+}) {
   const locale = useLocale();
-  const [sale, setSale] = useState<ActiveAnnouncement | null>(null);
+  const [sale, setSale] = useState<ActiveAnnouncement | null>(initialSale ?? null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    if (initialSale !== undefined) {
+      if (initialSale) {
+        const frame = requestAnimationFrame(() => {
+          setDismissed(
+            sessionStorage.getItem(
+              `valentro-sales-dismissed-${initialSale.id}`
+            ) === "true"
+          );
+        });
+
+        return () => cancelAnimationFrame(frame);
+      }
+      return;
+    }
+
     async function fetchSalesLine() {
       try {
         const res = await fetch("/api/storefront/announcements/active", {
@@ -38,7 +51,7 @@ export default function SalesBar() {
     }
 
     fetchSalesLine();
-  }, []);
+  }, [initialSale]);
 
   if (!sale || dismissed) return null;
 

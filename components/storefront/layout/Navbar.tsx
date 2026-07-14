@@ -273,9 +273,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
       if (pathname === homePath || pathname === `${homePath}/`) {
         event.preventDefault();
         closeMenu();
-        document
-          .getElementById("hero")
-          ?.scrollIntoView({behavior: "smooth", block: "start"});
+        window.scrollTo({top: 0, behavior: "smooth"});
       } else {
         closeMenu();
       }
@@ -307,7 +305,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           >
             <div className="flex items-center justify-between">
               <Link
-                href={`/${locale}#hero`}
+                href={`/${locale}`}
                 onClick={handleBrandClick}
                 className="focus-gold font-serif text-xl tracking-[0.14em] text-gold transition-colors hover:text-parchment"
                 aria-label="Valentro home"
@@ -379,7 +377,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           >
             <div className="flex items-center justify-between">
               <Link
-                href={`/${locale}#hero`}
+                href={`/${locale}`}
                 onClick={handleBrandClick}
                 className="focus-gold font-serif text-xl tracking-[0.14em] text-gold transition-colors hover:text-parchment"
                 aria-label="Valentro home"
@@ -472,7 +470,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           </button>
 
           <Link
-            href={`/${locale}#hero`}
+            href={`/${locale}`}
             onClick={handleBrandClick}
             className="focus-gold shrink-0 font-serif text-base tracking-[0.14em] text-gold transition-colors duration-300 hover:text-parchment sm:text-lg"
             aria-label="Valentro home"

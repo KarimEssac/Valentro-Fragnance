@@ -1,10 +1,12 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
+import {revalidateTag} from "next/cache";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
 
 import {authOptions} from "@/lib/auth";
 import {prisma} from "@/lib/prisma";
+import {STOREFRONT_ANNOUNCEMENTS_TAG} from "@/lib/storefront-data";
 
 type RouteContext = {
   params: Promise<{
@@ -98,6 +100,7 @@ export async function PUT(
       }
     });
 
+    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, "max");
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Failed to update admin announcement:", error);
@@ -124,6 +127,7 @@ export async function DELETE(
       where: {id}
     });
 
+    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, "max");
     return NextResponse.json({message: "Announcement deleted"});
   } catch (error) {
     console.error("Failed to delete admin announcement:", error);

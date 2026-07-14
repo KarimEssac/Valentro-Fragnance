@@ -5,6 +5,8 @@ import {notFound} from "next/navigation";
 import Navbar from "@/components/storefront/layout/Navbar";
 import SalesBar from "@/components/storefront/layout/SalesBar";
 import {prisma} from "@/lib/prisma";
+import {getProductTransitionName} from "@/lib/product-image-transition";
+import CollectionFragranceLink from "@/components/storefront/product/CollectionFragranceLink";
 
 type CollectionDetailPageProps = {
   params: Promise<{
@@ -88,7 +90,11 @@ export default async function CollectionDetailPage({
       <Navbar cartCount={0} />
       <section className="px-gutter pb-24 pt-12 lg:px-16">
         <div className="mx-auto grid max-w-container gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-          <div className="relative aspect-[4/5] overflow-hidden bg-surface">
+          <div
+            data-product-transition-target={slug}
+            style={{viewTransitionName: getProductTransitionName(slug)}}
+            className="relative aspect-[4/5] overflow-hidden bg-surface"
+          >
             <Image
               src={collection.coverImage}
               alt={name}
@@ -153,12 +159,18 @@ export default async function CollectionDetailPage({
               const imageAlt = image ? (isArabic ? image.altAr : image.altEn) : productName;
 
               return (
-                <Link
+                <CollectionFragranceLink
                   key={product.id}
-                  href={`/${locale}/fragrances/${product.slug}`}
+                  locale={locale}
+                  slug={product.slug}
+                  imageUrl={image?.url ?? null}
+                  imageAlt={imageAlt}
                   className="group block"
                 >
-                  <div className="relative mb-4 aspect-[3/4] overflow-hidden bg-surface">
+                  <div
+                    data-product-transition-source
+                    className="relative mb-4 aspect-[3/4] overflow-hidden bg-surface"
+                  >
                     {image ? (
                       <Image
                         src={image.url}
@@ -181,7 +193,7 @@ export default async function CollectionDetailPage({
                         : "Price on request"}
                     </p>
                   </div>
-                </Link>
+                </CollectionFragranceLink>
               );
             })}
           </div>

@@ -1,5 +1,6 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
+import {revalidateTag} from "next/cache";
 import {Prisma} from "@prisma/client";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
@@ -7,6 +8,7 @@ import type {Session} from "next-auth";
 import {authOptions} from "@/lib/auth";
 import {uploadCollectionImages} from "@/lib/fragrance-images";
 import {prisma} from "@/lib/prisma";
+import {STOREFRONT_COLLECTIONS_TAG} from "@/lib/storefront-data";
 
 export const runtime = "nodejs";
 
@@ -215,6 +217,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    revalidateTag(STOREFRONT_COLLECTIONS_TAG, "max");
     return NextResponse.json({message: "Collection offer created"}, {status: 201});
   } catch (error) {
     return NextResponse.json(

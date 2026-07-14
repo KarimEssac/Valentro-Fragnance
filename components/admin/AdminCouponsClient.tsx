@@ -3,6 +3,8 @@
 import {useMemo, useState} from "react";
 import {useRouter} from "next/navigation";
 
+import Modal from "@/components/ui/Modal";
+
 type CouponUser = {
   id: string;
   name: string | null;
@@ -53,9 +55,14 @@ type CouponFormState = {
   userIds: string[];
 };
 
+type BulkCouponFormState = Pick<
+  CouponFormState,
+  "type" | "value" | "minOrderAmount" | "maxUses" | "startsAt" | "expiresAt" | "isActive"
+>;
+
 const emptyForm: CouponFormState = {
   code: "",
-  generateCode: true,
+  generateCode: false,
   type: "PERCENTAGE",
   value: "10",
   minOrderAmount: "",
@@ -65,6 +72,16 @@ const emptyForm: CouponFormState = {
   isActive: true,
   applicableTo: "ALL",
   userIds: []
+};
+
+const emptyBulkForm: BulkCouponFormState = {
+  type: "PERCENTAGE",
+  value: "15",
+  minOrderAmount: "",
+  maxUses: "",
+  startsAt: "",
+  expiresAt: "",
+  isActive: true
 };
 
 function inputClass() {
@@ -81,6 +98,37 @@ function Field({label, children}: {label: string; children: React.ReactNode}) {
       <span className={labelClass()}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function MinimumCheckoutField({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label="Minimum Checkout Total (Optional)">
+      <div className="relative">
+        <input
+          value={value}
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="No minimum"
+          onChange={(event) => onChange(event.target.value)}
+          className={`${inputClass()} pr-14`}
+        />
+        <span className="label-caps pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-[#7A6A4F]">
+          EGP
+        </span>
+      </div>
+      <span className="mt-2 block text-xs leading-5 text-[#7c766d]">
+        Applies when the pre-discount checkout subtotal reaches this amount. Leave blank for no
+        minimum.
+      </span>
+    </Field>
   );
 }
 
@@ -111,9 +159,13 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
   const [form, setForm] = useState<CouponFormState>(emptyForm);
   const [bulkRule, setBulkRule] = useState<"TOP_SPEND" | "TOP_ORDERS">("TOP_SPEND");
   const [bulkPercent, setBulkPercent] = useState("10");
-  const [bulkValue, setBulkValue] = useState("15");
+  const [bulkForm, setBulkForm] = useState<BulkCouponFormState>(emptyBulkForm);
   const [editing, setEditing] = useState<Coupon | null>(null);
   const [editForm, setEditForm] = useState<CouponFormState>(emptyForm);
+  const [editError, setEditError] = useState("");
+  const [couponToDelete, setCouponToDelete] = useState<Coupon | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -167,9 +219,17 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
     setEditForm((current) => ({...current, [key]: value}));
   }
 
+  function updateBulkForm(
+    key: keyof BulkCouponFormState,
+    value: BulkCouponFormState[typeof key]
+  ) {
+    setBulkForm((current) => ({...current, [key]: value}));
+  }
+
   function openEdit(coupon: Coupon) {
     setEditing(coupon);
     setStatus("");
+    setEditError("");
     setEditForm({
       code: coupon.code,
       generateCode: false,
@@ -208,7 +268,8 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
     }
   }
 
-  async function submitBulk() {
+  async function submitBulk(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setStatus("");
     setSubmitting(true);
 
@@ -217,12 +278,10 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
-          ...form,
+          ...bulkForm,
           mode: "bulk",
           generateCode: true,
           applicableTo: "SPECIFIC_USERS",
-          type: "PERCENTAGE",
-          value: bulkValue,
           audienceRule: bulkRule,
           audiencePercent: Number(bulkPercent)
         })
@@ -242,6 +301,7 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
     event.preventDefault();
     if (!editing) return;
     setStatus("");
+    setEditError("");
     setSubmitting(true);
 
     try {
@@ -256,41 +316,33 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
       router.refresh();
       setStatus(result.message ?? "Coupon updated");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to update coupon");
+      setEditError(error instanceof Error ? error.message : "Unable to update coupon");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function disableCoupon(coupon: Coupon) {
-    setStatus("");
-    const response = await fetch(`/api/admin/coupons/${coupon.id}`, {method: "DELETE"});
-    const result = (await response.json()) as {message?: string};
-    if (!response.ok) {
-      setStatus(result.message ?? "Unable to disable coupon");
-      return;
-    }
-    router.refresh();
-    setStatus(result.message ?? "Coupon disabled");
-  }
+  async function deleteCoupon() {
+    if (!couponToDelete) return;
 
-  function reenableCoupon(coupon: Coupon) {
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 30);
-    setEditing(coupon);
-    setEditForm({
-      code: coupon.code,
-      generateCode: false,
-      type: coupon.type,
-      value: coupon.value,
-      minOrderAmount: coupon.minOrderAmount ?? "",
-      maxUses: coupon.maxUses?.toString() ?? "",
-      startsAt: "",
-      expiresAt: endDate.toISOString().slice(0, 16),
-      isActive: true,
-      applicableTo: coupon.applicableTo,
-      userIds: coupon.users.map((user) => user.id)
-    });
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch(`/api/admin/coupons/${couponToDelete.id}`, {
+        method: "DELETE"
+      });
+      const result = (await response.json()) as {message?: string};
+      if (!response.ok) throw new Error(result.message ?? "Unable to delete coupon");
+
+      setCouponToDelete(null);
+      router.refresh();
+      setStatus(result.message ?? "Coupon deleted");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete coupon");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -318,16 +370,17 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
             <span className="flex h-5 w-5 items-center justify-center border border-[#7A6A4F] text-sm text-[#7A6A4F]">
               +
             </span>
-            Create New Incentive
+            Create New Coupon
           </h2>
           <form onSubmit={submitCreate} className="space-y-10">
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <Field label="Code Name">
+              <Field label="Code Name (Optional)">
                 <input
                   value={form.code}
-                  disabled={form.generateCode}
-                  onChange={(event) => updateForm("code", event.target.value)}
-                  placeholder="e.g. VALENTRO20"
+                  maxLength={32}
+                  autoComplete="off"
+                  onChange={(event) => updateForm("code", event.target.value.toUpperCase())}
+                  placeholder="Leave blank to generate automatically"
                   className={inputClass()}
                 />
               </Field>
@@ -381,16 +434,12 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                   className={inputClass()}
                 />
               </Field>
+              <MinimumCheckoutField
+                value={form.minOrderAmount}
+                onChange={(value) => updateForm("minOrderAmount", value)}
+              />
             </div>
-            <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
-              <label className="label-caps flex items-center gap-3 text-[#4b463e]">
-                <input
-                  type="checkbox"
-                  checked={form.generateCode}
-                  onChange={(event) => updateForm("generateCode", event.target.checked)}
-                />
-                System generates code
-              </label>
+            <div className="grid gap-6">
               <label className="label-caps flex items-center gap-3 text-[#4b463e]">
                 <input
                   type="checkbox"
@@ -413,21 +462,22 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
               disabled={submitting}
               className="label-caps inline-flex min-h-14 w-full items-center justify-center gap-2 bg-[#201B11] px-8 py-4 text-[#F9F6F0] transition-colors hover:bg-[#D4AF37] disabled:opacity-50 md:w-auto"
             >
-              {submitting ? "Saving..." : "Generate Code"} <span aria-hidden="true">→</span>
+              {submitting ? "Saving..." : "Create Coupon"} <span aria-hidden="true">→</span>
             </button>
           </form>
         </section>
 
-        <section className="flex flex-col justify-between lg:col-span-5">
-          <div>
-            <h2 className="mb-6 border-b border-[#7A6A4F]/30 pb-4 font-serif text-[2rem] leading-tight text-[#201B11]">
-              Bulk Engine
-            </h2>
-            <p className="mb-8 max-w-md text-base leading-7 text-[#4b463e]">
-              Apply blanket discounts across designated client tiers to stimulate acquisition or
-              reward loyalty.
-            </p>
-            <div className="space-y-8">
+        <section className="lg:col-span-5">
+          <form onSubmit={submitBulk} className="flex h-full flex-col justify-between">
+            <div>
+              <h2 className="mb-6 border-b border-[#7A6A4F]/30 pb-4 font-serif text-[2rem] leading-tight text-[#201B11]">
+                Bulk Engine
+              </h2>
+              <p className="mb-8 max-w-md text-base leading-7 text-[#4b463e]">
+                Apply blanket discounts across designated client tiers to stimulate acquisition or
+                reward loyalty.
+              </p>
+              <div className="space-y-8">
               <Field label="Target Cohort">
                 <select
                   value={bulkRule}
@@ -450,34 +500,76 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                   className={inputClass()}
                 />
               </Field>
-              <Field label="Blanket Discount (%)">
-                <input
-                  value={bulkValue}
-                  type="number"
-                  min="1"
-                  max="100"
-                  onChange={(event) => setBulkValue(event.target.value)}
-                  className={inputClass()}
+              <div className="grid gap-6 sm:grid-cols-2">
+                <Field label="Discount Type">
+                  <select
+                    value={bulkForm.type}
+                    onChange={(event) =>
+                      updateBulkForm(
+                        "type",
+                        event.target.value as BulkCouponFormState["type"]
+                      )
+                    }
+                    className={inputClass()}
+                  >
+                    <option value="PERCENTAGE">Percentage (%)</option>
+                    <option value="FIXED">Fixed Amount</option>
+                  </select>
+                </Field>
+                <Field label="Discount Value">
+                  <input
+                    value={bulkForm.value}
+                    type="number"
+                    min="1"
+                    max={bulkForm.type === "PERCENTAGE" ? "100" : undefined}
+                    step="0.01"
+                    onChange={(event) => updateBulkForm("value", event.target.value)}
+                    className={inputClass()}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <MinimumCheckoutField
+                  value={bulkForm.minOrderAmount}
+                  onChange={(value) => updateBulkForm("minOrderAmount", value)}
                 />
-              </Field>
+                <Field label="Maximum Uses">
+                  <input
+                    value={bulkForm.maxUses}
+                    type="number"
+                    min="1"
+                    placeholder="Unlimited"
+                    onChange={(event) => updateBulkForm("maxUses", event.target.value)}
+                    className={inputClass()}
+                  />
+                </Field>
+              </div>
               <div className="grid gap-6 sm:grid-cols-2">
                 <Field label="Starts At">
                   <input
-                    value={form.startsAt}
+                    value={bulkForm.startsAt}
                     type="datetime-local"
-                    onChange={(event) => updateForm("startsAt", event.target.value)}
+                    onChange={(event) => updateBulkForm("startsAt", event.target.value)}
                     className={inputClass()}
                   />
                 </Field>
                 <Field label="Ends At">
                   <input
-                    value={form.expiresAt}
+                    value={bulkForm.expiresAt}
                     type="datetime-local"
-                    onChange={(event) => updateForm("expiresAt", event.target.value)}
+                    onChange={(event) => updateBulkForm("expiresAt", event.target.value)}
                     className={inputClass()}
                   />
                 </Field>
               </div>
+              <label className="label-caps flex items-center gap-3 text-[#4b463e]">
+                <input
+                  type="checkbox"
+                  checked={bulkForm.isActive}
+                  onChange={(event) => updateBulkForm("isActive", event.target.checked)}
+                />
+                Active in selected period
+              </label>
             </div>
             <div className="mt-8 border border-[#7A6A4F]/20 bg-white/35 p-4">
               <p className="label-caps mb-3 text-[#7A6A4F]">
@@ -496,15 +588,15 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                 )}
               </div>
             </div>
-          </div>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={submitBulk}
-            className="label-caps mt-12 inline-flex min-h-14 w-full items-center justify-center gap-2 border border-[#201B11] bg-transparent px-8 py-4 text-[#201B11] transition-colors hover:bg-[#EAE4D8] disabled:opacity-50"
-          >
+            </div>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="label-caps mt-12 inline-flex min-h-14 w-full items-center justify-center gap-2 border border-[#201B11] bg-transparent px-8 py-4 text-[#201B11] transition-colors hover:bg-[#EAE4D8] disabled:opacity-50"
+            >
             Execute Bulk Action <span aria-hidden="true">↯</span>
-          </button>
+            </button>
+          </form>
         </section>
       </div>
 
@@ -565,31 +657,24 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                       </span>
                     </td>
                     <td className="py-6 pr-4 text-right">
-                      <div className="flex items-center justify-end gap-4 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => openEdit(coupon)}
-                          className="label-caps text-[#7A6A4F] transition-colors hover:text-[#D4AF37]"
+                          className="label-caps min-h-9 border border-[#7A6A4F] px-4 text-[#4b463e] transition-colors hover:border-[#201B11] hover:bg-[#EAE4D8] hover:text-[#201B11]"
                         >
                           Edit
                         </button>
-                        {currentStatus === "Active" || currentStatus === "Scheduled" ? (
-                          <button
-                            type="button"
-                            onClick={() => disableCoupon(coupon)}
-                            className="label-caps text-[#201B11] transition-colors hover:text-[#D4AF37]"
-                          >
-                            Disable
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => reenableCoupon(coupon)}
-                            className="label-caps text-[#201B11] transition-colors hover:text-[#D4AF37]"
-                          >
-                            Re-enable
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteError("");
+                            setCouponToDelete(coupon);
+                          }}
+                          className="label-caps min-h-9 border border-red-700 px-4 text-red-700 transition-colors hover:bg-red-700 hover:text-white"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -604,20 +689,24 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
       </section>
 
       {editing ? (
-        <div className="fixed inset-0 z-[1000]">
-          <button
-            type="button"
-            aria-label="Close coupon editor"
-            onClick={() => setEditing(null)}
-            className="absolute inset-0 h-full w-full bg-[#201B11]/25"
-          />
-          <aside className="absolute bottom-0 right-0 top-0 w-full max-w-2xl overflow-y-auto border-l border-[#7A6A4F]/30 bg-[#fcf9f3] p-8 text-[#201B11] shadow-[0_0_70px_rgba(32,27,17,0.12)]">
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto bg-[#201B11]/45 p-4 backdrop-blur-sm sm:p-8"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !submitting) setEditing(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coupon-editor-title"
+            className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto border border-[#7A6A4F]/30 bg-[#fcf9f3] p-8 text-[#201B11] shadow-[0_24px_90px_rgba(32,27,17,0.28)]"
+          >
             <div className="mb-8 flex items-start justify-between gap-4">
               <div>
                 <p className="label-caps mb-2 text-[#7A6A4F]">Coupon Editor</p>
-                <h2 className="font-serif text-4xl leading-tight">{editing.code}</h2>
+                <h2 id="coupon-editor-title" className="font-serif text-4xl leading-tight">{editing.code}</h2>
               </div>
-              <button type="button" onClick={() => setEditing(null)} className="text-2xl text-[#7A6A4F]">
+              <button type="button" aria-label="Close coupon editor" onClick={() => setEditing(null)} className="text-2xl text-[#7A6A4F]">
                 x
               </button>
             </div>
@@ -679,17 +768,10 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                     className={inputClass()}
                   />
                 </Field>
-                <Field label="Minimum Order">
-                  <input
-                    value={editForm.minOrderAmount}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="No minimum"
-                    onChange={(event) => updateEditForm("minOrderAmount", event.target.value)}
-                    className={inputClass()}
-                  />
-                </Field>
+                <MinimumCheckoutField
+                  value={editForm.minOrderAmount}
+                  onChange={(value) => updateEditForm("minOrderAmount", value)}
+                />
                 <Field label="Status">
                   <label className="label-caps flex min-h-12 items-center gap-3 text-[#4b463e]">
                     <input
@@ -709,6 +791,7 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                 onAudienceChange={(value) => updateEditForm("applicableTo", value)}
                 onChange={(value) => updateEditForm("userIds", value)}
               />
+              {editError ? <p role="alert" className="text-sm text-red-700">{editError}</p> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
@@ -726,9 +809,43 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                 </button>
               </div>
             </form>
-          </aside>
+          </section>
         </div>
       ) : null}
+
+      <Modal
+        isOpen={Boolean(couponToDelete)}
+        title="Delete Coupon"
+        onClose={() => {
+          if (!deleting) setCouponToDelete(null);
+        }}
+      >
+        <div className="space-y-6">
+          <p className="text-sm leading-6 text-on-surface/80">
+            Are you sure you want to permanently delete &ldquo;{couponToDelete?.code}&rdquo;? Existing
+            order totals will be preserved, but this coupon can no longer be used.
+          </p>
+          {deleteError ? <p role="alert" className="text-sm text-red-400">{deleteError}</p> : null}
+          <div className="flex justify-end gap-4">
+            <button
+              type="button"
+              onClick={() => setCouponToDelete(null)}
+              disabled={deleting}
+              className="label-caps min-h-11 border border-outline px-6 text-parchment transition-colors hover:bg-surface-mid disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={deleteCoupon}
+              disabled={deleting}
+              className="label-caps min-h-11 border border-red-500 bg-red-600 px-6 text-white shadow-[0_8px_24px_rgba(220,38,38,0.25)] transition-colors hover:border-red-400 hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 disabled:cursor-not-allowed disabled:border-red-900 disabled:bg-red-950 disabled:text-red-300 disabled:shadow-none disabled:opacity-70"
+            >
+              {deleting ? "Deleting..." : "Yes, Delete"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

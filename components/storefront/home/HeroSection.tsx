@@ -1,7 +1,12 @@
 "use client";
 
 import {useLocale, useTranslations} from "next-intl";
+import Link from "next/link";
+import {useRouter} from "next/navigation";
+import type {MouseEvent} from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
+
+import {startProductImageTransition} from "@/lib/product-image-transition";
 
 /* ------------------------------------------------------------------ */
 /*  Types & static data                                                */
@@ -37,9 +42,44 @@ const slideBgImages: Record<SlideKey, string> = {
 export default function HeroSection() {
   const t = useTranslations("hero");
   const locale = useLocale();
+  const router = useRouter();
   const isRtl = locale === "ar";
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  function handleShopNow(
+    event: MouseEvent<HTMLAnchorElement>,
+    slug: string,
+    imageUrl: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const activeSlideElement = document.querySelector(
+      `[data-hero-section] > div[aria-hidden="false"] [data-product-transition-source]`
+    ) as HTMLElement | null;
+
+    if (!activeSlideElement) return;
+
+    const href = `/${locale}/fragrances/${slug}`;
+    const didStart = startProductImageTransition({
+      slug,
+      imageUrl,
+      imageAlt: "Hero Fragrance",
+      source: activeSlideElement,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
 
   /* Build slides --------------------------------------------------- */
   const slides = useMemo<Slide[]>(
@@ -69,7 +109,7 @@ export default function HeroSection() {
   /* Render --------------------------------------------------------- */
   return (
     <section
-      id="hero"
+      data-hero-section
       className="relative min-h-[100svh] w-full overflow-hidden bg-bg md:h-screen md:min-h-[680px]"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -87,6 +127,7 @@ export default function HeroSection() {
           >
             {/* Full-bleed background photo */}
             <div
+              data-product-transition-source
               className="absolute inset-0 bg-cover bg-[position:31%_center] bg-no-repeat sm:bg-[position:33%_center] md:bg-bottom"
               style={{backgroundImage: `url(${slide.bgImage})`}}
             />
@@ -133,12 +174,20 @@ export default function HeroSection() {
 
                 {/* Shop Now CTA */}
                 <div className="mt-6 flex w-full justify-center md:mt-8 md:justify-start">
-                  <a
+                  <Link
                     href={`/${locale}/fragrances/${slide.key === "noir" ? "noir-vanille" : "oud-imperial"}`}
+                    onClick={(event) =>
+                      handleShopNow(
+                        event,
+                        slide.key === "noir" ? "noir-vanille" : "oud-imperial",
+                        slide.bgImage
+                      )
+                    }
+                    data-product-image-transition-link
                     className="focus-gold inline-flex min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-6 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-surface-hi transition-all duration-300 hover:bg-gold hover:border-gold hover:text-surface-hi hover:shadow-gold sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
                   >
                     {t("shopNow")}
-                  </a>
+                  </Link>
                 </div>
               </div>
             );

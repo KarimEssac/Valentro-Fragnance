@@ -5,6 +5,8 @@ import type {ChangeEvent, FormEvent, ReactNode} from "react";
 import Image from "next/image";
 import {useRouter} from "next/navigation";
 
+import Modal from "@/components/ui/Modal";
+
 type Product = {
   id: string;
   nameEn: string;
@@ -91,6 +93,9 @@ export default function AdminCollectionsClient({locale, products, collections}: 
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [collectionToDelete, setCollectionToDelete] = useState<CollectionOffer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const money = useMemo(
     () =>
@@ -194,6 +199,32 @@ export default function AdminCollectionsClient({locale, products, collections}: 
       setStatus(error instanceof Error ? error.message : "Unable to create collection offer");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function deleteCollection() {
+    if (!collectionToDelete) return;
+
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch(`/api/admin/collections/${collectionToDelete.id}`, {
+        method: "DELETE"
+      });
+      const result = (await response.json()) as {message?: string};
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to delete collection offer");
+      }
+
+      setCollectionToDelete(null);
+      router.refresh();
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Unable to delete collection offer"
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -500,6 +531,19 @@ export default function AdminCollectionsClient({locale, products, collections}: 
                     <Metric label="Price" value={price ? money.format(price) : "-"} compact />
                     <Metric label="Off" value={`${discount}%`} compact />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError("");
+                      setCollectionToDelete(collection);
+                    }}
+                    className="label-caps mt-5 flex min-h-11 w-full items-center justify-center gap-2 border border-red-700 px-5 text-red-700 transition-colors hover:bg-red-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" className="h-4 w-4">
+                      <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                    </svg>
+                    Delete Collection
+                  </button>
                 </div>
               </article>
             );
@@ -511,6 +555,40 @@ export default function AdminCollectionsClient({locale, products, collections}: 
           </p>
         ) : null}
       </section>
+
+      <Modal
+        isOpen={Boolean(collectionToDelete)}
+        title="Delete Collection"
+        onClose={() => {
+          if (!deleting) setCollectionToDelete(null);
+        }}
+      >
+        <div className="space-y-6">
+          <p className="text-sm leading-6 text-on-surface/80">
+            Are you sure you want to permanently delete &ldquo;{collectionToDelete?.nameEn}&rdquo;?
+            This action cannot be undone.
+          </p>
+          {deleteError ? <p role="alert" className="text-sm text-red-400">{deleteError}</p> : null}
+          <div className="flex justify-end gap-4">
+            <button
+              type="button"
+              onClick={() => setCollectionToDelete(null)}
+              disabled={deleting}
+              className="label-caps min-h-11 border border-outline px-6 text-parchment transition-colors hover:bg-surface-mid disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={deleteCollection}
+              disabled={deleting}
+              className="label-caps min-h-11 border border-red-500 bg-red-600 px-6 text-white shadow-[0_8px_24px_rgba(220,38,38,0.25)] transition-colors hover:border-red-400 hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 disabled:cursor-not-allowed disabled:border-red-900 disabled:bg-red-950 disabled:text-red-300 disabled:shadow-none disabled:opacity-70"
+            >
+              {deleting ? "Deleting..." : "Yes, Delete"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

@@ -141,7 +141,9 @@ export default function Footer() {
           <a
             aria-label="Instagram"
             className="footer-social-link"
-            href="#instagram"
+            href="https://instagram.com"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             <svg className="footer-social-icon h-[22px] w-[22px] stroke-current" fill="none" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
@@ -152,7 +154,9 @@ export default function Footer() {
           <a
             aria-label="Facebook"
             className="footer-social-link"
-            href="#facebook"
+            href="https://facebook.com"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             <svg className="footer-social-icon h-[22px] w-[22px] fill-current" viewBox="0 0 24 24">
               <path d="M9 8H7v3h2v9h3v-9h2.72l.42-3H12V6c0-.57.24-1 1-1h2V2h-3c-3.07 0-5 1.89-5 5v1z"/>

@@ -69,6 +69,7 @@ export default async function LocaleLayout({
       lang={locale}
       dir={direction}
       className={`${serif.variable} ${sans.variable}`}
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <body>

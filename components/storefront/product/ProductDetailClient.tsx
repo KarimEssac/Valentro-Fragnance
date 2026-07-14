@@ -8,61 +8,14 @@ import type {FormEvent} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 
 import Modal from "@/components/ui/Modal";
-
-type ProductImage = {
-  id: string;
-  url: string;
-  altEn: string;
-  altAr: string;
-  position: number;
-  isPrimary: boolean;
-};
-
-type ProductVariant = {
-  id: string;
-  sizeML: number;
-  price: string;
-  compareAtPrice: string | null;
-  stock: number;
-  sku: string;
-};
-
-type ProductReview = {
-  id: string;
-  reviewerName: string;
-  rating: number;
-  messageEn: string;
-  messageAr: string | null;
-  createdAt: string;
-};
-
-type ProductDetail = {
-  id: string;
-  slug: string;
-  nameEn: string;
-  nameAr: string;
-  taglineEn: string;
-  taglineAr: string;
-  descriptionEn: string;
-  descriptionAr: string;
-  scentProfile: string;
-  ratingAverage: string;
-  ratingCount: number;
-  images: ProductImage[];
-  variants: ProductVariant[];
-  reviews: ProductReview[];
-};
-
-type CartItem = {
-  fragranceId: string;
-  variantId: string;
-  slug: string;
-  name: string;
-  image: string | null;
-  sizeML: number;
-  price: string;
-  quantity: number;
-};
+import type {CartItem} from "@/lib/cart-items";
+import {productDiscountBadge} from "@/lib/product-discounts";
+import type {ActiveProductDiscount} from "@/lib/product-discounts";
+import {
+  getPendingProductTransition,
+  getProductTransitionName
+} from "@/lib/product-image-transition";
+import type {StorefrontFragranceDetail as ProductDetail} from "@/lib/storefront-data";
 
 type SessionResponse = {
   user?: {
@@ -70,6 +23,8 @@ type SessionResponse = {
     role?: string;
   };
 };
+
+const PRODUCT_TRANSITION_HOLD_MS = 920;
 
 function ArrowIcon({direction}: {direction: "left" | "right"}) {
   return (
@@ -118,13 +73,24 @@ function formatScentProfile(value: string) {
     .join(" ");
 }
 
-export default function ProductDetailClient({slug}: {slug: string}) {
+export default function ProductDetailClient({
+  slug,
+  initialProduct
+}: {
+  slug: string;
+  initialProduct?: ProductDetail | null;
+}) {
   const locale = useLocale();
   const router = useRouter();
   const isArabic = locale === "ar";
-  const [product, setProduct] = useState<ProductDetail | null>(null);
+  const [transitionPreview] = useState(() =>
+    getPendingProductTransition(slug)
+  );
+  const [product, setProduct] = useState<ProductDetail | null>(() =>
+    transitionPreview ? null : (initialProduct ?? null)
+  );
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    "loading"
+    transitionPreview || !initialProduct ? "loading" : "ready"
   );
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -138,6 +104,9 @@ export default function ProductDetailClient({slug}: {slug: string}) {
   const [reviewToDelete, setReviewToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const transitionStyle = transitionPreview
+    ? {viewTransitionName: getProductTransitionName(slug)}
+    : undefined;
 
   const priceFormatter = useMemo(
     () =>
@@ -150,22 +119,41 @@ export default function ProductDetailClient({slug}: {slug: string}) {
   );
 
   useEffect(() => {
+    if (initialProduct && !transitionPreview) return;
+
     let isMounted = true;
+    let revealTimer: ReturnType<typeof setTimeout> | null = null;
+    const loadStartedAt = performance.now();
 
     async function loadProduct() {
       try {
-        const response = await fetch(`/api/storefront/fragrances/${slug}`, {
-          headers: {Accept: "application/json"}
-        });
+        const data = initialProduct ?? (await (async () => {
+          const response = await fetch(`/api/storefront/fragrances/${slug}`, {
+            headers: {Accept: "application/json"}
+          });
 
-        if (!response.ok) {
-          throw new Error("Unable to load fragrance");
-        }
+          if (!response.ok) {
+            throw new Error("Unable to load fragrance");
+          }
 
-        const data = (await response.json()) as ProductDetail;
+          return (await response.json()) as ProductDetail;
+        })());
         if (isMounted) {
-          setProduct(data);
-          setStatus("ready");
+          const revealProduct = () => {
+            if (!isMounted) return;
+            setProduct(data);
+            setStatus("ready");
+          };
+          const elapsed = performance.now() - loadStartedAt;
+          const revealDelay = transitionPreview
+            ? Math.max(0, PRODUCT_TRANSITION_HOLD_MS - elapsed)
+            : 0;
+
+          if (revealDelay > 0) {
+            revealTimer = setTimeout(revealProduct, revealDelay);
+          } else {
+            revealProduct();
+          }
         }
       } catch {
         if (isMounted) {
@@ -178,8 +166,9 @@ export default function ProductDetailClient({slug}: {slug: string}) {
 
     return () => {
       isMounted = false;
+      if (revealTimer) clearTimeout(revealTimer);
     };
-  }, [slug]);
+  }, [initialProduct, slug, transitionPreview]);
 
   useEffect(() => {
     let isMounted = true;
@@ -235,7 +224,14 @@ export default function ProductDetailClient({slug}: {slug: string}) {
       : product.taglineEn
     : "";
   const price = selectedVariant ? Number(selectedVariant.price) : 0;
+  const originalPrice = selectedVariant
+    ? Number(selectedVariant.originalPrice)
+    : price;
   const rating = product ? Math.round(Number(product.ratingAverage)) : 0;
+
+  function formatDiscountBadge(discount: ActiveProductDiscount) {
+    return productDiscountBadge(discount, (amount) => priceFormatter.format(amount));
+  }
 
   function moveImage(direction: "previous" | "next") {
     if (images.length < 2) return;
@@ -257,6 +253,8 @@ export default function ProductDetailClient({slug}: {slug: string}) {
       image: selectedImage?.url ?? null,
       sizeML: selectedVariant.sizeML,
       price: selectedVariant.price,
+      originalPrice: selectedVariant.originalPrice,
+      discount: product.discount,
       quantity
     };
 
@@ -270,6 +268,7 @@ export default function ProductDetailClient({slug}: {slug: string}) {
     if (itemIndex >= 0) {
       existing[itemIndex] = {
         ...existing[itemIndex],
+        ...item,
         quantity: existing[itemIndex].quantity + quantity
       };
     } else {
@@ -375,10 +374,30 @@ export default function ProductDetailClient({slug}: {slug: string}) {
     return (
       <main
         data-route-loading="true"
-        className="min-h-screen bg-bg px-gutter pb-24 pt-36 text-parchment lg:px-16"
+        className="min-h-screen bg-bg px-gutter pb-24 pt-32 text-parchment lg:px-16"
       >
-        <div className="mx-auto grid max-w-container gap-10 md:grid-cols-12">
-          <div className="h-[620px] animate-pulse bg-surface-mid/60 md:col-span-7" />
+        <div className="mx-auto grid max-w-container gap-10 md:grid-cols-12 md:items-start">
+          <div className="flex flex-col gap-6 md:col-span-7 md:flex-row">
+            <div className="hidden shrink-0 md:block md:w-24" />
+            <div
+              data-product-transition-target={slug}
+              style={transitionStyle}
+              className="relative aspect-[4/5] w-full overflow-hidden bg-surface-mid/60"
+            >
+              {transitionPreview ? (
+                <Image
+                  src={transitionPreview.imageUrl}
+                  alt={transitionPreview.imageAlt}
+                  fill
+                  priority
+                  sizes="(min-width: 1024px) 52vw, 100vw"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="h-full w-full animate-pulse bg-surface-mid/60" />
+              )}
+            </div>
+          </div>
           <div className="space-y-5 md:col-span-5">
             <div className="h-4 w-32 animate-pulse bg-surface-mid/60" />
             <div className="h-16 w-4/5 animate-pulse bg-surface-mid/60" />
@@ -403,8 +422,12 @@ export default function ProductDetailClient({slug}: {slug: string}) {
     <main className="min-h-screen bg-bg px-gutter pb-24 pt-32 text-parchment lg:px-16">
       <div className="mx-auto max-w-container">
         <section className="grid grid-cols-1 gap-10 md:grid-cols-12 md:items-start">
-          <div className="md:col-span-7 flex flex-col-reverse gap-6 md:flex-row">
-            <div className="no-scrollbar flex shrink-0 gap-4 overflow-x-auto pb-2 md:w-24 md:flex-col md:overflow-visible md:pb-0">
+          <div className="md:col-span-7 flex flex-col gap-6 md:flex-row">
+            <div
+              className={`no-scrollbar flex shrink-0 gap-4 overflow-x-auto pb-2 md:w-24 md:flex-col md:overflow-visible md:pb-0 ${
+                transitionPreview ? "product-detail-thumbnails-reveal" : ""
+              }`}
+            >
               {images.map((image, index) => (
                 <button
                   key={image.id}
@@ -428,7 +451,22 @@ export default function ProductDetailClient({slug}: {slug: string}) {
               ))}
             </div>
 
-            <div className="relative aspect-[4/5] w-full overflow-hidden bg-surface-mid">
+            <div
+              data-product-transition-target={slug}
+              style={transitionStyle}
+              className="relative aspect-[4/5] w-full overflow-hidden bg-surface-mid"
+            >
+              {transitionPreview ? (
+                <Image
+                  src={transitionPreview.imageUrl}
+                  alt=""
+                  fill
+                  priority
+                  aria-hidden="true"
+                  sizes="(min-width: 1024px) 52vw, 100vw"
+                  className="z-0 object-cover"
+                />
+              ) : null}
               {selectedImage ? (
                 <Image
                   src={selectedImage.url}
@@ -436,11 +474,18 @@ export default function ProductDetailClient({slug}: {slug: string}) {
                   fill
                   priority
                   sizes="(min-width: 1024px) 52vw, 100vw"
-                  className="object-cover transition-transform duration-700 ease-out hover:scale-[1.02]"
+                  className={`z-10 object-cover transition-transform duration-700 ease-out hover:scale-[1.02] ${
+                    transitionPreview ? "product-detail-image-reveal" : ""
+                  }`}
                 />
               ) : null}
+              {product.discount ? (
+                <span className="label-caps absolute right-4 top-4 z-30 bg-gold px-4 py-2.5 text-surface-hi shadow-lg shadow-bg/20">
+                  {formatDiscountBadge(product.discount)}
+                </span>
+              ) : null}
               {images.length > 1 ? (
-                <div className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 justify-between">
+                <div className="absolute inset-x-4 top-1/2 z-20 flex -translate-y-1/2 justify-between">
                   <button
                     type="button"
                     aria-label="Previous image"
@@ -462,7 +507,11 @@ export default function ProductDetailClient({slug}: {slug: string}) {
             </div>
           </div>
 
-          <div className="flex h-full flex-col justify-center md:col-span-5 md:pl-8 lg:pl-12">
+          <div
+            className={`flex h-full flex-col justify-center md:col-span-5 md:pl-8 lg:pl-12 ${
+              transitionPreview ? "product-detail-copy-reveal" : ""
+            }`}
+          >
             <Link
               href={`/${locale}/fragrances`}
               className="label-caps mb-5 inline-flex items-center gap-1.5 text-[10px] text-on-surface/70 transition-colors hover:text-gold"
@@ -493,9 +542,20 @@ export default function ProductDetailClient({slug}: {slug: string}) {
             <p className="mt-5 text-lg leading-7 text-on-surface/75">
               {tagline}
             </p>
-            <p className="mt-6 font-serif text-3xl leading-10 text-parchment">
-              {priceFormatter.format(price)}
-            </p>
+            <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              {product.discount ? (
+                <span className="font-serif text-xl text-on-surface/50 line-through decoration-on-surface/50">
+                  {priceFormatter.format(originalPrice)}
+                </span>
+              ) : null}
+              <span
+                className={`font-serif text-3xl leading-10 ${
+                  product.discount ? "text-gold" : "text-parchment"
+                }`}
+              >
+                {priceFormatter.format(price)}
+              </span>
+            </div>
             <p className="mt-8 max-w-xl text-base leading-7 text-on-surface/80">
               {description}
             </p>

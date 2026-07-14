@@ -2,7 +2,9 @@
 
 import Image from "next/image";
 import {useRouter} from "next/navigation";
-import {useMemo, useState} from "react";
+import {useEffect, useMemo, useState} from "react";
+
+import Modal from "@/components/ui/Modal";
 
 export type InventoryProduct = {
   id: string;
@@ -19,6 +21,11 @@ export type InventoryProduct = {
   longevity: number;
   isPublished: boolean;
   isFeatured: boolean;
+  discountType: "PERCENTAGE" | "FIXED" | null;
+  discountValue: string | null;
+  discountIsActive: boolean;
+  discountStartsAt: string | null;
+  discountExpiresAt: string | null;
   position: number;
   totalStock: number;
   minPrice: string | null;
@@ -130,11 +137,73 @@ function Field({label, children}: {label: string; children: React.ReactNode}) {
   );
 }
 
+type DiscountStatusKey = "active" | "scheduled" | "expired" | "stopped" | "none";
+
+const discountStatusStyles: Record<DiscountStatusKey, string> = {
+  active: "border-emerald-500/45 bg-emerald-950/35 text-emerald-300",
+  scheduled: "border-sky-500/45 bg-sky-950/35 text-sky-300",
+  expired: "border-amber-500/45 bg-amber-950/35 text-amber-300",
+  stopped: "border-outline bg-surface-mid text-on-surface/65",
+  none: "border-outline/55 bg-surface/50 text-on-surface/50"
+};
+
+function discountStatus(product: InventoryProduct, now: number) {
+  if (!product.discountType || !product.discountValue) {
+    return {key: "none" as const, label: "No discount"};
+  }
+  if (!product.discountIsActive) {
+    return {key: "stopped" as const, label: "Stopped"};
+  }
+
+  const startsAt = product.discountStartsAt
+    ? new Date(product.discountStartsAt).getTime()
+    : null;
+  const expiresAt = product.discountExpiresAt
+    ? new Date(product.discountExpiresAt).getTime()
+    : null;
+
+  if (startsAt !== null && startsAt > now) {
+    return {key: "scheduled" as const, label: "Scheduled"};
+  }
+  if (expiresAt !== null && expiresAt <= now) {
+    return {key: "expired" as const, label: "Expired"};
+  }
+
+  return {key: "active" as const, label: "Active"};
+}
+
+function toLocalDateTime(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function localDateTimeToIso(value: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 export default function AdminInventoryClient({locale, products}: Props) {
   const router = useRouter();
   const isArabic = locale === "ar";
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [query, setQuery] = useState("");
   const [details, setDetails] = useState<InventoryProduct | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [discountProduct, setDiscountProduct] = useState<InventoryProduct | null>(null);
+  const [discountType, setDiscountType] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
+  const [discountValue, setDiscountValue] = useState("");
+  const [discountStartsAt, setDiscountStartsAt] = useState("");
+  const [discountExpiresAt, setDiscountExpiresAt] = useState("");
+  const [discountSubmitting, setDiscountSubmitting] = useState(false);
+  const [discountError, setDiscountError] = useState("");
+  const [discountActionError, setDiscountActionError] = useState("");
+  const [stoppingDiscountId, setStoppingDiscountId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -145,6 +214,21 @@ export default function AdminInventoryClient({locale, products}: Props) {
     {sizeML: "50", price: "", stock: "0"}
   ]);
   const currency = useMemo(() => new Intl.NumberFormat(locale, {style: "currency", currency: "EGP", maximumFractionDigits: 0}), [locale]);
+  const dateTime = useMemo(
+    () => new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeStyle: "short"}),
+    [locale]
+  );
+
+  useEffect(() => {
+    const syncCurrentTime = () => setCurrentTime(Date.now());
+    const interval = window.setInterval(syncCurrentTime, 30_000);
+
+    window.addEventListener("focus", syncCurrentTime);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncCurrentTime);
+    };
+  }, []);
 
   const filteredProducts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -161,6 +245,13 @@ export default function AdminInventoryClient({locale, products}: Props) {
   const lowStockCount = products.filter((product) => product.totalStock <= 5).length;
   const featuredCount = products.filter((product) => product.isFeatured).length;
   const collectionCount = new Set(products.flatMap((product) => product.collections)).size;
+  const productDiscountStatuses = products.map((product) => discountStatus(product, currentTime));
+  const activeDiscountCount = productDiscountStatuses.filter(
+    (discount) => discount.key === "active"
+  ).length;
+  const scheduledDiscountCount = productDiscountStatuses.filter(
+    (discount) => discount.key === "scheduled"
+  ).length;
 
   function openAddProduct() {
     setSelectedSeasons([]);
@@ -169,6 +260,144 @@ export default function AdminInventoryClient({locale, products}: Props) {
     setCreateVariants([{sizeML: "50", price: "", stock: "0"}]);
     setStatus("");
     setAddOpen(true);
+  }
+
+  function closeDetails() {
+    setDeleteOpen(false);
+    setDeleteError("");
+    setDetails(null);
+  }
+
+  async function deleteProduct() {
+    if (!details) return;
+
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch(`/api/admin/fragrances/${details.id}`, {
+        method: "DELETE"
+      });
+      const result = (await response.json()) as {message?: string};
+      if (!response.ok) throw new Error(result.message ?? "Unable to delete product");
+
+      closeDetails();
+      router.refresh();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete product");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function openDiscount(product: InventoryProduct) {
+    setDiscountProduct(product);
+    setDiscountType(product.discountType ?? "PERCENTAGE");
+    setDiscountValue(product.discountValue ?? "");
+    setDiscountStartsAt(toLocalDateTime(product.discountStartsAt));
+    setDiscountExpiresAt(toLocalDateTime(product.discountExpiresAt));
+    setDiscountError("");
+    setDiscountActionError("");
+  }
+
+  function closeDiscount() {
+    if (discountSubmitting) return;
+    setDiscountProduct(null);
+    setDiscountError("");
+  }
+
+  async function submitDiscount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!discountProduct) return;
+
+    const numericValue = Number(discountValue);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      setDiscountError("Enter a discount value greater than zero.");
+      return;
+    }
+    if (discountType === "PERCENTAGE" && numericValue > 100) {
+      setDiscountError("Percentage discounts cannot exceed 100%.");
+      return;
+    }
+
+    const startsAt = localDateTimeToIso(discountStartsAt);
+    const expiresAt = localDateTimeToIso(discountExpiresAt);
+    if (discountStartsAt && !startsAt) {
+      setDiscountError("Start time is invalid.");
+      return;
+    }
+    if (discountExpiresAt && !expiresAt) {
+      setDiscountError("End time is invalid.");
+      return;
+    }
+    if (expiresAt) {
+      const now = Date.now();
+      const startsAtTime = startsAt ? new Date(startsAt).getTime() : now;
+      const effectiveStart = Math.max(now, startsAtTime);
+      if (new Date(expiresAt).getTime() <= effectiveStart) {
+        setDiscountError(
+          startsAtTime > now
+            ? "End time must be after start time."
+            : "End time must be in the future."
+        );
+        return;
+      }
+    }
+
+    setDiscountSubmitting(true);
+    setDiscountError("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/fragrances/${discountProduct.id}/discount`,
+        {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            type: discountType,
+            value: numericValue,
+            startsAt,
+            expiresAt
+          })
+        }
+      );
+      const result = (await response.json()) as {message?: string};
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to save discount");
+      }
+
+      setDiscountProduct(null);
+      setCurrentTime(Date.now());
+      router.refresh();
+    } catch (error) {
+      setDiscountError(error instanceof Error ? error.message : "Unable to save discount");
+    } finally {
+      setDiscountSubmitting(false);
+    }
+  }
+
+  async function stopDiscount(product: InventoryProduct) {
+    setStoppingDiscountId(product.id);
+    setDiscountActionError("");
+
+    try {
+      const response = await fetch(`/api/admin/fragrances/${product.id}/discount`, {
+        method: "DELETE"
+      });
+      const result = (await response.json()) as {message?: string};
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to stop discount");
+      }
+
+      setCurrentTime(Date.now());
+      router.refresh();
+    } catch (error) {
+      setDiscountActionError(
+        error instanceof Error ? error.message : "Unable to stop discount"
+      );
+    } finally {
+      setStoppingDiscountId(null);
+    }
   }
 
   function updateCreateVariant(index: number, key: keyof VariantDraft, value: string) {
@@ -229,12 +458,14 @@ export default function AdminInventoryClient({locale, products}: Props) {
         </div>
       </header>
 
-      <section className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {[
           ["Total Stock", totalStock],
           ["Low Stock Items", lowStockCount],
           ["Featured Products", featuredCount],
-          ["Collections", collectionCount]
+          ["Collections", collectionCount],
+          ["Active Discounts", activeDiscountCount],
+          ["Scheduled Discounts", scheduledDiscountCount]
         ].map(([label, value]) => (
           <div key={label} className="border border-outline/55 bg-surface/70 p-6">
             <p className="label-caps mb-4 text-on-surface/70">{label}</p>
@@ -243,12 +474,18 @@ export default function AdminInventoryClient({locale, products}: Props) {
         ))}
       </section>
 
+      {discountActionError ? (
+        <p role="alert" className="mb-5 border border-red-700/55 bg-red-950/30 px-5 py-3 text-sm text-red-300">
+          {discountActionError}
+        </p>
+      ) : null}
+
       <section className="border border-outline/55 bg-surface/70">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-left">
+          <table className="w-full min-w-[1240px] border-collapse text-left">
             <thead>
               <tr className="border-b border-outline/60">
-                {["Image", "Fragrance Name", "Order", "Collection", "Stock Level", "Price", "Actions"].map((head) => (
+                {["Image", "Fragrance Name", "Order", "Collection", "Stock Level", "Price", "Discount", "Actions"].map((head) => (
                   <th key={head} className={`label-caps p-5 text-on-surface/70 ${head === "Actions" ? "text-right" : ""}`}>{head}</th>
                 ))}
               </tr>
@@ -259,6 +496,24 @@ export default function AdminInventoryClient({locale, products}: Props) {
                 const minPrice = product.minPrice ? Number(product.minPrice) : null;
                 const maxPrice = product.maxPrice ? Number(product.maxPrice) : null;
                 const stockPercent = Math.min((product.totalStock / 50) * 100, 100);
+                const currentDiscountStatus = discountStatus(product, currentTime);
+                const discountValueLabel = product.discountType === "PERCENTAGE"
+                  ? `${Number(product.discountValue ?? 0)}% off`
+                  : product.discountType === "FIXED" && product.discountValue
+                    ? `${currency.format(Number(product.discountValue))} off`
+                    : "No reduction configured";
+                const discountTiming =
+                  currentDiscountStatus.key === "scheduled" && product.discountStartsAt
+                    ? `Starts ${dateTime.format(new Date(product.discountStartsAt))}`
+                    : currentDiscountStatus.key === "active" && product.discountExpiresAt
+                      ? `Ends ${dateTime.format(new Date(product.discountExpiresAt))}`
+                      : currentDiscountStatus.key === "expired" && product.discountExpiresAt
+                        ? `Ended ${dateTime.format(new Date(product.discountExpiresAt))}`
+                        : currentDiscountStatus.key === "active"
+                          ? "Runs until stopped"
+                          : currentDiscountStatus.key === "stopped"
+                            ? "Configuration saved"
+                            : "Base pricing";
                 return (
                   <tr key={product.id} className="border-b border-outline/25 transition-colors hover:bg-surface-hi">
                     <td className="p-5">
@@ -283,10 +538,45 @@ export default function AdminInventoryClient({locale, products}: Props) {
                     <td className="p-5 text-sm">
                       {minPrice ? maxPrice && maxPrice !== minPrice ? `${currency.format(minPrice)} - ${currency.format(maxPrice)}` : currency.format(minPrice) : "No price"}
                     </td>
+                    <td className="p-5">
+                      <div className="min-w-40">
+                        <span className={`label-caps inline-flex border px-2.5 py-1 ${discountStatusStyles[currentDiscountStatus.key]}`}>
+                          {currentDiscountStatus.label}
+                        </span>
+                        <p className="mt-2 text-sm text-parchment">{discountValueLabel}</p>
+                        <p className="mt-1 text-xs leading-5 text-on-surface/55">{discountTiming}</p>
+                      </div>
+                    </td>
                     <td className="p-5 text-right">
-                      <button type="button" onClick={() => setDetails(product)} className="label-caps border-b border-transparent pb-1 text-gold transition-colors hover:border-gold hover:text-parchment">
-                        View Details
-                      </button>
+                      <div className="ml-auto grid w-36 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openDiscount(product)}
+                          className="label-caps inline-flex min-h-9 w-full items-center justify-center gap-2 border border-gold/55 bg-gold/10 px-3 text-gold transition-colors hover:border-gold hover:bg-gold hover:text-surface-hi"
+                        >
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
+                            <path d="M4 7h10M4 17h16M17 4v6M8 14v6" />
+                          </svg>
+                          Apply Discount
+                        </button>
+                        {product.discountType && product.discountValue && product.discountIsActive ? (
+                          <button
+                            type="button"
+                            onClick={() => void stopDiscount(product)}
+                            disabled={stoppingDiscountId === product.id}
+                            className="label-caps min-h-8 w-full border border-red-800/45 bg-red-950/20 px-3 text-red-400 transition-colors hover:border-red-600/70 hover:bg-red-950/40 hover:text-red-300 disabled:cursor-wait disabled:opacity-55"
+                          >
+                            {stoppingDiscountId === product.id ? "Stopping..." : "Stop Discount"}
+                          </button>
+                        ) : null}
+                        <button type="button" onClick={() => setDetails(product)} className="label-caps inline-flex min-h-9 w-full items-center justify-center gap-2 border border-outline/65 bg-surface-hi/70 px-3 text-on-surface/75 transition-colors hover:border-parchment/65 hover:bg-surface-mid hover:text-parchment">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
+                            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                            <circle cx="12" cy="12" r="2.5" />
+                          </svg>
+                          View Details
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -297,23 +587,185 @@ export default function AdminInventoryClient({locale, products}: Props) {
         {filteredProducts.length === 0 ? <p className="px-6 py-10 text-center text-sm text-on-surface/70">No inventory matches the current search.</p> : null}
       </section>
 
+      <Modal
+        isOpen={Boolean(discountProduct)}
+        title={discountProduct ? `Apply Discount to ${isArabic ? discountProduct.nameAr : discountProduct.nameEn}` : "Apply Product Discount"}
+        onClose={closeDiscount}
+      >
+        {discountProduct ? (
+          <form onSubmit={submitDiscount} className="space-y-6">
+            <div className="border border-outline/55 bg-surface/55 p-4">
+              <p className="label-caps text-gold">Product-wide pricing</p>
+              <p className="mt-2 text-sm leading-6 text-on-surface/70">
+                This reduction applies to every available size. Base prices remain unchanged and return automatically when the discount stops.
+              </p>
+            </div>
+
+            <fieldset>
+              <legend className="label-caps mb-3 text-gold">Discount Type</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([
+                  ["PERCENTAGE", "Percentage", "A percentage off every size"],
+                  ["FIXED", "Fixed amount", "The same EGP amount off every size"]
+                ] as const).map(([value, label, description]) => (
+                  <label key={value} className="cursor-pointer">
+                    <input
+                      type="radio"
+                      name="discountType"
+                      value={value}
+                      checked={discountType === value}
+                      onChange={() => setDiscountType(value)}
+                      className="peer sr-only"
+                    />
+                    <span className={`block min-h-24 border p-4 transition-colors peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-gold ${
+                      discountType === value
+                        ? "border-gold bg-gold/10 text-parchment"
+                        : "border-outline/70 bg-surface/40 text-on-surface/70 hover:border-gold/60"
+                    }`}>
+                      <span className="font-serif text-lg">{label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-on-surface/55">{description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <Field label={discountType === "PERCENTAGE" ? "Percentage Off" : "Amount Off (EGP)"}>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0.01"
+                  max={discountType === "PERCENTAGE" ? "100" : undefined}
+                  step="0.01"
+                  required
+                  value={discountValue}
+                  onChange={(event) => setDiscountValue(event.target.value)}
+                  placeholder={discountType === "PERCENTAGE" ? "15" : "250"}
+                  className={`${inputClass()} pr-14`}
+                />
+                <span className="pointer-events-none absolute bottom-2 right-0 text-sm text-gold">
+                  {discountType === "PERCENTAGE" ? "%" : "EGP"}
+                </span>
+              </div>
+            </Field>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Start Time (Optional)">
+                <input
+                  type="datetime-local"
+                  value={discountStartsAt}
+                  onChange={(event) => setDiscountStartsAt(event.target.value)}
+                  className={inputClass()}
+                />
+                <span className="mt-2 block text-xs leading-5 text-on-surface/55">
+                  Leave blank to start immediately.
+                </span>
+              </Field>
+              <Field label="End Time (Optional)">
+                <input
+                  type="datetime-local"
+                  value={discountExpiresAt}
+                  onChange={(event) => setDiscountExpiresAt(event.target.value)}
+                  className={inputClass()}
+                />
+                <span className="mt-2 block text-xs leading-5 text-on-surface/55">
+                  Leave blank to run until manually stopped.
+                </span>
+              </Field>
+            </div>
+
+            {discountError ? (
+              <p role="alert" className="border border-red-700/55 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+                {discountError}
+              </p>
+            ) : null}
+
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeDiscount}
+                disabled={discountSubmitting}
+                className="label-caps min-h-11 border border-outline px-6 text-parchment transition-colors hover:bg-surface-mid disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={discountSubmitting}
+                className="label-caps min-h-11 border border-gold bg-gold px-6 text-bg transition-colors hover:bg-parchment disabled:cursor-wait disabled:opacity-60"
+              >
+                {discountSubmitting ? "Saving..." : "Save & Activate Discount"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
+
       {details ? (
         <div className="fixed inset-0 z-[1000]">
-          <button type="button" aria-label="Close product details" onClick={() => setDetails(null)} className="absolute inset-0 h-full w-full bg-parchment/35" />
+          <button type="button" aria-label="Close product details" onClick={closeDetails} className="absolute inset-0 h-full w-full bg-parchment/35" />
           <aside className="absolute bottom-0 right-0 top-0 w-full max-w-2xl overflow-y-auto border-l border-outline bg-surface-hi p-8 shadow-[0_0_70px_rgba(74,47,22,0.25)]">
             <div className="flex items-start justify-between gap-4">
               <div><p className="label-caps mb-2 text-gold">Product Details</p><h2 className="font-serif text-4xl leading-tight">{isArabic ? details.nameAr : details.nameEn}</h2></div>
-              <button type="button" onClick={() => setDetails(null)} className="text-2xl text-gold">x</button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Delete product"
+                  title="Delete product"
+                  onClick={() => {
+                    setDeleteError("");
+                    setDeleteOpen(true);
+                  }}
+                  className="flex h-10 w-10 items-center justify-center border border-red-700/60 text-red-500 transition-colors hover:border-red-500 hover:bg-red-950/40 hover:text-red-300"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" className="h-5 w-5">
+                    <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                  </svg>
+                </button>
+                <button type="button" aria-label="Close product details" onClick={closeDetails} className="flex h-10 w-10 items-center justify-center text-2xl text-gold">x</button>
+              </div>
             </div>
             <EditProductForm
               product={details}
-              onClose={() => setDetails(null)}
+              onClose={closeDetails}
               onSaved={() => {
-                setDetails(null);
+                closeDetails();
                 router.refresh();
               }}
             />
           </aside>
+          <Modal
+            isOpen={deleteOpen}
+            title="Delete Fragrance"
+            onClose={() => {
+              if (!deleting) setDeleteOpen(false);
+            }}
+          >
+            <div className="space-y-6">
+              <p className="text-sm leading-6 text-on-surface/80">
+                Are you sure you want to permanently delete &ldquo;{isArabic ? details.nameAr : details.nameEn}&rdquo;? This action cannot be undone.
+              </p>
+              {deleteError ? <p role="alert" className="text-sm text-red-400">{deleteError}</p> : null}
+              <div className="flex justify-end gap-4">
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                  className="label-caps min-h-11 border border-outline px-6 text-parchment transition-colors hover:bg-surface-mid disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteProduct}
+                  disabled={deleting}
+                  className="label-caps min-h-11 border border-red-500 bg-red-600 px-6 text-white shadow-[0_8px_24px_rgba(220,38,38,0.25)] transition-colors hover:border-red-400 hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 disabled:cursor-not-allowed disabled:border-red-900 disabled:bg-red-950 disabled:text-red-300 disabled:shadow-none disabled:opacity-70"
+                >
+                  {deleting ? "Deleting..." : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          </Modal>
         </div>
       ) : null}
 

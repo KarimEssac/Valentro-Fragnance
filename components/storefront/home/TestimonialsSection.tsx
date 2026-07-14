@@ -2,25 +2,12 @@
 
 import {useLocale} from "next-intl";
 import Image from "next/image";
+import {useRouter} from "next/navigation";
+import type {MouseEvent} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
 
-type StorefrontTestimonial = {
-  id: string;
-  messageEn: string;
-  messageAr: string;
-  image: {
-    url: string;
-    altEn: string;
-    altAr: string;
-  };
-  rating: number;
-  position: number;
-  fragrance: {
-    slug: string;
-    nameEn: string;
-    nameAr: string;
-  } | null;
-};
+import {startProductImageTransition} from "@/lib/product-image-transition";
+import type {StorefrontTestimonial} from "@/lib/storefront-data";
 
 function ArrowIcon({direction}: {direction: "left" | "right"}) {
   return (
@@ -61,18 +48,66 @@ function StarIcon({filled}: {filled: boolean}) {
   );
 }
 
-export default function TestimonialsSection() {
+export default function TestimonialsSection({
+  initialTestimonials
+}: {
+  initialTestimonials?: StorefrontTestimonial[];
+}) {
   const locale = useLocale();
+  const router = useRouter();
   const isArabic = locale === "ar";
+
+  function handleBuyNow(
+    event: MouseEvent<HTMLAnchorElement>,
+    slug: string,
+    imageUrl: string,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const article = event.currentTarget.closest("article");
+    if (!article) return;
+
+    const sources = Array.from(
+      article.querySelectorAll<HTMLElement>("[data-product-transition-source]")
+    );
+    const source = sources.find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    if (!source) return;
+
+    const href = `/${locale}/fragrances/${slug}`;
+    const didStart = startProductImageTransition({
+      slug,
+      imageUrl,
+      imageAlt,
+      source,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
   const carouselRef = useRef<HTMLDivElement>(null);
   const [testimonials, setTestimonials] = useState<StorefrontTestimonial[]>(
-    []
+    initialTestimonials ?? []
   );
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    "loading"
+    initialTestimonials ? "ready" : "loading"
   );
 
   useEffect(() => {
+    if (initialTestimonials) return;
+
     let isMounted = true;
 
     async function loadTestimonials() {
@@ -102,7 +137,7 @@ export default function TestimonialsSection() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [initialTestimonials]);
 
   const scrollCarousel = useCallback((direction: "previous" | "next") => {
     const carousel = carouselRef.current;
@@ -181,7 +216,8 @@ export default function TestimonialsSection() {
                   className="grid w-full shrink-0 snap-start md:grid-cols-12 md:items-center md:gap-6"
                 >
                   <div
-                    className={`relative hidden aspect-[4/5] overflow-hidden bg-surface-mid md:block md:col-span-5 lg:col-span-5 ${
+                    data-product-transition-source
+                    className={`img-shimmer relative hidden aspect-[4/5] overflow-hidden bg-surface-mid md:block md:col-span-5 lg:col-span-5 ${
                       isEven
                         ? "md:col-start-1"
                         : "md:col-start-8 md:order-2"
@@ -193,6 +229,9 @@ export default function TestimonialsSection() {
                       fill
                       sizes="(min-width: 1024px) 36vw, (min-width: 768px) 42vw"
                       className="object-cover object-center"
+                      onLoad={(event) => {
+                        event.currentTarget.dataset.loaded = "true";
+                      }}
                     />
                     <div className="absolute inset-0 bg-parchment/5" />
                   </div>
@@ -221,7 +260,10 @@ export default function TestimonialsSection() {
                           {isArabic
                             ? `لهذا العطر: ${fragranceName}`
                             : `For fragrance: ${fragranceName}`}
-                          <span className="relative h-12 w-10 shrink-0 overflow-hidden bg-surface-mid md:hidden">
+                          <span
+                            data-product-transition-source
+                            className="relative h-12 w-10 shrink-0 overflow-hidden bg-surface-mid md:hidden"
+                          >
                             <Image
                               src={testimonial.image.url}
                               alt={imageAlt}
@@ -233,6 +275,15 @@ export default function TestimonialsSection() {
                         </p>
                         <a
                           href={`/${locale}/fragrances/${testimonial.fragrance.slug}`}
+                          onClick={(event) =>
+                            handleBuyNow(
+                              event,
+                              testimonial.fragrance!.slug,
+                              testimonial.image.url,
+                              imageAlt
+                            )
+                          }
+                          data-product-image-transition-link
                           className="label-caps mt-6 inline-flex min-h-11 items-center justify-center border border-parchment bg-parchment px-6 text-surface-hi transition-colors hover:border-gold hover:bg-gold"
                         >
                           {isArabic ? "اشتر الآن" : "Buy Now"}

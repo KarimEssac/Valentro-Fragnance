@@ -117,13 +117,16 @@ export default function CategoriesSection() {
                 category.offset ? "md:mt-16" : ""
               }`}
             >
-              <div className="relative mb-6 aspect-[3/4] overflow-hidden bg-surface-mid">
+              <div className="img-shimmer relative mb-6 aspect-[3/4] overflow-hidden bg-surface-mid/40">
                 <Image
                   src={category.image}
                   alt={category.alt}
                   fill
                   sizes="(min-width: 1024px) 31vw, (min-width: 768px) 33vw, 100vw"
                   className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+                  onLoad={(event) => {
+                    event.currentTarget.dataset.loaded = "true";
+                  }}
                 />
                 <div className="absolute inset-0 bg-parchment/5 transition-colors duration-500 group-hover:bg-transparent" />
               </div>

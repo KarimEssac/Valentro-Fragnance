@@ -3,18 +3,24 @@
 import {useLocale} from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
+import {useRouter} from "next/navigation";
+import type {MouseEvent} from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
-type CartItem = {
-  fragranceId: string;
-  variantId: string;
-  slug: string;
-  name: string;
-  image: string | null;
-  sizeML: number;
-  price: string;
-  quantity: number;
-};
+import {
+  cartOriginalSubtotal,
+  cartSubtotal,
+  mergeCartPricing,
+  readCartItems,
+  requestCartPricing,
+  writeCartItems,
+  type CartItem
+} from "@/lib/cart-items";
+import {
+  productDiscountBadge,
+  type ActiveProductDiscount
+} from "@/lib/product-discounts";
+import {startProductImageTransition} from "@/lib/product-image-transition";
 
 type Recommendation = {
   id: string;
@@ -26,10 +32,12 @@ type Recommendation = {
     altEn: string;
     altAr: string;
   } | null;
+  discount?: ActiveProductDiscount | null;
   variants: {
     id: string;
     sizeML: number;
     price: string;
+    originalPrice?: string;
     stock: number;
   }[];
 };
@@ -70,16 +78,6 @@ type SuggestedItem =
       fragrance: Recommendation;
     };
 
-function readCart() {
-  try {
-    return JSON.parse(
-      window.localStorage.getItem("valentro-cart") ?? "[]"
-    ) as CartItem[];
-  } catch {
-    return [];
-  }
-}
-
 function ArrowIcon({direction}: {direction: "left" | "right"}) {
   return (
     <svg
@@ -103,10 +101,96 @@ function ArrowIcon({direction}: {direction: "left" | "right"}) {
 
 export default function CartClient() {
   const locale = useLocale();
+  const router = useRouter();
   const isArabic = locale === "ar";
   const recommendationsCarouselRef = useRef<HTMLDivElement>(null);
+
+  function navigateToFragrance(
+    event: MouseEvent<HTMLAnchorElement>,
+    slug: string,
+    imageUrl: string | null,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      !imageUrl
+    ) {
+      return;
+    }
+
+    const anchor = event.currentTarget;
+    let source = anchor.querySelector<HTMLElement>("[data-product-transition-source]");
+    if (!source && anchor.hasAttribute("data-product-transition-source")) {
+      source = anchor;
+    }
+    if (!source) {
+      const article = anchor.closest("article");
+      if (article) {
+        source = article.querySelector<HTMLElement>("[data-product-transition-source]");
+      }
+    }
+    if (!source) return;
+
+    const href = `/${locale}/fragrances/${slug}`;
+    const didStart = startProductImageTransition({
+      slug,
+      imageUrl,
+      imageAlt,
+      source,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
+
+  function navigateToCollection(
+    event: MouseEvent<HTMLAnchorElement>,
+    slug: string,
+    imageUrl: string,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const anchor = event.currentTarget;
+    let source = anchor.querySelector<HTMLElement>("[data-product-transition-source]");
+    if (!source && anchor.hasAttribute("data-product-transition-source")) {
+      source = anchor;
+    }
+    if (!source) {
+      const article = anchor.closest("article");
+      if (article) {
+        source = article.querySelector<HTMLElement>("[data-product-transition-source]");
+      }
+    }
+    if (!source) return;
+
+    const href = `/${locale}/collections/${slug}`;
+    const didStart = startProductImageTransition({
+      slug,
+      imageUrl,
+      imageAlt,
+      source,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
   const [items, setItems] = useState<CartItem[]>(() =>
-    typeof window === "undefined" ? [] : readCart()
+    typeof window === "undefined" ? [] : readCartItems()
   );
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [collections, setCollections] = useState<CollectionRecommendation[]>([]);
@@ -123,8 +207,7 @@ export default function CartClient() {
 
   function persist(nextItems: CartItem[]) {
     setItems(nextItems);
-    window.localStorage.setItem("valentro-cart", JSON.stringify(nextItems));
-    window.dispatchEvent(new Event("valentro-cart-updated"));
+    writeCartItems(nextItems);
   }
 
   function updateQuantity(variantId: string, quantity: number) {
@@ -168,6 +251,8 @@ export default function CartClient() {
         image: recommendation.primaryImage?.url ?? null,
         sizeML: variant.sizeML,
         price: variant.price,
+        originalPrice: variant.originalPrice ?? variant.price,
+        discount: recommendation.discount ?? null,
         quantity: 1
       });
     }
@@ -225,10 +310,32 @@ export default function CartClient() {
     };
   }, []);
 
-  const subtotal = items.reduce(
-    (total, item) => total + Number(item.price) * item.quantity,
-    0
-  );
+  useEffect(() => {
+    const controller = new AbortController();
+    const storedItems = readCartItems();
+
+    if (storedItems.length > 0) {
+      requestCartPricing(storedItems, controller.signal)
+        .then((pricing) => {
+          setItems((current) => {
+            const nextItems = mergeCartPricing(current, pricing);
+            writeCartItems(nextItems, false);
+            return nextItems;
+          });
+        })
+        .catch((error) => {
+          if (!(error instanceof Error && error.name === "AbortError")) {
+            // The saved snapshot remains usable until checkout verifies it.
+          }
+        });
+    }
+
+    return () => controller.abort();
+  }, []);
+
+  const subtotal = cartSubtotal(items);
+  const originalSubtotal = cartOriginalSubtotal(items);
+  const productSavings = Math.max(0, originalSubtotal - subtotal);
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const cartFragranceIds = new Set(items.map((item) => item.fragranceId));
   const matchingCollection = collections.find((collection) => {
@@ -296,6 +403,14 @@ export default function CartClient() {
           <section className="space-y-3 lg:space-y-5">
             {items.map((item) => {
               const lineTotal = Number(item.price) * item.quantity;
+              const originalLineTotal =
+                Number(item.originalPrice ?? item.price) * item.quantity;
+              const hasProductDiscount = originalLineTotal > lineTotal + 0.001;
+              const discountLabel = item.discount
+                ? productDiscountBadge(item.discount, (amount) =>
+                    priceFormatter.format(amount)
+                  )
+                : "Sale";
 
               return (
                 <article
@@ -304,6 +419,11 @@ export default function CartClient() {
                 >
                   <Link
                     href={`/${locale}/fragrances/${item.slug}`}
+                    onClick={(event) =>
+                      navigateToFragrance(event, item.slug, item.image, item.name)
+                    }
+                    data-product-image-transition-link
+                    data-product-transition-source
                     className="relative h-16 w-14 shrink-0 overflow-hidden bg-surface-mid lg:aspect-[4/5] lg:h-auto lg:w-full"
                   >
                     {item.image ? (
@@ -321,6 +441,10 @@ export default function CartClient() {
                     <div className="flex flex-col min-w-0">
                       <Link
                         href={`/${locale}/fragrances/${item.slug}`}
+                        onClick={(event) =>
+                          navigateToFragrance(event, item.slug, item.image, item.name)
+                        }
+                        data-product-image-transition-link
                         className="truncate font-serif text-base leading-tight text-parchment transition-colors hover:text-gold lg:text-2xl lg:whitespace-normal"
                       >
                         {item.name}
@@ -330,20 +454,44 @@ export default function CartClient() {
                           {item.sizeML}ml
                         </span>
                         <span>•</span>
-                        <span>{priceFormatter.format(Number(item.price))}</span>
+                        <span className="text-parchment">
+                          {priceFormatter.format(Number(item.price))}
+                        </span>
+                        {hasProductDiscount ? (
+                          <span className="line-through">
+                            {priceFormatter.format(Number(item.originalPrice ?? item.price))}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="hidden lg:block">
-                        <p className="label-caps mt-2 text-gold">
-                          {item.sizeML}ml
-                        </p>
-                        <p className="mt-4 text-sm text-on-surface/75">
-                          {priceFormatter.format(Number(item.price))}
-                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <p className="label-caps text-gold">{item.sizeML}ml</p>
+                          {hasProductDiscount ? (
+                            <span className="label-caps border border-gold/55 bg-gold/10 px-2 py-1 text-[9px] text-gold">
+                              {discountLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 flex items-center gap-2 text-sm">
+                          <span className="text-parchment">
+                            {priceFormatter.format(Number(item.price))}
+                          </span>
+                          {hasProductDiscount ? (
+                            <span className="text-on-surface/55 line-through">
+                              {priceFormatter.format(Number(item.originalPrice ?? item.price))}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0 lg:flex-col lg:items-end lg:gap-4">
                       <div className="hidden lg:block">
+                        {hasProductDiscount ? (
+                          <p className="text-right text-xs text-on-surface/55 line-through">
+                            {priceFormatter.format(originalLineTotal)}
+                          </p>
+                        ) : null}
                         <p className="font-serif text-2xl text-parchment">
                           {priceFormatter.format(lineTotal)}
                         </p>
@@ -394,6 +542,20 @@ export default function CartClient() {
               Order Summary
             </h2>
             <div className="mt-6 space-y-4 border-y border-outline/60 py-5 text-sm text-on-surface/75">
+              {productSavings > 0 ? (
+                <>
+                  <div className="flex justify-between gap-4">
+                    <span>Original subtotal</span>
+                    <span className="text-on-surface/55 line-through">
+                      {priceFormatter.format(originalSubtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4 text-gold">
+                    <span>Product discounts</span>
+                    <span>-{priceFormatter.format(productSavings)}</span>
+                  </div>
+                </>
+              ) : null}
               <div className="flex justify-between gap-4">
                 <span>Subtotal</span>
                 <span className="text-parchment">
@@ -408,6 +570,46 @@ export default function CartClient() {
             <div className="mt-5 flex justify-between gap-4 font-serif text-2xl text-parchment">
               <span>Total</span>
               <span>{priceFormatter.format(subtotal)}</span>
+            </div>
+            <div className="mt-4 border border-gold/55 bg-gold/[0.07] p-3">
+              <div className="flex items-start gap-2.5">
+                <span
+                  aria-hidden="true"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center border border-gold/50 bg-gold/10 text-gold"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-3.5 w-3.5"
+                  >
+                    <path d="M20 12a2 2 0 0 0 0-4V5H4v3a2 2 0 0 0 0 4 2 2 0 0 0 0 4v3h16v-3a2 2 0 0 0 0-4Z" />
+                    <path d="M12 7v10" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="label-caps text-[0.65rem] text-gold">
+                    {isArabic ? "لديك خصم؟" : "Have a discount?"}
+                  </p>
+                  <p className="mt-1 text-[0.7rem] leading-4 text-on-surface/80">
+                    {isArabic
+                      ? "سيظهر أي خصم مؤهل مرتبط ببريدك الإلكتروني تلقائيًا، ويمكنك أيضًا إدخال رمز الكوبون في صفحة الدفع."
+                      : "Any eligible discount linked to your email will appear automatically, and you can also enter a coupon code at checkout."}
+                  </p>
+                  <Link
+                    href={`/${locale}/checkout`}
+                    className="focus-gold mt-1.5 inline-flex items-center gap-1.5 text-[0.7rem] font-semibold leading-4 text-parchment underline decoration-gold/60 underline-offset-4 transition-colors hover:text-gold"
+                  >
+                    {isArabic
+                      ? "عرض الخصومات عند الدفع"
+                      : "View discounts at checkout"}
+                    <span aria-hidden="true">{isArabic ? "←" : "→"}</span>
+                  </Link>
+                </div>
+              </div>
             </div>
             <Link
               href={`/${locale}/checkout`}
@@ -474,6 +676,11 @@ export default function CartClient() {
                     >
                       <Link
                         href={`/${locale}/collections/${collection.slug}`}
+                        onClick={(event) =>
+                          navigateToCollection(event, collection.slug, collection.coverImage, name)
+                        }
+                        data-product-image-transition-link
+                        data-product-transition-source
                         className="relative block aspect-[3/4] overflow-hidden bg-surface-mid"
                       >
                         <Image
@@ -507,6 +714,10 @@ export default function CartClient() {
                         </p>
                         <Link
                           href={`/${locale}/collections/${collection.slug}`}
+                          onClick={(event) =>
+                            navigateToCollection(event, collection.slug, collection.coverImage, name)
+                          }
+                          data-product-image-transition-link
                           className="label-caps mt-3 flex min-h-9 items-center justify-center border border-parchment text-parchment transition-colors hover:border-gold hover:text-gold"
                         >
                           View
@@ -533,6 +744,16 @@ export default function CartClient() {
                   >
                     <Link
                       href={`/${locale}/fragrances/${fragrance.slug}`}
+                      onClick={(event) =>
+                        navigateToFragrance(
+                          event,
+                          fragrance.slug,
+                          fragrance.primaryImage?.url ?? null,
+                          imageAlt
+                        )
+                      }
+                      data-product-image-transition-link
+                      data-product-transition-source
                       className="relative block aspect-[3/4] overflow-hidden bg-surface-mid"
                     >
                       {fragrance.primaryImage ? (

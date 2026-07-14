@@ -62,6 +62,11 @@ export default async function AdminInventoryPage({
       longevity: fragrance.longevity,
       isPublished: fragrance.isPublished,
       isFeatured: fragrance.isFeatured,
+      discountType: fragrance.discountType,
+      discountValue: fragrance.discountValue?.toString() ?? null,
+      discountIsActive: fragrance.discountIsActive,
+      discountStartsAt: fragrance.discountStartsAt?.toISOString() ?? null,
+      discountExpiresAt: fragrance.discountExpiresAt?.toISOString() ?? null,
       position: fragrance.position,
       totalStock: fragrance.variants.reduce(
         (sum, variant) => sum + variant.stock,

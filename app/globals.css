@@ -119,6 +119,45 @@
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
     font-family: 'Material Symbols Outlined';
   }
+
+  .img-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .img-shimmer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      rgba(227, 210, 186, 0.28) 50%,
+      transparent 60%
+    );
+    background-size: 200% 100%;
+    animation: img-shimmer-sweep 1.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .img-shimmer img[data-nimg] {
+    opacity: 0;
+    transition: opacity 0.5s ease-out;
+  }
+
+  .img-shimmer img[data-nimg][data-loaded="true"] {
+    opacity: 1;
+  }
+}
+
+@keyframes img-shimmer-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @keyframes bottle-float {
@@ -283,6 +322,107 @@
 .loading-progress-auto {
   animation: loading-progress 2.8s cubic-bezier(0.65, 0, 0.35, 1) forwards;
   width: 0%;
+}
+
+html[data-product-image-transition="native"]::view-transition-group(*) {
+  animation-duration: 850ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-product-image-transition="native"]::view-transition-old(root) {
+  animation: product-page-out 520ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+html[data-product-image-transition="native"]::view-transition-new(root) {
+  animation: product-page-in 720ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes product-page-out {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes product-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(1.008);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+html[data-product-image-transition="fallback"]
+  [data-product-transition-target] {
+  opacity: 0;
+}
+
+.product-detail-image-reveal {
+  animation: product-detail-image-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+
+.product-detail-thumbnails-reveal {
+  animation: product-detail-thumbnails-in 520ms 140ms
+    cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.product-detail-copy-reveal {
+  animation: product-detail-copy-in 680ms 180ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+
+@keyframes product-detail-image-in {
+  from {
+    opacity: 0;
+    transform: scale(1.012);
+    filter: saturate(0.92) brightness(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: saturate(1) brightness(1);
+  }
+}
+
+@keyframes product-detail-thumbnails-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes product-detail-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-product-image-transition="native"]::view-transition-group(*) {
+    animation-duration: 1ms;
+  }
+
+  .product-detail-image-reveal,
+  .product-detail-thumbnails-reveal,
+  .product-detail-copy-reveal {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
 }
 
 @keyframes scent-backdrop-in {

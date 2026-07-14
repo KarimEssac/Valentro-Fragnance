@@ -1,5 +1,5 @@
 import {NextResponse} from "next/server";
-import {prisma} from "@/lib/prisma";
+import {getActiveAnnouncement} from "@/lib/storefront-data";
 
 export type ActiveSalesLine = {
   id: string;
@@ -7,32 +7,15 @@ export type ActiveSalesLine = {
   textAr: string;
 };
 
-export const revalidate = 0; // Dynamic route
-
 export async function GET(): Promise<NextResponse<ActiveSalesLine | null>> {
   try {
-    const now = new Date();
-    const announcement = await prisma.announcement.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { startAt: null, endAt: null },
-          { startAt: { lte: now }, endAt: { gte: now } },
-          { startAt: { lte: now }, endAt: null },
-          { startAt: null, endAt: { gte: now } }
-        ]
-      },
-      orderBy: {
-        createdAt: "desc"
-      },
-      select: {
-        id: true,
-        textEn: true,
-        textAr: true
+    const announcement = await getActiveAnnouncement();
+
+    return NextResponse.json(announcement, {
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120"
       }
     });
-
-    return NextResponse.json(announcement);
   } catch (error) {
     console.error("Failed to fetch active storefront sales line:", error);
     return NextResponse.json(null);

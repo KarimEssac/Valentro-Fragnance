@@ -15,12 +15,17 @@ export default function Modal({isOpen, title, children, onClose}: ModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-bg/80 px-gutter py-6 backdrop-blur-md">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-bg/65 px-gutter py-6 backdrop-blur-md"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="w-full max-w-lg border border-gold bg-bg p-5 text-on-surface sm:p-8"
+        className="w-full max-w-lg border border-outline/80 bg-surface-hi p-5 text-on-surface shadow-[0_28px_90px_rgba(20,14,10,0.45)] sm:p-8"
       >
         <div className="flex items-center justify-between gap-6">
           <h2 id="modal-title" className="font-serif text-2xl leading-tight text-parchment">

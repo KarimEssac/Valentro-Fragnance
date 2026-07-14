@@ -3,19 +3,26 @@
 import Image from "next/image";
 import Link from "next/link";
 import {useLocale} from "next-intl";
+import {useRouter} from "next/navigation";
+import type {MouseEvent} from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 
-type CartItem = {
-  fragranceId: string;
-  variantId: string;
-  slug: string;
-  name: string;
-  image: string | null;
-  sizeML: number;
-  price: string;
-  quantity: number;
-};
+import {
+  cartOriginalSubtotal,
+  cartSubtotal,
+  cartUpdatedEvent,
+  mergeCartPricing,
+  readCartItems,
+  requestCartPricing,
+  writeCartItems,
+  type CartItem
+} from "@/lib/cart-items";
+import {
+  productDiscountBadge,
+  type ActiveProductDiscount
+} from "@/lib/product-discounts";
+import {startProductImageTransition} from "@/lib/product-image-transition";
 
 type Recommendation = {
   id: string;
@@ -27,10 +34,12 @@ type Recommendation = {
     altEn: string;
     altAr: string;
   } | null;
+  discount?: ActiveProductDiscount | null;
   variants: {
     id: string;
     sizeML: number;
     price: string;
+    originalPrice?: string;
     stock: number;
   }[];
 };
@@ -76,21 +85,6 @@ type SideCartProps = {
   onClose: () => void;
 };
 
-function readCart() {
-  try {
-    return JSON.parse(
-      window.localStorage.getItem("valentro-cart") ?? "[]"
-    ) as CartItem[];
-  } catch {
-    return [];
-  }
-}
-
-function persistCart(items: CartItem[]) {
-  window.localStorage.setItem("valentro-cart", JSON.stringify(items));
-  window.dispatchEvent(new Event("valentro-cart-updated"));
-}
-
 function CloseIcon() {
   return (
     <svg
@@ -130,11 +124,58 @@ function ArrowIcon({direction}: {direction: "left" | "right"}) {
 
 export default function SideCart({open, onClose}: SideCartProps) {
   const locale = useLocale();
+  const router = useRouter();
   const isArabic = locale === "ar";
   const [items, setItems] = useState<CartItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [collections, setCollections] = useState<CollectionRecommendation[]>([]);
   const [isClosing, setIsClosing] = useState(false);
+
+  function navigateToFragrance(
+    event: MouseEvent<HTMLAnchorElement>,
+    slug: string,
+    imageUrl: string | null,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      !imageUrl
+    ) {
+      return;
+    }
+
+    const anchor = event.currentTarget;
+    let source = anchor.querySelector<HTMLElement>("[data-product-transition-source]");
+    if (!source && anchor.hasAttribute("data-product-transition-source")) {
+      source = anchor;
+    }
+    if (!source) {
+      const article = anchor.closest("article");
+      if (article) {
+        source = article.querySelector<HTMLElement>("[data-product-transition-source]");
+      }
+    }
+    if (!source) return;
+
+    const href = `/${locale}/fragrances/${slug}`;
+    const didStart = startProductImageTransition({
+      slug,
+      imageUrl,
+      imageAlt,
+      source,
+      navigate: () => {
+        requestClose();
+        router.push(href);
+      }
+    });
+
+    if (didStart) event.preventDefault();
+  }
   const recommendationsCarouselRef = useRef<HTMLDivElement>(null);
 
   const isVisible = open || isClosing;
@@ -151,18 +192,43 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
   useEffect(() => {
     function syncCart() {
-      setItems(readCart());
+      setItems(readCartItems());
     }
 
     syncCart();
     window.addEventListener("storage", syncCart);
-    window.addEventListener("valentro-cart-updated", syncCart);
+    window.addEventListener(cartUpdatedEvent, syncCart);
 
     return () => {
       window.removeEventListener("storage", syncCart);
-      window.removeEventListener("valentro-cart-updated", syncCart);
+      window.removeEventListener(cartUpdatedEvent, syncCart);
     };
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const controller = new AbortController();
+    const storedItems = readCartItems();
+
+    if (storedItems.length > 0) {
+      requestCartPricing(storedItems, controller.signal)
+        .then((pricing) => {
+          setItems((current) => {
+            const nextItems = mergeCartPricing(current, pricing);
+            writeCartItems(nextItems, false);
+            return nextItems;
+          });
+        })
+        .catch((error) => {
+          if (!(error instanceof Error && error.name === "AbortError")) {
+            // Keep the last display snapshot; checkout verifies every price.
+          }
+        });
+    }
+
+    return () => controller.abort();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -229,7 +295,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
           );
 
     setItems(nextItems);
-    persistCart(nextItems);
+    writeCartItems(nextItems);
   }
 
   function addRecommendation(recommendation: Recommendation) {
@@ -238,7 +304,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
     if (!variant) return;
 
     const name = isArabic ? recommendation.nameAr : recommendation.nameEn;
-    const existing = readCart();
+    const existing = readCartItems();
     const itemIndex = existing.findIndex((item) => item.variantId === variant.id);
 
     if (itemIndex >= 0) {
@@ -255,12 +321,14 @@ export default function SideCart({open, onClose}: SideCartProps) {
         image: recommendation.primaryImage?.url ?? null,
         sizeML: variant.sizeML,
         price: variant.price,
+        originalPrice: variant.originalPrice ?? variant.price,
+        discount: recommendation.discount ?? null,
         quantity: 1
       });
     }
 
     setItems(existing);
-    persistCart(existing);
+    writeCartItems(existing);
   }
 
   const scrollRecommendations = useCallback((direction: "previous" | "next") => {
@@ -276,10 +344,9 @@ export default function SideCart({open, onClose}: SideCartProps) {
     });
   }, []);
 
-  const subtotal = items.reduce(
-    (total, item) => total + Number(item.price) * item.quantity,
-    0
-  );
+  const subtotal = cartSubtotal(items);
+  const originalSubtotal = cartOriginalSubtotal(items);
+  const productSavings = Math.max(0, originalSubtotal - subtotal);
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const cartFragranceIds = new Set(items.map((item) => item.fragranceId));
   const matchingCollection = collections.find((collection) => {
@@ -350,12 +417,24 @@ export default function SideCart({open, onClose}: SideCartProps) {
             <div className="space-y-7">
               {items.map((item) => {
                 const lineTotal = Number(item.price) * item.quantity;
+                const originalLineTotal =
+                  Number(item.originalPrice ?? item.price) * item.quantity;
+                const hasProductDiscount = originalLineTotal > lineTotal + 0.001;
+                const discountLabel = item.discount
+                  ? productDiscountBadge(item.discount, (amount) =>
+                      priceFormatter.format(amount)
+                    )
+                  : "Sale";
 
                 return (
                   <article key={item.variantId} className="group flex gap-5">
                     <Link
                       href={`/${locale}/fragrances/${item.slug}`}
-                      onClick={requestClose}
+                      onClick={(event) =>
+                        navigateToFragrance(event, item.slug, item.image, item.name)
+                      }
+                      data-product-image-transition-link
+                      data-product-transition-source
                       className="relative h-32 w-24 shrink-0 overflow-hidden bg-surface-mid"
                     >
                       {item.image ? (
@@ -374,7 +453,10 @@ export default function SideCart({open, onClose}: SideCartProps) {
                         <div className="min-w-0">
                           <Link
                             href={`/${locale}/fragrances/${item.slug}`}
-                            onClick={requestClose}
+                            onClick={(event) =>
+                              navigateToFragrance(event, item.slug, item.image, item.name)
+                            }
+                            data-product-image-transition-link
                             className="font-serif text-xl leading-tight transition-colors hover:text-gold"
                           >
                             {item.name}
@@ -382,6 +464,11 @@ export default function SideCart({open, onClose}: SideCartProps) {
                           <p className="label-caps mt-1 text-on-surface/65">
                             Eau de Parfum · {item.sizeML}ml
                           </p>
+                          {hasProductDiscount ? (
+                            <span className="label-caps mt-2 inline-flex border border-gold/55 bg-gold/10 px-2 py-1 text-[9px] text-gold">
+                              {discountLabel}
+                            </span>
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -419,9 +506,16 @@ export default function SideCart({open, onClose}: SideCartProps) {
                             +
                           </button>
                         </div>
-                        <span className="font-serif text-xl">
-                          {priceFormatter.format(lineTotal)}
-                        </span>
+                        <div className="text-right">
+                          {hasProductDiscount ? (
+                            <p className="text-xs text-on-surface/55 line-through">
+                              {priceFormatter.format(originalLineTotal)}
+                            </p>
+                          ) : null}
+                          <span className="font-serif text-xl">
+                            {priceFormatter.format(lineTotal)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -543,7 +637,16 @@ export default function SideCart({open, onClose}: SideCartProps) {
                     >
                       <Link
                         href={`/${locale}/fragrances/${fragrance.slug}`}
-                        onClick={requestClose}
+                        onClick={(event) =>
+                          navigateToFragrance(
+                            event,
+                            fragrance.slug,
+                            fragrance.primaryImage?.url ?? null,
+                            imageAlt
+                          )
+                        }
+                        data-product-image-transition-link
+                        data-product-transition-source
                         className="relative overflow-hidden bg-surface-mid"
                       >
                         {fragrance.primaryImage ? (
@@ -559,7 +662,15 @@ export default function SideCart({open, onClose}: SideCartProps) {
                       <div className="min-w-0 px-3 pb-2 pt-3">
                         <Link
                           href={`/${locale}/fragrances/${fragrance.slug}`}
-                          onClick={requestClose}
+                          onClick={(event) =>
+                            navigateToFragrance(
+                              event,
+                              fragrance.slug,
+                              fragrance.primaryImage?.url ?? null,
+                              imageAlt
+                            )
+                          }
+                          data-product-image-transition-link
                           className="line-clamp-2 font-serif text-base leading-tight transition-colors hover:text-gold"
                         >
                           {name}
@@ -586,6 +697,20 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
         <footer className="shrink-0 border-t border-outline/60 bg-surface px-gutter py-6">
           <div className="space-y-4 text-sm text-on-surface/75">
+            {productSavings > 0 ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span>Original subtotal</span>
+                  <span className="line-through">
+                    {priceFormatter.format(originalSubtotal)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-gold">
+                  <span>Product discounts</span>
+                  <span>-{priceFormatter.format(productSavings)}</span>
+                </div>
+              </>
+            ) : null}
             <div className="flex items-center justify-between">
               <span>Subtotal</span>
               <span className="font-serif text-lg text-parchment">

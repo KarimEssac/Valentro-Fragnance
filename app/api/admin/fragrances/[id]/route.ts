@@ -1,5 +1,6 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
+import {revalidateTag} from "next/cache";
 import {FragranceNote, Gender, ScentProfile, Sillage} from "@prisma/client";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
@@ -8,6 +9,7 @@ import {authOptions} from "@/lib/auth";
 import {deleteCloudinaryImageByUrl} from "@/lib/cloudinary";
 import {uploadFragranceImages} from "@/lib/fragrance-images";
 import {prisma} from "@/lib/prisma";
+import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/storefront-data";
 
 export const runtime = "nodejs";
 
@@ -438,6 +440,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       deletedImageUrls.map((url) => deleteCloudinaryImageByUrl(url))
     );
 
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
     return NextResponse.json({message: "Product updated", id: saved?.id});
   } catch (error) {
     return NextResponse.json(
@@ -460,6 +463,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   try {
     await prisma.fragrance.delete({where: {id}});
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
     return NextResponse.json({message: "Product deleted"});
   } catch {
     return NextResponse.json({message: "Unable to delete product"}, {status: 400});
