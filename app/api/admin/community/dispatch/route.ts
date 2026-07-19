@@ -1,49 +1,15 @@
 import {NextResponse} from "next/server";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
+import type {NextRequest} from "next/server";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
+import {renderNewsletterEmailTemplate} from "@/lib/newsletter-email";
+import {uploadNewsletterImage} from "@/lib/newsletter-images";
 import {prisma} from "@/lib/prisma";
 
-type DispatchPayload = {
-  subject?: unknown;
-  body?: unknown;
-};
+export const runtime = "nodejs";
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function buildHtml(subject: string, body: string) {
-  const paragraphs = escapeHtml(body)
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.replace(/\n/g, "<br />"))
-    .map(
-      (paragraph) =>
-        `<p style="margin:0 0 18px;color:#4b463e;font-size:16px;line-height:1.7;">${paragraph}</p>`
-    )
-    .join("");
-
-  return `<!doctype html>
-<html>
-  <body style="margin:0;background:#F9F6F0;font-family:Arial,sans-serif;color:#201B11;">
-    <div style="max-width:640px;margin:0 auto;padding:42px 24px;">
-      <p style="margin:0 0 18px;color:#7A6A4F;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;">Valentro Atelier</p>
-      <h1 style="margin:0 0 28px;font-family:Georgia,serif;font-weight:400;font-size:36px;line-height:1.15;color:#201B11;">${escapeHtml(subject)}</h1>
-      ${paragraphs}
-      <div style="margin-top:34px;border-top:1px solid #cdc5bb;padding-top:18px;color:#7A6A4F;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">Valentro Inner Circle</div>
-    </div>
-  </body>
-</html>`;
 }
 
 function isBlockedTestAddress(email: string) {
@@ -66,16 +32,21 @@ function isResendTestSender(from: string) {
   return from.toLowerCase().includes("@resend.dev");
 }
 
-export async function POST(request: Request) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user?.role !== "ADMIN") {
+export async function POST(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
-  const payload = (await request.json()) as DispatchPayload;
-  const subject = text(payload.subject);
-  const body = text(payload.body);
+  let form: FormData;
+
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json({message: "Invalid newsletter request"}, {status: 400});
+  }
+
+  const subject = text(form.get("subject"));
+  const body = text(form.get("body"));
 
   if (!subject || subject.length > 140) {
     return NextResponse.json(
@@ -141,7 +112,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const html = buildHtml(subject, body);
+  const image = form.get("image");
+  let imageUrl: string | null = null;
+
+  if (image instanceof File && image.size > 0) {
+    try {
+      imageUrl = await uploadNewsletterImage(image);
+    } catch (error) {
+      return NextResponse.json(
+        {message: error instanceof Error ? error.message : "Unable to upload newsletter image"},
+        {status: 400}
+      );
+    }
+  }
+
+  const template = renderNewsletterEmailTemplate(subject, body, imageUrl);
   const batches = [];
 
   for (let index = 0; index < deliverableSubscribers.length; index += 100) {
@@ -160,7 +145,8 @@ export async function POST(request: Request) {
           from,
           to: [subscriber.email],
           subject,
-          html
+          html: template.html,
+          text: template.text
         }))
       )
     });

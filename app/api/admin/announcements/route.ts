@@ -1,19 +1,15 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {revalidateTag} from "next/cache";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
-import {STOREFRONT_ANNOUNCEMENTS_TAG} from "@/lib/storefront-data";
+import {STOREFRONT_ANNOUNCEMENTS_TAG} from "@/lib/cache-tags";
 
 export const revalidate = 0; // Dynamic route
 
-export async function GET() {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user?.role !== "ADMIN") {
+export async function GET(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -35,9 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user?.role !== "ADMIN") {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 

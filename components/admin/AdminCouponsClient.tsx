@@ -4,6 +4,7 @@ import {useMemo, useState} from "react";
 import {useRouter} from "next/navigation";
 
 import Modal from "@/components/ui/Modal";
+import ValentroSelect from "@/components/ui/ValentroSelect";
 
 type CouponUser = {
   id: string;
@@ -385,16 +386,15 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                 />
               </Field>
               <Field label="Discount Type">
-                <select
+                <ValentroSelect
                   value={form.type}
                   onChange={(event) =>
                     updateForm("type", event.target.value as CouponFormState["type"])
                   }
-                  className={inputClass()}
                 >
                   <option value="PERCENTAGE">Percentage (%)</option>
                   <option value="FIXED">Fixed Amount</option>
-                </select>
+                </ValentroSelect>
               </Field>
               <Field label="Value">
                 <input
@@ -479,16 +479,15 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
               </p>
               <div className="space-y-8">
               <Field label="Target Cohort">
-                <select
+                <ValentroSelect
                   value={bulkRule}
                   onChange={(event) =>
                     setBulkRule(event.target.value as "TOP_SPEND" | "TOP_ORDERS")
                   }
-                  className={inputClass()}
                 >
                   <option value="TOP_SPEND">Top paying customers</option>
                   <option value="TOP_ORDERS">Top customers by order count</option>
-                </select>
+                </ValentroSelect>
               </Field>
               <Field label="Top Percent">
                 <input
@@ -502,7 +501,7 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
               </Field>
               <div className="grid gap-6 sm:grid-cols-2">
                 <Field label="Discount Type">
-                  <select
+                  <ValentroSelect
                     value={bulkForm.type}
                     onChange={(event) =>
                       updateBulkForm(
@@ -510,11 +509,10 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                         event.target.value as BulkCouponFormState["type"]
                       )
                     }
-                    className={inputClass()}
                   >
                     <option value="PERCENTAGE">Percentage (%)</option>
                     <option value="FIXED">Fixed Amount</option>
-                  </select>
+                  </ValentroSelect>
                 </Field>
                 <Field label="Discount Value">
                   <input
@@ -720,16 +718,15 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                   />
                 </Field>
                 <Field label="Discount Type">
-                  <select
+                  <ValentroSelect
                     value={editForm.type}
                     onChange={(event) =>
                       updateEditForm("type", event.target.value as CouponFormState["type"])
                     }
-                    className={inputClass()}
                   >
                     <option value="PERCENTAGE">Percentage</option>
                     <option value="FIXED">Fixed amount</option>
-                  </select>
+                  </ValentroSelect>
                 </Field>
                 <Field label="Discount Value">
                   <input
@@ -880,14 +877,13 @@ function CustomerPicker({
     <div className="border border-[#7A6A4F]/20 bg-white/35 p-4">
       <div className="mb-4 grid gap-6 sm:grid-cols-2">
         <Field label="Audience">
-          <select
+          <ValentroSelect
             value={applicableTo}
             onChange={(event) => onAudienceChange(event.target.value as "ALL" | "SPECIFIC_USERS")}
-            className={inputClass()}
           >
             <option value="ALL">All customers</option>
             <option value="SPECIFIC_USERS">Specific customers</option>
-          </select>
+          </ValentroSelect>
         </Field>
         <Field label="Find Customers">
           <input

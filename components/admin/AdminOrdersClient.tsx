@@ -2,8 +2,11 @@
 
 import {useMemo, useState} from "react";
 
+import ValentroSelect from "@/components/ui/ValentroSelect";
+
 type AdminOrderItem = {
   fragranceName: string;
+  collectionId?: string | null;
   sizeML: number;
   quantity: number;
   unitPrice: string;
@@ -246,18 +249,18 @@ export default function AdminOrdersClient({
             <span className="label-caps mb-2 block text-on-surface/70">
               Move Status
             </span>
-            <select
+            <ValentroSelect
               value={order.status}
               disabled={updatingOrderId === order.id}
               onChange={(event) => updateOrderStatus(order.id, event.target.value)}
-              className="label-caps min-h-11 w-full border border-outline bg-surface-hi px-3 text-parchment outline-none focus:border-gold"
+              className="min-h-11 bg-surface-hi"
             >
               {editableStatuses.map((option) => (
                 <option key={option} value={option}>
                   {option.toLowerCase().replace("_", " ")}
                 </option>
               ))}
-            </select>
+            </ValentroSelect>
           </label>
         </div>
 
@@ -300,7 +303,7 @@ export default function AdminOrdersClient({
                     {item.fragranceName}
                   </p>
                   <p className="mt-1 text-on-surface/65">
-                    {item.sizeML}ml × {item.quantity} ·{" "}
+                    {item.collectionId ? "Collection" : `${item.sizeML}ml`} × {item.quantity} ·{" "}
                     {currencyFormatter.format(Number(item.unitPrice))}
                   </p>
                 </div>
@@ -382,11 +385,10 @@ export default function AdminOrdersClient({
           </svg>
         </div>
 
-        <div className="relative w-full sm:w-auto">
-          <select
+        <ValentroSelect
+          wrapperClassName="sm:w-auto sm:min-w-48"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="label-caps min-h-10 w-full cursor-pointer appearance-none border border-outline bg-surface py-2 pl-4 pr-12 text-left text-parchment outline-none transition-colors focus:border-gold sm:w-auto sm:min-w-48"
             aria-label="Filter orders by status"
           >
             {statusOptions.map((option) => (
@@ -394,19 +396,7 @@ export default function AdminOrdersClient({
                 {option === "ALL" ? "All Statuses" : option.toLowerCase().replace("_", " ")}
               </option>
             ))}
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-gold">
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </div>
-        </div>
+          </ValentroSelect>
       </section>
 
       {message ? (

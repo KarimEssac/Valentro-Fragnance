@@ -1,13 +1,11 @@
 import {CouponType, Prisma} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {revalidateTag} from "next/cache";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
-import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/storefront-data";
+import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -42,13 +40,8 @@ function optionalDate(value: unknown, label: string) {
   return date;
 }
 
-async function isAdmin() {
-  const session = (await getServerSession(authOptions)) as Session | null;
-  return session?.user?.role === "ADMIN";
-}
-
 export async function PUT(request: NextRequest, context: RouteContext) {
-  if (!(await isAdmin())) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -133,8 +126,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
-  if (!(await isAdmin())) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 

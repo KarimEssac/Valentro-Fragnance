@@ -6,7 +6,9 @@ import Link from "next/link";
 import type {FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
+import ValentroSelect from "@/components/ui/ValentroSelect";
 import {
+  cartPricingRequestItems,
   cartOriginalSubtotal,
   cartSubtotal,
   mergeCartPricing,
@@ -239,7 +241,7 @@ export default function CheckoutClient() {
   const originalSubtotal = cartOriginalSubtotal(items);
   const productSavings = Math.max(0, originalSubtotal - subtotal);
   const pricingRequestItems = JSON.stringify(
-    items.map(({variantId, quantity}) => ({variantId, quantity}))
+    cartPricingRequestItems(items)
   );
   const displayedDiscount = subtotal > 0 ? checkoutDiscount : null;
   const discountAmount = displayedDiscount?.discountAmount ?? 0;
@@ -266,7 +268,8 @@ export default function CheckoutClient() {
           body: JSON.stringify({
             csrfToken,
             items: JSON.parse(pricingRequestItems) as {
-              variantId: string;
+              variantId?: string;
+              collectionId?: string;
               quantity: number;
             }[],
             email: normalizedEmail,
@@ -471,10 +474,7 @@ export default function CheckoutClient() {
         couponCode: appliedCouponCode,
         paymentMethod: "CASH_ON_DELIVERY",
         billingAddress: "same",
-        items: items.map((item) => ({
-          variantId: item.variantId,
-          quantity: item.quantity
-        }))
+        items: cartPricingRequestItems(items)
       })
     });
     const data = (await response.json()) as {
@@ -592,12 +592,12 @@ export default function CheckoutClient() {
               <span className="label-caps text-on-surface/75">
                 Country/Region
               </span>
-              <select
+              <ValentroSelect
                 disabled
-                className="mt-1.5 h-10 w-full border-0 border-b border-outline bg-surface-hi px-3 text-sm text-parchment outline-none"
+                className="mt-1.5 bg-surface-hi text-sm"
               >
                 <option>Egypt</option>
-              </select>
+              </ValentroSelect>
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -647,7 +647,7 @@ export default function CheckoutClient() {
                 <span className="label-caps text-on-surface/75">
                   Governorate
                 </span>
-                <select
+                <ValentroSelect
                   id="checkout-governorate"
                   required
                   value={form.governorate}
@@ -655,7 +655,7 @@ export default function CheckoutClient() {
                   onChange={(event) =>
                     updateField("governorate", event.target.value)
                   }
-                  className="mt-1.5 h-10 w-full border-0 border-b border-outline bg-surface-hi px-3 text-sm text-parchment outline-none focus:border-gold"
+                  className="mt-1.5 bg-surface-hi text-sm"
                 >
                   <option value="">Select Governorate</option>
                   {governorates.map((governorate) => (
@@ -663,7 +663,7 @@ export default function CheckoutClient() {
                       {governorate}
                     </option>
                   ))}
-                </select>
+                </ValentroSelect>
               </label>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -779,6 +779,8 @@ export default function CheckoutClient() {
           <h2 className="font-serif text-3xl leading-tight">Order Summary</h2>
           <div className="mt-5 space-y-4 border-b border-outline/60 pb-5">
             {items.map((item) => {
+              const isCollection = item.itemType === "collection";
+              const itemMeta = isCollection ? "Collection" : `${item.sizeML}ml`;
               const lineTotal = Number(item.price) * item.quantity;
               const originalLineTotal =
                 Number(item.originalPrice ?? item.price) * item.quantity;
@@ -805,7 +807,7 @@ export default function CheckoutClient() {
                       {item.name}
                     </p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-on-surface/70">
-                      <span>{item.sizeML}ml</span>
+                      <span>{itemMeta}</span>
                       {hasProductDiscount && item.discount ? (
                         <span className="label-caps text-[9px] text-gold">
                           {productDiscountBadge(item.discount, (amount) =>

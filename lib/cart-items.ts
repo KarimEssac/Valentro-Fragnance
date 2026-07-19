@@ -3,9 +3,17 @@ import type {ActiveProductDiscount} from "@/lib/product-discounts";
 export const cartStorageKey = "valentro-cart";
 export const cartUpdatedEvent = "valentro-cart-updated";
 
+export type CartItemType = "fragrance" | "collection";
+
+export function collectionCartKey(collectionId: string) {
+  return `collection:${collectionId}`;
+}
+
 export type CartItem = {
   fragranceId: string;
   variantId: string;
+  itemType?: CartItemType;
+  collectionId?: string;
   slug: string;
   name: string;
   image: string | null;
@@ -20,6 +28,8 @@ export type CartItem = {
 
 export type CartPricingLine = {
   variantId: string;
+  kind?: CartItemType;
+  collectionId?: string | null;
   quantity: number;
   originalPrice: string;
   price: string;
@@ -28,6 +38,11 @@ export type CartPricingLine = {
   productDiscountAmount: string;
   discount: ActiveProductDiscount | null;
 };
+
+type CartPricingRequestItem = Pick<
+  CartItem,
+  "variantId" | "quantity" | "itemType" | "collectionId"
+>;
 
 export type CartPricingQuote = {
   lines: CartPricingLine[];
@@ -41,9 +56,14 @@ function isCartItem(value: unknown): value is CartItem {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 
   const item = value as Partial<CartItem>;
+  const itemType = item.itemType ?? "fragrance";
   return (
     typeof item.fragranceId === "string" &&
     typeof item.variantId === "string" &&
+    (itemType === "fragrance" ||
+      (itemType === "collection" &&
+        typeof item.collectionId === "string" &&
+        item.variantId === collectionCartKey(item.collectionId))) &&
     typeof item.slug === "string" &&
     typeof item.name === "string" &&
     (typeof item.image === "string" || item.image === null) &&
@@ -86,13 +106,23 @@ export function mergeCartPricing(
       ...item,
       price: line.price,
       originalPrice: line.originalPrice,
-      discount: line.discount
+      discount: line.discount,
+      ...(line.kind ? {itemType: line.kind} : {}),
+      ...(line.collectionId ? {collectionId: line.collectionId} : {})
     };
   });
 }
 
+export function cartPricingRequestItems(items: CartPricingRequestItem[]) {
+  return items.map((item) =>
+    item.itemType === "collection" && item.collectionId
+      ? {collectionId: item.collectionId, quantity: item.quantity}
+      : {variantId: item.variantId, quantity: item.quantity}
+  );
+}
+
 export async function requestCartPricing(
-  items: Pick<CartItem, "variantId" | "quantity">[],
+  items: CartPricingRequestItem[],
   signal?: AbortSignal
 ) {
   const response = await fetch("/api/storefront/cart-pricing", {
@@ -102,7 +132,7 @@ export async function requestCartPricing(
       Accept: "application/json"
     },
     body: JSON.stringify({
-      items: items.map(({variantId, quantity}) => ({variantId, quantity}))
+      items: cartPricingRequestItems(items)
     }),
     signal
   });
@@ -129,4 +159,3 @@ export function cartOriginalSubtotal(items: CartItem[]) {
     0
   );
 }
-

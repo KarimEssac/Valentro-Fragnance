@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import {signOut} from "next-auth/react";
 import {usePathname} from "next/navigation";
 import {useState} from "react";
 
@@ -14,7 +14,6 @@ type AdminNavLink = {
 type AdminLayoutClientProps = {
   children: React.ReactNode;
   locale: string;
-  adminName: string;
   links: AdminNavLink[];
 };
 
@@ -66,6 +65,18 @@ function Icon({name}: {name: string}) {
         <path d="M3 20a5 5 0 0 1 10 0" />
         <path d="M12 18a5 5 0 0 1 9 2" />
       </>
+    ),
+    email: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="1" />
+        <path d="m4 7 8 6 8-6" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M14 5h6v14h-6" />
+        <path d="M3 12h11M10 8l4 4-4 4" />
+      </>
     )
   };
 
@@ -88,12 +99,10 @@ function Icon({name}: {name: string}) {
 function AdminSidebar({
   locale,
   links,
-  adminName,
   onNavigate
 }: {
   locale: string;
   links: AdminNavLink[];
-  adminName: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -134,25 +143,16 @@ function AdminSidebar({
       </div>
 
       <div className="border-t border-outline/70 px-6 py-8">
-        <div className="flex items-center gap-3">
-          <div className="relative h-11 w-11 overflow-hidden border border-outline/70 bg-surface">
-            <Image
-              src="https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613530/valentro/fragrances/emporio-armani.webp"
-              alt="Valentro admin"
-              fill
-              sizes="44px"
-              className="object-cover"
-            />
-          </div>
-          <div>
-            <p className="label-caps text-parchment">
-              {adminName || "Admin"}
-            </p>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-gold">
-              Atelier Admin
-            </p>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            void signOut({callbackUrl: `/${locale}/login`});
+          }}
+          className="flex w-full items-center gap-4 py-2 text-on-surface/75 transition-colors hover:text-gold"
+        >
+          <Icon name="logout" />
+          <span className="label-caps tracking-[0.15em]">Log out</span>
+        </button>
       </div>
     </aside>
   );
@@ -161,7 +161,6 @@ function AdminSidebar({
 export default function AdminLayoutClient({
   children,
   locale,
-  adminName,
   links
 }: AdminLayoutClientProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -210,7 +209,6 @@ export default function AdminLayoutClient({
               <AdminSidebar
                 locale={locale}
                 links={links}
-                adminName={adminName}
                 onNavigate={() => setSidebarOpen(false)}
               />
             </div>
@@ -219,7 +217,7 @@ export default function AdminLayoutClient({
       </div>
 
       <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:block lg:w-64">
-        <AdminSidebar locale={locale} links={links} adminName={adminName} />
+        <AdminSidebar locale={locale} links={links} />
       </div>
 
       <div className="min-h-screen pt-16 lg:ml-64 lg:pt-0">{children}</div>

@@ -1,7 +1,6 @@
 "use client";
 
 import {useState, useMemo} from "react";
-import {useRouter} from "next/navigation";
 
 export type AnnouncementDraft = {
   id?: string;
@@ -100,7 +99,6 @@ export default function AdminAnnouncementsClient({
   locale,
   initialAnnouncements
 }: Props) {
-  const router = useRouter();
   const isArabic = locale === "ar";
 
   const [announcements, setAnnouncements] = useState<AnnouncementSerialized[]>(initialAnnouncements);
@@ -200,7 +198,6 @@ export default function AdminAnnouncementsClient({
           : [savedAnnouncement, ...normalizedCurrent];
       });
       resetForm();
-      router.refresh();
       setStatus(editingId ? "Announcement updated successfully!" : "Announcement created successfully!");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "An error occurred");
@@ -219,7 +216,6 @@ export default function AdminAnnouncementsClient({
 
       setAnnouncements((current) => current.filter((ann) => ann.id !== id));
       setDeletingId(null);
-      router.refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete");
     }
@@ -254,7 +250,6 @@ export default function AdminAnnouncementsClient({
 
         return updatedAnnouncement.isActive ? {...item, isActive: false} : item;
       }));
-      router.refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to toggle status");
     }

@@ -1,10 +1,8 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {CouponApplicability, CouponType, Prisma} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
 
 type CouponPayload = {
@@ -102,31 +100,25 @@ function asUserIds(value: unknown) {
     .filter((item) => /^[A-Za-z0-9_-]+$/.test(item));
 }
 
-async function assertAdmin() {
-  const session = (await getServerSession(authOptions)) as Session | null;
-  if (session?.user.role !== "ADMIN") {
+async function assertAdmin(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
     throw new Error("Unauthorized");
   }
 }
 
 async function selectBulkUsers(rule: string, percent: number) {
-  const users = await prisma.user.findMany({
-    where: {role: "CUSTOMER"},
-    select: {
-      id: true,
-      orders: {
-        select: {
-          total: true
-        }
-      }
-    }
+  const users = await prisma.order.groupBy({
+    by: ["userId"],
+    where: {user: {role: "CUSTOMER"}},
+    _count: {_all: true},
+    _sum: {total: true}
   });
 
   const ranked = users
     .map((user) => ({
-      id: user.id,
-      orderCount: user.orders.length,
-      totalSpent: user.orders.reduce((sum, order) => sum + Number(order.total), 0)
+      id: user.userId,
+      orderCount: user._count._all,
+      totalSpent: Number(user._sum.total ?? 0)
     }))
     .filter((user) => (rule === "TOP_SPEND" ? user.totalSpent > 0 : user.orderCount > 0))
     .sort((a, b) =>
@@ -166,9 +158,9 @@ function parseSharedPayload(payload: CouponPayload) {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await assertAdmin();
+    await assertAdmin(request);
 
     const coupons = await prisma.coupon.findMany({
       orderBy: [{createdAt: "desc"}],
@@ -192,7 +184,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await assertAdmin();
+    await assertAdmin(request);
     const payload = (await request.json()) as CouponPayload;
     const shared = parseSharedPayload(payload);
     const mode = asString(payload.mode) || "manual";

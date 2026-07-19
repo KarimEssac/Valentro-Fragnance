@@ -2,13 +2,11 @@ import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {revalidateTag} from "next/cache";
 import {Prisma} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {uploadCollectionImages} from "@/lib/fragrance-images";
 import {prisma} from "@/lib/prisma";
-import {STOREFRONT_COLLECTIONS_TAG} from "@/lib/storefront-data";
+import {STOREFRONT_COLLECTIONS_TAG} from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -64,10 +62,8 @@ function productIds(data: Record<string, unknown>) {
   return unique;
 }
 
-export async function GET() {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user.role !== "ADMIN") {
+export async function GET(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -119,9 +115,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user.role !== "ADMIN") {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -176,7 +170,26 @@ export async function POST(request: NextRequest) {
     if (!coverImage) throw new Error("Add a collection image or choose products with images");
 
     await prisma.$transaction(async (tx) => {
-      const collection = await tx.collection.create({
+      const maximumPosition = await tx.collection.aggregate({
+        where: {isOffer: true},
+        _max: {position: true}
+      });
+      const lastPosition = maximumPosition._max.position ?? 0;
+      const targetPosition = displayOrder
+        ? Math.min(displayOrder, lastPosition + 1)
+        : lastPosition + 1;
+
+      if (targetPosition <= lastPosition) {
+        await tx.collection.updateMany({
+          where: {
+            isOffer: true,
+            position: {gte: targetPosition}
+          },
+          data: {position: {increment: 1}}
+        });
+      }
+
+      await tx.collection.create({
         data: {
           slug,
           code,
@@ -188,7 +201,7 @@ export async function POST(request: NextRequest) {
           offerPrice,
           isOffer: true,
           isPublished,
-          position: 0,
+          position: targetPosition,
           fragrances: {
             create: selectedProductIds.map((fragranceId) => ({
               fragrance: {connect: {id: fragranceId}}
@@ -197,24 +210,6 @@ export async function POST(request: NextRequest) {
         },
         select: {id: true}
       });
-
-      const orderedOffers = await tx.collection.findMany({
-        where: {isOffer: true, id: {not: collection.id}},
-        orderBy: [{position: "asc"}, {createdAt: "asc"}],
-        select: {id: true}
-      });
-      const orderedIds = orderedOffers.map((offer) => offer.id);
-      const targetIndex = displayOrder
-        ? Math.min(displayOrder - 1, orderedIds.length)
-        : orderedIds.length;
-      orderedIds.splice(targetIndex, 0, collection.id);
-
-      for (const [index, collectionId] of orderedIds.entries()) {
-        await tx.collection.update({
-          where: {id: collectionId},
-          data: {position: index + 1}
-        });
-      }
     });
 
     revalidateTag(STOREFRONT_COLLECTIONS_TAG, "max");

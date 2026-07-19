@@ -2,13 +2,20 @@ import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {revalidateTag} from "next/cache";
 import {FragranceNote, Gender, ScentProfile, Sillage} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
+import {
+  avoidanceVerbs,
+  parseFinderRule,
+  type FinderRuleVerb
+} from "@/lib/finder-rules";
 import {uploadFragranceImages} from "@/lib/fragrance-images";
+import {
+  inferIngredientCategory,
+  normalizeIngredientCategory
+} from "@/lib/ingredient-categories";
 import {prisma} from "@/lib/prisma";
-import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/storefront-data";
+import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -16,6 +23,11 @@ const genderValues = new Set(Object.values(Gender));
 const scentValues = new Set(Object.values(ScentProfile));
 const sillageValues = new Set(Object.values(Sillage));
 const seasonValues = new Set(["SPRING", "SUMMER", "FALL", "WINTER", "ALL_YEAR"]);
+
+type IngredientInput = {
+  name: string;
+  category: string;
+};
 
 function text(form: FormData, key: string, label: string, max = 240) {
   const value = form.get(key);
@@ -32,11 +44,80 @@ function optionalText(form: FormData, key: string, fallback: string, max = 2000)
   return result || fallback;
 }
 
-function values(form: FormData, key: string) {
-  return form
+function values(form: FormData, key: string, label = key) {
+  const seen = new Set<string>();
+  const entries = form
     .getAll(key)
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .map((value) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""))
     .filter(Boolean);
+
+  if (entries.length > 30) throw new Error(`Too many ${label}`);
+
+  return entries.filter((entry) => {
+    if (entry.length > 120) throw new Error(`${label} entry is too long`);
+    const normalized = entry.toLocaleLowerCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function finderRuleValues(
+  form: FormData,
+  key: string,
+  label: string,
+  allowedVerbs: readonly FinderRuleVerb[]
+) {
+  const entries = values(form, key, label);
+  if (entries.some((entry) => {
+    const rule = parseFinderRule(entry);
+    return !rule || !allowedVerbs.includes(rule.verb);
+  })) {
+    throw new Error(`${label} must use a customer verb and a saved ingredient`);
+  }
+  return entries;
+}
+
+function ingredientInputs(form: FormData): IngredientInput[] {
+  const raw = form.get("ingredients");
+  let parsed: unknown;
+
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return values(form, "ingredients", "ingredients").map((name) => ({
+        name,
+        category: inferIngredientCategory(name)
+      }));
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return values(form, "ingredients", "ingredients").map((name) => ({
+      name,
+      category: inferIngredientCategory(name)
+    }));
+  }
+  if (parsed.length > 30) throw new Error("Too many ingredients");
+
+  const seen = new Set<string>();
+  return parsed.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") {
+      throw new Error("Ingredient data is invalid");
+    }
+
+    const record = entry as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim().replace(/\s+/g, " ") : "";
+    const category = normalizeIngredientCategory(record.category);
+    if (!name || name.length > 120) throw new Error("Ingredient name is invalid");
+    if (!category) throw new Error(`Choose a category for ${name}`);
+
+    const key = name.toLocaleLowerCase();
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{name, category}];
+  });
 }
 
 function positiveInt(form: FormData, key: string, label: string) {
@@ -125,9 +206,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user.role !== "ADMIN") {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -157,23 +236,40 @@ export async function POST(request: NextRequest) {
     if (!sillageValues.has(sillage)) throw new Error("Sillage is invalid");
 
     const variants = variantsFrom(form, slug);
-    const uploadedImages = await uploadFragranceImages(
-      form.getAll("images").filter((value): value is File => value instanceof File),
-      slug
-    );
+    const [uploadedImages, signatureCollection] = await Promise.all([
+      uploadFragranceImages(
+        form.getAll("images").filter((value): value is File => value instanceof File),
+        slug
+      ),
+      prisma.collection.findUnique({
+        where: {slug: "signature-line"},
+        select: {id: true}
+      })
+    ]);
     const selectedSeasons = values(form, "seasons").filter((season) =>
       seasonValues.has(season)
     );
     const finalSeasons = selectedSeasons.includes("ALL_YEAR")
       ? ["ALL_YEAR"]
       : selectedSeasons;
-    const ingredients = values(form, "ingredients");
-    const signatureCollection = await prisma.collection.findUnique({
-      where: {slug: "signature-line"},
-      select: {id: true}
-    });
+    const ingredients = ingredientInputs(form);
     await prisma.$transaction(async (tx) => {
-      const fragrance = await tx.fragrance.create({
+      const maximumPosition = await tx.fragrance.aggregate({
+        _max: {position: true}
+      });
+      const lastPosition = maximumPosition._max.position ?? 0;
+      const targetPosition = displayOrder
+        ? Math.min(displayOrder, lastPosition + 1)
+        : lastPosition + 1;
+
+      if (targetPosition <= lastPosition) {
+        await tx.fragrance.updateMany({
+          where: {position: {gte: targetPosition}},
+          data: {position: {increment: 1}}
+        });
+      }
+
+      await tx.fragrance.create({
         data: {
           slug,
           nameEn,
@@ -184,20 +280,21 @@ export async function POST(request: NextRequest) {
           descriptionAr,
           gender,
           scentProfile,
-          avoidIf: values(form, "avoidIf"),
+          avoidIf: finderRuleValues(form, "avoidIf", "avoid-if rules", avoidanceVerbs),
           bestFor: [],
           seasons: finalSeasons,
           sillage,
           longevity: positiveInt(form, "longevity", "Longevity"),
-          position: 0,
+          position: targetPosition,
           isPublished: true,
           variants: {
             create: variants
           },
           ingredients: {
             create: ingredients.map((ingredient, index) => ({
-              nameEn: ingredient,
-              nameAr: ingredient,
+              nameEn: ingredient.name,
+              nameAr: ingredient.name,
+              category: ingredient.category,
               note:
                 index === 0
                   ? FragranceNote.TOP
@@ -227,24 +324,6 @@ export async function POST(request: NextRequest) {
         },
         select: {id: true}
       });
-
-      const orderedProducts = await tx.fragrance.findMany({
-        where: {id: {not: fragrance.id}},
-        orderBy: [{position: "asc"}, {createdAt: "asc"}],
-        select: {id: true}
-      });
-      const orderedIds = orderedProducts.map((product) => product.id);
-      const targetIndex = displayOrder
-        ? Math.min(displayOrder - 1, orderedIds.length)
-        : orderedIds.length;
-      orderedIds.splice(targetIndex, 0, fragrance.id);
-
-      for (const [index, fragranceId] of orderedIds.entries()) {
-        await tx.fragrance.update({
-          where: {id: fragranceId},
-          data: {position: index + 1}
-        });
-      }
     });
 
     revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");

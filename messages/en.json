@@ -177,5 +177,55 @@
         "button": "Contact Concierge"
       }
     }
+  },
+  "terms": {
+    "metaTitle": "Terms & Conditions - VALENTRO",
+    "metaDescription": "The terms and conditions for shopping with VALENTRO Atelier.",
+    "subtitle": "Valentro Policies",
+    "title": "Terms & Conditions",
+    "introduction": "These terms explain how you may use Valentro and shop with us. Please read them before placing an order.",
+    "lastUpdated": "Last updated: July 18, 2026",
+    "sections": {
+      "acceptance": {
+        "title": "1. Acceptance of these terms",
+        "body": "By using our website or placing an order, you agree to these Terms & Conditions and our Privacy Policy. If you do not agree, please do not use the website or place an order."
+      },
+      "orders": {
+        "title": "2. Orders and account information",
+        "body": "Please provide complete and accurate contact, delivery, and order information. Orders are subject to availability and confirmation by Valentro. We may decline or cancel an order when information is inaccurate, a product is unavailable, or we reasonably suspect misuse."
+      },
+      "products": {
+        "title": "3. Products and availability",
+        "body": "We aim to present every fragrance and its details accurately. Product images, packaging, and scent perception can vary slightly. Availability is shown in good faith and may change before an order is confirmed."
+      },
+      "pricing": {
+        "title": "4. Prices and payment",
+        "body": "Prices are shown in Egyptian pounds (EGP) unless stated otherwise. Any applicable delivery charge is presented during checkout or confirmed with you before dispatch. Orders are currently paid by cash on delivery."
+      },
+      "delivery": {
+        "title": "5. Delivery",
+        "body": "We deliver to supported governorates in Egypt. Delivery dates are estimates and can be affected by courier operations, weather, or circumstances outside our control. Please make sure someone is available to receive the order at the confirmed address."
+      },
+      "returns": {
+        "title": "6. Returns and refunds",
+        "body": "Returns and refunds are handled under our Refund Policy. In case of a conflict, the Refund Policy governs the conditions and process for return requests."
+      },
+      "care": {
+        "title": "7. Fragrance care and safe use",
+        "body": "Use fragrances externally and as directed. Avoid contact with eyes, avoid spraying near a flame, and discontinue use if irritation occurs. Store bottles upright and away from heat and direct sunlight."
+      },
+      "intellectualProperty": {
+        "title": "8. Our content and intellectual property",
+        "body": "The Valentro name, logo, photography, product descriptions, and website content belong to Valentro or its licensors. You may not copy, reproduce, or use them commercially without our written permission."
+      },
+      "changes": {
+        "title": "9. Changes and applicable law",
+        "body": "We may update these terms when needed. The version published on this page applies to your use of the website. These terms are governed by the applicable laws of the Arab Republic of Egypt."
+      },
+      "contact": {
+        "title": "10. Contact us",
+        "body": "For questions about these terms or an order, please contact our team at concierge@valentro.com."
+      }
+    }
   }
 }

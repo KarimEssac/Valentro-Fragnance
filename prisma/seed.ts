@@ -158,7 +158,7 @@ async function main() {
       gender: "UNISEX",
       scentProfile: "VANILLA",
       avoidIf: ["Avoids sweet amber", "Prefers very fresh scents"],
-      bestFor: ["Evening events", "Date night", "Cool weather"],
+      bestFor: [],
       seasons: ["FALL", "WINTER"],
       sillage: "NOTICEABLE",
       longevity: 10,
@@ -185,9 +185,9 @@ async function main() {
       },
       ingredients: {
         create: [
-          {nameEn: "Bergamot", nameAr: "برغموت", note: "TOP"},
-          {nameEn: "Madagascar Vanilla", nameAr: "فانيلا مدغشقر", note: "MIDDLE"},
-          {nameEn: "Amber Woods", nameAr: "أخشاب عنبرية", note: "BASE"}
+          {nameEn: "Bergamot", nameAr: "برغموت", category: "Citrus & Fresh", note: "TOP"},
+          {nameEn: "Madagascar Vanilla", nameAr: "فانيلا مدغشقر", category: "Sweet & Gourmand", note: "MIDDLE"},
+          {nameEn: "Amber Woods", nameAr: "أخشاب عنبرية", category: "Woody & Earthy", note: "BASE"}
         ]
       },
       images: {
@@ -232,7 +232,7 @@ async function main() {
       gender: "HIM",
       scentProfile: "OUD",
       avoidIf: ["Sensitive to oud", "Wants a discreet office scent"],
-      bestFor: ["Formal evenings", "Winter", "Statement dressing"],
+      bestFor: [],
       seasons: ["WINTER", "FALL"],
       sillage: "STRONG",
       longevity: 14,
@@ -259,9 +259,9 @@ async function main() {
       },
       ingredients: {
         create: [
-          {nameEn: "Saffron", nameAr: "زعفران", note: "TOP"},
-          {nameEn: "Laotian Oud", nameAr: "عود لاوسي", note: "MIDDLE"},
-          {nameEn: "Labdanum", nameAr: "لادن", note: "BASE"}
+          {nameEn: "Saffron", nameAr: "زعفران", category: "Spicy & Aromatic", note: "TOP"},
+          {nameEn: "Laotian Oud", nameAr: "عود لاوسي", category: "Woody & Earthy", note: "MIDDLE"},
+          {nameEn: "Labdanum", nameAr: "لادن", category: "Base & Accent Notes", note: "BASE"}
         ]
       },
       images: {
@@ -306,7 +306,7 @@ async function main() {
       gender: "HER",
       scentProfile: "FLORAL",
       avoidIf: ["Allergic to musk", "Dislikes powdery florals"],
-      bestFor: ["Daytime", "Brunch", "Spring"],
+      bestFor: [],
       seasons: ["SPRING", "SUMMER", "ALL_YEAR"],
       sillage: "MODERATE",
       longevity: 8,
@@ -333,9 +333,9 @@ async function main() {
       },
       ingredients: {
         create: [
-          {nameEn: "Mandarin", nameAr: "يوسفي", note: "TOP"},
-          {nameEn: "Jasmine", nameAr: "ياسمين", note: "MIDDLE"},
-          {nameEn: "Clean Musk", nameAr: "مسك نقي", note: "BASE"}
+          {nameEn: "Mandarin", nameAr: "يوسفي", category: "Citrus & Fresh", note: "TOP"},
+          {nameEn: "Jasmine", nameAr: "ياسمين", category: "Herbal & Floral", note: "MIDDLE"},
+          {nameEn: "Clean Musk", nameAr: "مسك نقي", category: "Base & Accent Notes", note: "BASE"}
         ]
       },
       images: {

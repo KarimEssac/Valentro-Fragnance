@@ -1,4 +1,4 @@
-import {OrderStatus} from "@prisma/client";
+import type {OrderStatus} from "@prisma/client";
 
 import AdminOrdersClient from "@/components/admin/AdminOrdersClient";
 import type {AdminOrderRow} from "@/components/admin/AdminOrdersClient";
@@ -19,8 +19,7 @@ function shortOrderId(id: string) {
 export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
   const {locale} = await params;
 
-  const [orders, total, pending, processing, shipped, delivered] =
-    await Promise.all([
+  const [orders, statusCounts] = await Promise.all([
       prisma.order.findMany({
         orderBy: {createdAt: "desc"},
         include: {
@@ -34,6 +33,7 @@ export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
             select: {
               fragranceNameEn: true,
               fragranceNameAr: true,
+              collectionId: true,
               sizeML: true,
               quantity: true,
               unitPrice: true,
@@ -42,12 +42,26 @@ export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
           }
         }
       }),
-      prisma.order.count(),
-      prisma.order.count({where: {status: "PENDING"}}),
-      prisma.order.count({where: {status: {in: activeProcessingStatuses}}}),
-      prisma.order.count({where: {status: "SHIPPED"}}),
-      prisma.order.count({where: {status: "DELIVERED"}})
+      prisma.order.groupBy({
+        by: ["status"],
+        _count: {_all: true}
+      })
     ]);
+
+  const countsByStatus = new Map(
+    statusCounts.map((entry) => [entry.status, entry._count._all])
+  );
+  const total = statusCounts.reduce(
+    (sum, entry) => sum + entry._count._all,
+    0
+  );
+  const pending = countsByStatus.get("PENDING") ?? 0;
+  const processing = activeProcessingStatuses.reduce(
+    (sum, status) => sum + (countsByStatus.get(status) ?? 0),
+    0
+  );
+  const shipped = countsByStatus.get("SHIPPED") ?? 0;
+  const delivered = countsByStatus.get("DELIVERED") ?? 0;
 
   const rows: AdminOrderRow[] = orders.map((order) => {
     const itemCount = order.items.reduce(
@@ -77,6 +91,7 @@ export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
       items: order.items.map((item) => ({
         fragranceName:
           locale === "ar" ? item.fragranceNameAr : item.fragranceNameEn,
+        collectionId: item.collectionId,
         sizeML: item.sizeML,
         quantity: item.quantity,
         unitPrice: item.unitPrice.toString(),

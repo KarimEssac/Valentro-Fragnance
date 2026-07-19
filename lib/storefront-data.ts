@@ -3,17 +3,18 @@ import "server-only";
 import {Prisma} from "@prisma/client";
 import {unstable_cache} from "next/cache";
 
+import {
+  STOREFRONT_ANNOUNCEMENTS_TAG,
+  STOREFRONT_COLLECTIONS_TAG,
+  STOREFRONT_FRAGRANCES_TAG,
+  STOREFRONT_TESTIMONIALS_TAG
+} from "@/lib/cache-tags";
 import {prisma} from "@/lib/prisma";
 import {
   calculateProductPrice,
   resolveActiveProductDiscount
 } from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
-
-export const STOREFRONT_FRAGRANCES_TAG = "storefront-fragrances";
-export const STOREFRONT_COLLECTIONS_TAG = "storefront-collections";
-export const STOREFRONT_TESTIMONIALS_TAG = "storefront-testimonials";
-export const STOREFRONT_ANNOUNCEMENTS_TAG = "storefront-announcements";
 
 export type StorefrontFragrance = {
   id: string;
@@ -25,12 +26,11 @@ export type StorefrontFragrance = {
   gender: string;
   scentProfile: string;
   avoidIf: string[];
-  bestFor: string[];
   seasons: string[];
   sillage: string;
   isFeatured: boolean;
   position: number;
-  ingredients: {nameEn: string; nameAr: string}[];
+  ingredients: {nameEn: string; nameAr: string; category: string}[];
   primaryImage: {
     url: string;
     altEn: string;
@@ -85,6 +85,7 @@ export type StorefrontFragranceDetail = {
     id: string;
     nameEn: string;
     nameAr: string;
+    category: string;
     note: string;
   }[];
   reviews: {
@@ -187,7 +188,6 @@ const getCachedFragrances = unstable_cache(
         gender: true,
         scentProfile: true,
         avoidIf: true,
-        bestFor: true,
         seasons: true,
         sillage: true,
         isFeatured: true,
@@ -208,7 +208,7 @@ const getCachedFragrances = unstable_cache(
         },
         ingredients: {
           orderBy: [{note: "asc"}, {nameEn: "asc"}],
-          select: {nameEn: true, nameAr: true}
+          select: {nameEn: true, nameAr: true, category: true}
         }
       }
     });
@@ -247,7 +247,6 @@ const getCachedFragrances = unstable_cache(
         gender: fragrance.gender,
         scentProfile: fragrance.scentProfile,
         avoidIf: fragrance.avoidIf,
-        bestFor: fragrance.bestFor,
         seasons: fragrance.seasons,
         sillage: fragrance.sillage,
         isFeatured: fragrance.isFeatured,
@@ -267,7 +266,7 @@ const getCachedFragrances = unstable_cache(
       };
     });
   },
-  ["storefront-fragrances-v1"],
+  ["storefront-fragrances-v2"],
   {revalidate: 60, tags: [STOREFRONT_FRAGRANCES_TAG]}
 );
 
@@ -378,7 +377,7 @@ const getCachedFragranceDetail = unstable_cache(
       })
     };
   },
-  ["storefront-fragrance-detail-v1"],
+  ["storefront-fragrance-detail-v2"],
   {revalidate: 60, tags: [STOREFRONT_FRAGRANCES_TAG]}
 );
 

@@ -261,7 +261,7 @@ export default async function OrderTrackingPage({
                           : item.fragranceNameEn}
                       </p>
                       <p className="mt-1 text-xs text-on-surface/70">
-                        {item.sizeML}ml x {item.quantity}
+                        {item.collectionId ? "Collection" : `${item.sizeML}ml`} x {item.quantity}
                       </p>
                     </div>
                     <p className="shrink-0 text-sm text-parchment">

@@ -1,9 +1,9 @@
-import {NextResponse} from "next/server";
+import {after, NextResponse} from "next/server";
+import type {NextRequest} from "next/server";
 import {OrderStatus} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
+import {sendOrderShippedEmail} from "@/lib/order-email";
 import {prisma} from "@/lib/prisma";
 
 type AdminOrderRouteProps = {
@@ -14,10 +14,8 @@ type AdminOrderRouteProps = {
 
 const validStatuses = new Set<string>(Object.values(OrderStatus));
 
-export async function PATCH(request: Request, {params}: AdminOrderRouteProps) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user?.role !== "ADMIN") {
+export async function PATCH(request: NextRequest, {params}: AdminOrderRouteProps) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -30,6 +28,15 @@ export async function PATCH(request: Request, {params}: AdminOrderRouteProps) {
   }
 
   try {
+    const previousOrder = await prisma.order.findUnique({
+      where: {id},
+      select: {status: true}
+    });
+
+    if (!previousOrder) {
+      return NextResponse.json({message: "Order not found"}, {status: 404});
+    }
+
     const order = await prisma.order.update({
       where: {id},
       data: {status: status as OrderStatus},
@@ -38,6 +45,19 @@ export async function PATCH(request: Request, {params}: AdminOrderRouteProps) {
         status: true
       }
     });
+
+    if (status === "SHIPPED" && previousOrder.status !== "SHIPPED") {
+      after(async () => {
+        try {
+          await sendOrderShippedEmail(order.id);
+        } catch (error) {
+          console.error(
+            "Order status was updated, but the shipping email could not be prepared:",
+            error instanceof Error ? error.message : "Unknown email error"
+          );
+        }
+      });
+    }
 
     return NextResponse.json({
       message: "Order status updated",

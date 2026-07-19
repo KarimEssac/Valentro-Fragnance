@@ -416,6 +416,11 @@ export default function SideCart({open, onClose}: SideCartProps) {
           {items.length > 0 ? (
             <div className="space-y-7">
               {items.map((item) => {
+                const isCollection = item.itemType === "collection";
+                const itemHref = isCollection
+                  ? `/${locale}/collections/${item.slug}`
+                  : `/${locale}/fragrances/${item.slug}`;
+                const itemMeta = isCollection ? "Collection" : `${item.sizeML}ml`;
                 const lineTotal = Number(item.price) * item.quantity;
                 const originalLineTotal =
                   Number(item.originalPrice ?? item.price) * item.quantity;
@@ -424,17 +429,22 @@ export default function SideCart({open, onClose}: SideCartProps) {
                   ? productDiscountBadge(item.discount, (amount) =>
                       priceFormatter.format(amount)
                     )
-                  : "Sale";
+                  : isCollection
+                    ? "Bundle offer"
+                    : "Sale";
 
                 return (
                   <article key={item.variantId} className="group flex gap-5">
                     <Link
-                      href={`/${locale}/fragrances/${item.slug}`}
-                      onClick={(event) =>
-                        navigateToFragrance(event, item.slug, item.image, item.name)
+                      href={itemHref}
+                      onClick={
+                        isCollection
+                          ? undefined
+                          : (event) =>
+                              navigateToFragrance(event, item.slug, item.image, item.name)
                       }
-                      data-product-image-transition-link
-                      data-product-transition-source
+                      data-product-image-transition-link={isCollection ? undefined : true}
+                      data-product-transition-source={isCollection ? undefined : true}
                       className="relative h-32 w-24 shrink-0 overflow-hidden bg-surface-mid"
                     >
                       {item.image ? (
@@ -452,9 +462,12 @@ export default function SideCart({open, onClose}: SideCartProps) {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <Link
-                            href={`/${locale}/fragrances/${item.slug}`}
-                            onClick={(event) =>
-                              navigateToFragrance(event, item.slug, item.image, item.name)
+                            href={itemHref}
+                            onClick={
+                              isCollection
+                                ? undefined
+                                : (event) =>
+                                    navigateToFragrance(event, item.slug, item.image, item.name)
                             }
                             data-product-image-transition-link
                             className="font-serif text-xl leading-tight transition-colors hover:text-gold"
@@ -462,7 +475,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
                             {item.name}
                           </Link>
                           <p className="label-caps mt-1 text-on-surface/65">
-                            Eau de Parfum · {item.sizeML}ml
+                            {itemMeta}
                           </p>
                           {hasProductDiscount ? (
                             <span className="label-caps mt-2 inline-flex border border-gold/55 bg-gold/10 px-2 py-1 text-[9px] text-gold">

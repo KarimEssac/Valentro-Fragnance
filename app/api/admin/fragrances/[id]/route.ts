@@ -1,15 +1,25 @@
-import {NextResponse} from "next/server";
+import {after, NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {revalidateTag} from "next/cache";
 import {FragranceNote, Gender, ScentProfile, Sillage} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {deleteCloudinaryImageByUrl} from "@/lib/cloudinary";
+import {
+  avoidanceVerbs,
+  parseFinderRule,
+  type FinderRuleVerb
+} from "@/lib/finder-rules";
 import {uploadFragranceImages} from "@/lib/fragrance-images";
+import {
+  inferIngredientCategory,
+  normalizeIngredientCategory
+} from "@/lib/ingredient-categories";
 import {prisma} from "@/lib/prisma";
-import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/storefront-data";
+import {
+  sendRestockNotifications
+} from "@/lib/restock-notifications";
+import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -40,6 +50,11 @@ type ImageInput = {
   delete: boolean;
 };
 
+type IngredientInput = {
+  name: string;
+  category: string;
+};
+
 function stringValue(data: Record<string, unknown>, key: string, label: string, max = 240) {
   const value = typeof data[key] === "string" ? data[key].trim() : "";
   if (!value) throw new Error(`${label} is required`);
@@ -58,12 +73,70 @@ function optionalString(
   return value || fallback;
 }
 
-function stringArray(data: Record<string, unknown>, key: string) {
+function stringArray(data: Record<string, unknown>, key: string, label = key) {
   const value = data[key];
   if (!Array.isArray(value)) return [];
+  if (value.length > 30) throw new Error(`Too many ${label}`);
+
+  const seen = new Set<string>();
   return value
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
+    .map((item) => (typeof item === "string" ? item.trim().replace(/\s+/g, " ") : ""))
+    .filter(Boolean)
+    .filter((item) => {
+      if (item.length > 120) throw new Error(`${label} entry is too long`);
+      const normalized = item.toLocaleLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function finderRuleArray(
+  data: Record<string, unknown>,
+  key: string,
+  label: string,
+  allowedVerbs: readonly FinderRuleVerb[]
+) {
+  const entries = stringArray(data, key, label);
+  if (entries.some((entry) => {
+    const rule = parseFinderRule(entry);
+    return !rule || !allowedVerbs.includes(rule.verb);
+  })) {
+    throw new Error(`${label} must use a customer verb and a saved ingredient`);
+  }
+  return entries;
+}
+
+function ingredientInputs(data: Record<string, unknown>): IngredientInput[] {
+  const value = data.ingredients;
+  if (!Array.isArray(value)) return [];
+  if (value.length > 30) throw new Error("Too many ingredients");
+
+  const seen = new Set<string>();
+  return value.flatMap((entry) => {
+    if (typeof entry === "string") {
+      const name = entry.trim().replace(/\s+/g, " ");
+      if (!name || name.length > 120) throw new Error("Ingredient name is invalid");
+      const key = name.toLocaleLowerCase();
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{name, category: inferIngredientCategory(name)}];
+    }
+    if (!entry || typeof entry !== "object") {
+      throw new Error("Ingredient data is invalid");
+    }
+
+    const record = entry as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim().replace(/\s+/g, " ") : "";
+    const category = normalizeIngredientCategory(record.category);
+    if (!name || name.length > 120) throw new Error("Ingredient name is invalid");
+    if (!category) throw new Error(`Choose a category for ${name}`);
+
+    const key = name.toLocaleLowerCase();
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{name, category}];
+  });
 }
 
 function intValue(data: Record<string, unknown>, key: string, label: string, min = 0) {
@@ -204,9 +277,7 @@ async function requestData(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user.role !== "ADMIN") {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -242,6 +313,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const selectedSeasons = stringArray(data, "seasons").filter((season) =>
       seasonValues.has(season)
     );
+    const ingredients = ingredientInputs(data);
+    const increasedVariantIds = new Set<string>();
 
     if (!genderValues.has(gender)) throw new Error("Gender is invalid");
     if (!scentValues.has(scentProfile)) throw new Error("Scent profile is invalid");
@@ -256,8 +329,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         where: {id},
         select: {
           id: true,
+          position: true,
           variants: {
-            select: {id: true}
+            select: {id: true, stock: true}
           },
           images: {
             select: {id: true, url: true}
@@ -268,6 +342,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       if (!existing) throw new Error("Fragrance was not found");
 
       const existingVariantIds = new Set(existing.variants.map((variant) => variant.id));
+      const existingVariantStock = new Map(
+        existing.variants.map((variant) => [variant.id, variant.stock])
+      );
       const keptVariantIds = variants
         .map((variant) => variant.id)
         .filter((variantId): variantId is string => Boolean(variantId));
@@ -285,15 +362,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           descriptionAr,
           gender,
           scentProfile,
-          avoidIf: stringArray(data, "avoidIf"),
+          avoidIf: finderRuleArray(data, "avoidIf", "avoid-if rules", avoidanceVerbs),
+          bestFor: [],
           seasons: selectedSeasons.includes("ALL_YEAR") ? ["ALL_YEAR"] : selectedSeasons,
           sillage,
           longevity: intValue(data, "longevity", "Longevity", 1),
           ingredients: {
             deleteMany: {},
-            create: stringArray(data, "ingredients").map((ingredient, index, list) => ({
-              nameEn: ingredient,
-              nameAr: ingredient,
+            create: ingredients.map((ingredient, index, list) => ({
+              nameEn: ingredient.name,
+              nameAr: ingredient.name,
+              category: ingredient.category,
               note:
                 index === 0
                   ? FragranceNote.TOP
@@ -307,6 +386,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
       for (const variant of variants) {
         if (variant.id && existingVariantIds.has(variant.id)) {
+          const previousStock = existingVariantStock.get(variant.id) ?? 0;
+          if (variant.stock > previousStock && variant.stock > 0) {
+            increasedVariantIds.add(variant.id);
+          }
+
           await tx.fragranceVariant.update({
             where: {id: variant.id},
             data: {
@@ -414,21 +498,37 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         });
       }
 
-      const orderedProducts = await tx.fragrance.findMany({
-        where: {id: {not: id}},
-        orderBy: [{position: "asc"}, {createdAt: "asc"}],
-        select: {id: true}
+      const maximumPosition = await tx.fragrance.aggregate({
+        _max: {position: true}
       });
-      const orderedIds = orderedProducts.map((product) => product.id);
-      const targetIndex = position ? Math.min(position - 1, orderedIds.length) : orderedIds.length;
-      orderedIds.splice(targetIndex, 0, id);
+      const lastPosition = Math.max(maximumPosition._max.position ?? 1, 1);
+      const currentPosition = Math.max(existing.position, 1);
+      const targetPosition = position
+        ? Math.min(position, lastPosition)
+        : lastPosition;
 
-      for (const [index, fragranceId] of orderedIds.entries()) {
-        await tx.fragrance.update({
-          where: {id: fragranceId},
-          data: {position: index + 1}
+      if (targetPosition < currentPosition) {
+        await tx.fragrance.updateMany({
+          where: {
+            id: {not: id},
+            position: {gte: targetPosition, lt: currentPosition}
+          },
+          data: {position: {increment: 1}}
+        });
+      } else if (targetPosition > currentPosition) {
+        await tx.fragrance.updateMany({
+          where: {
+            id: {not: id},
+            position: {gt: currentPosition, lte: targetPosition}
+          },
+          data: {position: {decrement: 1}}
         });
       }
+
+      await tx.fragrance.update({
+        where: {id},
+        data: {position: targetPosition}
+      });
 
       return tx.fragrance.findUnique({
         where: {id},
@@ -436,12 +536,34 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
     });
 
-    await Promise.allSettled(
-      deletedImageUrls.map((url) => deleteCloudinaryImageByUrl(url))
-    );
+    const restockedVariantIds = [...increasedVariantIds];
+    if (deletedImageUrls.length > 0 || restockedVariantIds.length > 0) {
+      after(async () => {
+        await Promise.allSettled(
+          deletedImageUrls.map((url) => deleteCloudinaryImageByUrl(url))
+        );
+
+        if (restockedVariantIds.length > 0) {
+          try {
+            await sendRestockNotifications(restockedVariantIds);
+          } catch (notificationError) {
+            console.error(
+              "Unable to process restock notifications:",
+              notificationError
+            );
+          }
+        }
+      });
+    }
 
     revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
-    return NextResponse.json({message: "Product updated", id: saved?.id});
+    return NextResponse.json({
+      message:
+        restockedVariantIds.length > 0
+          ? "Product updated. Restock notifications are being processed."
+          : "Product updated.",
+      id: saved?.id
+    });
   } catch (error) {
     return NextResponse.json(
       {message: error instanceof Error ? error.message : "Unable to update product"},
@@ -451,18 +573,29 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  void request;
-
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user.role !== "ADMIN") {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
   const {id} = await context.params;
 
   try {
-    await prisma.fragrance.delete({where: {id}});
+    const fragrance = await prisma.fragrance.findUnique({
+      where: {id},
+      select: {position: true}
+    });
+
+    if (!fragrance) {
+      return NextResponse.json({message: "Product not found"}, {status: 404});
+    }
+
+    await prisma.$transaction([
+      prisma.fragrance.delete({where: {id}}),
+      prisma.fragrance.updateMany({
+        where: {position: {gt: fragrance.position}},
+        data: {position: {decrement: 1}}
+      })
+    ]);
     revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
     return NextResponse.json({message: "Product deleted"});
   } catch {

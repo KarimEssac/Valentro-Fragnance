@@ -1,11 +1,9 @@
 import {notFound, redirect} from "next/navigation";
 import {getTranslations} from "next-intl/server";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 import type {ReactNode} from "react";
 
 import AdminLayoutClient from "@/components/admin/AdminLayoutClient";
-import {authOptions} from "@/lib/auth";
+import {getSessionIdentity} from "@/lib/admin-session";
 
 type AdminLayoutProps = {
   children: ReactNode;
@@ -19,13 +17,13 @@ export default async function AdminLayout({
   params
 }: AdminLayoutProps) {
   const {locale} = await params;
-  const session = (await getServerSession(authOptions)) as Session | null;
+  const admin = await getSessionIdentity();
 
-  if (!session?.user?.id) {
+  if (!admin?.id) {
     redirect(`/${locale}/login?callbackUrl=/${locale}/admin`);
   }
 
-  if (session.user.role !== "ADMIN") {
+  if (admin.role !== "ADMIN") {
     notFound();
   }
 
@@ -33,18 +31,18 @@ export default async function AdminLayout({
   const links = [
     {href: `/${locale}/admin`, label: t("dashboard"), icon: "dashboard"},
     {href: `/${locale}/admin/orders`, label: t("orders"), icon: "orders"},
-    {href: `/${locale}/admin/fragrances`, label: t("fragrances"), icon: "fragrances"},
+    {href: `/${locale}/admin/inventory`, label: t("fragrances"), icon: "fragrances"},
     {href: `/${locale}/admin/collections`, label: t("collections"), icon: "collections"},
     {href: `/${locale}/admin/coupons`, label: t("coupons"), icon: "coupons"},
     {href: `/${locale}/admin/announcements`, label: t("announcements"), icon: "announcements"},
-    {href: `/${locale}/admin/community`, label: t("community"), icon: "community"}
+    {href: `/${locale}/admin/community`, label: t("community"), icon: "community"},
+    {href: `/${locale}/admin/email-templates`, label: "Email Templates", icon: "email"}
   ];
 
   return (
     <AdminLayoutClient
       locale={locale}
       links={links}
-      adminName={session.user.name ?? "Admin"}
     >
       {children}
     </AdminLayoutClient>

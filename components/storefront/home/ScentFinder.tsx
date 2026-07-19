@@ -2,7 +2,24 @@
 
 import {useLocale} from "next-intl";
 import Image from "next/image";
+import {useRouter} from "next/navigation";
+import type {MouseEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
+
+import {startProductImageTransition} from "@/lib/product-image-transition";
+import {
+  buildFinderAliasMap,
+  normalizeFinderTerm,
+  scoreFragranceMatch
+} from "@/lib/scent-finder-logic";
+import {
+  ingredientCategoryFor,
+  ingredientCategoryIcon,
+  ingredientCategoryLabel,
+  ingredientCategorySortOrder,
+  ingredientFinderIcon,
+  ingredientFinderImage
+} from "@/lib/ingredient-categories";
 
 type FinderFragrance = {
   id: string;
@@ -14,12 +31,13 @@ type FinderFragrance = {
   gender: string;
   scentProfile: string;
   avoidIf: string[];
-  bestFor: string[];
   seasons: string[];
   sillage: string;
+  isFeatured: boolean;
   ingredients: {
     nameEn: string;
     nameAr: string;
+    category: string;
   }[];
   primaryImage: {
     url: string;
@@ -39,6 +57,20 @@ type ScoredFragrance = FinderFragrance & {
   displayMatch: number;
 };
 
+type FinderIngredient = {
+  key: string;
+  name: string;
+  category: string;
+  frequency: number;
+  profileMatches: number;
+  featuredFrequency: number;
+};
+
+type IngredientCategoryGroup = {
+  category: string;
+  ingredients: FinderIngredient[];
+};
+
 const audienceOptions = [
   {value: "HER", label: "For Her", icon: "♀"},
   {value: "HIM", label: "For Him", icon: "♂"},
@@ -46,30 +78,20 @@ const audienceOptions = [
 ];
 
 const seasonOptions = [
-  {value: "SPRING", label: "Spring"},
-  {value: "SUMMER", label: "Summer"},
-  {value: "FALL", label: "Fall"},
-  {value: "WINTER", label: "Winter"},
-  {value: "ALL_YEAR", label: "All Year"}
+  {value: "SPRING", label: "Spring", icon: "✿"},
+  {value: "SUMMER", label: "Summer", icon: "☀"},
+  {value: "FALL", label: "Fall", icon: "◒"},
+  {value: "WINTER", label: "Winter", icon: "❄"},
+  {value: "ALL_YEAR", label: "All Year", icon: "∞"}
 ];
 
 const presenceOptions = [
-  {value: "MODERATE", label: "Moderate"},
-  {value: "STRONG", label: "Strong"},
-  {value: "ENORMOUS", label: "Enormous"}
-];
-
-const fallbackIngredients = [
-  "Vanilla",
-  "Amber",
-  "Oud",
-  "Musk",
-  "Jasmine",
-  "Citrus",
-  "Bergamot",
-  "Saffron",
-  "Woods",
-  "Powder"
+  {value: "SOFT_LANDING", label: "Soft Landing", icon: "☁"},
+  {value: "MODERATE", label: "Moderate", icon: "◐"},
+  {value: "NOTICEABLE", label: "Noticeable", icon: "✦"},
+  {value: "STRONG", label: "Strong", icon: "✶"},
+  {value: "ENORMOUS", label: "Enormous", icon: "✹"},
+  {value: "FILLS_THE_ROOM", label: "Fills the Room", icon: "✺"}
 ];
 
 const steps: FinderStep[] = [
@@ -80,14 +102,6 @@ const steps: FinderStep[] = [
   "presence",
   "results"
 ];
-
-function normalize(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim();
-}
 
 function formatEnum(value: string) {
   return value
@@ -103,99 +117,9 @@ function toggleValue(values: string[], value: string) {
     : [...values, value];
 }
 
-function presenceMatches(selectedPresence: string, sillage: string) {
-  if (!selectedPresence) return 0;
-
-  const groups: Record<string, string[]> = {
-    MODERATE: ["SOFT_LANDING", "MODERATE", "NOTICEABLE"],
-    STRONG: ["NOTICEABLE", "STRONG"],
-    ENORMOUS: ["ENORMOUS", "FILLS_THE_ROOM", "STRONG"]
-  };
-
-  return groups[selectedPresence]?.includes(sillage) ? 18 : 0;
-}
-
-function seasonMatches(selectedSeason: string, fragrance: FinderFragrance) {
-  if (!selectedSeason) return 0;
-  if (selectedSeason === "ALL_YEAR") {
-    return fragrance.seasons.includes("ALL_YEAR") ? 18 : 8;
-  }
-  if (
-    fragrance.seasons.includes(selectedSeason) ||
-    fragrance.seasons.includes("ALL_YEAR")
-  ) {
-    return 18;
-  }
-
-  const legacyBestFor = fragrance.bestFor.map(normalize);
-  return legacyBestFor.some((item) => item.includes(normalize(selectedSeason)))
-    ? 12
-    : 0;
-}
-
-function scoreFragrance({
-  fragrance,
-  audience,
-  loved,
-  avoided,
-  season,
-  presence
-}: {
-  fragrance: FinderFragrance;
-  audience: string;
-  loved: string[];
-  avoided: string[];
-  season: string;
-  presence: string;
-}) {
-  const ingredientNames = fragrance.ingredients.map((ingredient) =>
-    normalize(ingredient.nameEn)
-  );
-  const searchableNotes = [
-    ...ingredientNames,
-    normalize(fragrance.scentProfile),
-    ...fragrance.bestFor.map(normalize),
-    ...fragrance.avoidIf.map(normalize)
-  ];
-
-  const hasAvoidedNote = avoided.some((note) => {
-    const normalizedNote = normalize(note);
-    return searchableNotes.some(
-      (candidate) =>
-        candidate.includes(normalizedNote) || normalizedNote.includes(candidate)
-    );
-  });
-
-  if (hasAvoidedNote) return 0;
-
-  let score = 0;
-
-  if (audience) {
-    if (fragrance.gender === audience) score += 24;
-    else if (fragrance.gender === "UNISEX" || audience === "UNISEX") score += 14;
-  }
-
-  if (loved.length > 0) {
-    const lovedMatches = loved.filter((note) => {
-      const normalizedNote = normalize(note);
-      return searchableNotes.some(
-        (candidate) =>
-          candidate.includes(normalizedNote) || normalizedNote.includes(candidate)
-      );
-    }).length;
-    score += Math.min(32, lovedMatches * 16);
-  }
-
-  score += seasonMatches(season, fragrance);
-  score += presenceMatches(presence, fragrance.sillage);
-
-  if (loved.length === 0 && !season && !presence) score += 10;
-
-  return Math.min(100, Math.max(0, score));
-}
-
 export default function ScentFinder() {
   const locale = useLocale();
+  const router = useRouter();
   const isArabic = locale === "ar";
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<FinderStep>("audience");
@@ -206,60 +130,140 @@ export default function ScentFinder() {
   const [audience, setAudience] = useState("");
   const [loved, setLoved] = useState<string[]>([]);
   const [avoided, setAvoided] = useState<string[]>([]);
-  const [season, setSeason] = useState("");
-  const [presence, setPresence] = useState("");
+  const [seasons, setSeasons] = useState<string[]>([]);
+  const [presences, setPresences] = useState<string[]>([]);
+  const [isMatching, setIsMatching] = useState(false);
+  const [matchingStage, setMatchingStage] = useState(0);
 
   const currentStepIndex = steps.indexOf(step);
-  const progress = ((currentStepIndex + 1) / steps.length) * 100;
+  const progress = isMatching
+    ? 100
+    : ((currentStepIndex + 1) / steps.length) * 100;
   const canContinue =
     step === "audience"
       ? Boolean(audience)
       : step === "love"
         ? loved.length > 0
         : step === "season"
-          ? Boolean(season)
+          ? seasons.length > 0
           : step === "presence"
-            ? Boolean(presence)
+            ? presences.length > 0
             : true;
 
-  const ingredientOptions = useMemo(() => {
-    const names = fragrances.flatMap((fragrance) =>
-      fragrance.ingredients.map((ingredient) =>
-        isArabic ? ingredient.nameAr : ingredient.nameEn
-      )
-    );
-    const scentProfiles = fragrances.map((fragrance) =>
-      formatEnum(fragrance.scentProfile)
-    );
+  const ingredientCatalog = useMemo<FinderIngredient[]>(() => {
+    const byIngredient = new Map<string, FinderIngredient>();
 
-    return Array.from(new Set([...names, ...scentProfiles, ...fallbackIngredients]))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b))
-      .slice(0, 18);
+    fragrances.forEach((fragrance) => {
+      const profile = normalizeFinderTerm(formatEnum(fragrance.scentProfile));
+      fragrance.ingredients.forEach((ingredient) => {
+        const key = normalizeFinderTerm(ingredient.nameEn);
+        if (!key) return;
+
+        const existing = byIngredient.get(key);
+        const name = isArabic ? ingredient.nameAr || ingredient.nameEn : ingredient.nameEn;
+        const category = ingredientCategoryFor(ingredient.nameEn, ingredient.category);
+        const profileMatches = key.includes(profile) ? 1 : 0;
+
+        if (existing) {
+          existing.frequency += 1;
+          existing.profileMatches += profileMatches;
+          existing.featuredFrequency += fragrance.isFeatured ? 1 : 0;
+          return;
+        }
+
+        byIngredient.set(key, {
+          key,
+          name,
+          category,
+          frequency: 1,
+          profileMatches,
+          featuredFrequency: fragrance.isFeatured ? 1 : 0
+        });
+      });
+    });
+
+    return [...byIngredient.values()].sort((first, second) =>
+      first.name.localeCompare(second.name)
+    );
   }, [fragrances, isArabic]);
+
+  const quickPicks = useMemo(() => {
+    const ranked = [...ingredientCatalog].sort(
+      (first, second) =>
+        second.frequency - first.frequency ||
+        second.profileMatches - first.profileMatches ||
+        second.featuredFrequency - first.featuredFrequency ||
+        first.name.localeCompare(second.name)
+    );
+    const picked: FinderIngredient[] = [];
+
+    for (const category of [...new Set(ranked.map((ingredient) => ingredient.category))].sort(
+      (first, second) => ingredientCategorySortOrder(first) - ingredientCategorySortOrder(second)
+    )) {
+      const ingredient = ranked.find((candidate) => candidate.category === category);
+      if (ingredient) picked.push(ingredient);
+      if (picked.length === 6) return picked;
+    }
+
+    ranked.forEach((ingredient) => {
+      if (picked.length >= 6 || picked.some((pick) => pick.key === ingredient.key)) return;
+      picked.push(ingredient);
+    });
+
+    return picked;
+  }, [ingredientCatalog]);
+
+  const ingredientCategories = useMemo<IngredientCategoryGroup[]>(() => {
+    const groups = new Map<string, FinderIngredient[]>();
+
+    ingredientCatalog.forEach((ingredient) => {
+      const current = groups.get(ingredient.category) ?? [];
+      current.push(ingredient);
+      groups.set(ingredient.category, current);
+    });
+
+    return [...groups.entries()]
+      .map(([category, ingredients]) => ({
+        category,
+        ingredients: ingredients.sort((first, second) => first.name.localeCompare(second.name))
+      }))
+      .sort(
+        (first, second) =>
+          ingredientCategorySortOrder(first.category) - ingredientCategorySortOrder(second.category) ||
+          first.category.localeCompare(second.category)
+      );
+  }, [ingredientCatalog]);
+
+  const aliases = useMemo(
+    () => buildFinderAliasMap(fragrances),
+    [fragrances]
+  );
 
   const results = useMemo<ScoredFragrance[]>(() => {
     const scored = fragrances
       .map((fragrance) => ({
         ...fragrance,
-        match: scoreFragrance({
+        match: scoreFragranceMatch(
           fragrance,
-          audience,
-          loved,
-          avoided,
-          season,
-          presence
-        }),
+          {
+            audience,
+            loved,
+            avoided,
+            seasons,
+            presences
+          },
+          aliases
+        ),
         displayMatch: 0
       }))
       .filter((fragrance) => fragrance.match > 0)
       .sort((a, b) => b.match - a.match);
 
-    return scored.map((fragrance, index) => ({
+    return scored.map((fragrance) => ({
       ...fragrance,
-      displayMatch: index === 0 ? Math.max(70, fragrance.match) : fragrance.match
+      displayMatch: fragrance.match
     }));
-  }, [audience, avoided, fragrances, loved, presence, season]);
+  }, [aliases, audience, avoided, fragrances, loved, presences, seasons]);
 
   useEffect(() => {
     if (!isOpen || status !== "loading") return;
@@ -301,36 +305,107 @@ export default function ScentFinder() {
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isMatching) return;
+
+    const secondStage = window.setTimeout(() => setMatchingStage(1), 2_000);
+    const finalStage = window.setTimeout(() => setMatchingStage(2), 4_000);
+    const complete = window.setTimeout(() => {
+      setIsMatching(false);
+      setStep("results");
+    }, 6_000);
+
+    return () => {
+      window.clearTimeout(secondStage);
+      window.clearTimeout(finalStage);
+      window.clearTimeout(complete);
+    };
+  }, [isMatching]);
+
   function openFinder() {
     if (status === "idle") setStatus("loading");
     setIsOpen(true);
   }
 
   function closeFinder() {
+    setIsMatching(false);
     setIsOpen(false);
   }
 
   function nextStep() {
     if (step === "results") return;
+    if (step === "presence") {
+      setMatchingStage(0);
+      setIsMatching(true);
+      return;
+    }
     const next = steps[currentStepIndex + 1] ?? "results";
     setStep(next);
   }
 
+  function skipCurrentStep() {
+    if (step === "audience") setAudience("");
+    if (step === "love") setLoved([]);
+    if (step === "avoid") setAvoided([]);
+    if (step === "season") setSeasons([]);
+    if (step === "presence") setPresences([]);
+    nextStep();
+  }
+
   function previousStep() {
+    if (isMatching) {
+      setIsMatching(false);
+      return;
+    }
     if (currentStepIndex <= 0) return;
     setStep(steps[currentStepIndex - 1]);
   }
 
   function resetFinder() {
+    setIsMatching(false);
     setStep("audience");
     setAudience("");
     setLoved([]);
     setAvoided([]);
-    setSeason("");
-    setPresence("");
+    setSeasons([]);
+    setPresences([]);
   }
 
-  const selectedLoved = new Set(loved.map(normalize));
+  const selectedLoved = new Set(loved.map(normalizeFinderTerm));
+
+  function handleResultClick(
+    event: MouseEvent<HTMLAnchorElement>,
+    fragrance: ScoredFragrance,
+    imageAlt: string
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      !fragrance.primaryImage
+    ) {
+      return;
+    }
+
+    const source = event.currentTarget.querySelector<HTMLElement>(
+      "[data-product-transition-source]"
+    );
+    if (!source) return;
+
+    const href = `/${locale}/fragrances/${fragrance.slug}`;
+    const didStart = startProductImageTransition({
+      slug: fragrance.slug,
+      imageUrl: fragrance.primaryImage.url,
+      imageAlt,
+      source,
+      navigate: () => router.push(href)
+    });
+
+    if (didStart) event.preventDefault();
+  }
 
   return (
     <>
@@ -374,7 +449,9 @@ export default function ScentFinder() {
 
             <div className="flex items-center justify-between border-b border-[#7A6A4F]/30 px-5 py-4 sm:px-6">
               <div className="label-caps text-[#7A6A4F]">
-                {step === "results"
+                {isMatching
+                  ? "Matching"
+                  : step === "results"
                   ? `${results.length} Matches`
                   : `Step ${currentStepIndex + 1} of ${steps.length - 1}`}
               </div>
@@ -412,8 +489,16 @@ export default function ScentFinder() {
                 </div>
               ) : null}
 
-              {status === "ready" && step === "audience" ? (
-                <Question key="audience" title="For whom is this selection?">
+              {status === "ready" && isMatching ? (
+                <ScentMatchingStage stage={matchingStage} />
+              ) : null}
+
+              {status === "ready" && !isMatching && step === "audience" ? (
+                <Question
+                  key="audience"
+                  title="For whom is this selection?"
+                  onSkip={skipCurrentStep}
+                >
                   <div className="grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
                     {audienceOptions.map((option, index) => (
                       <OptionButton
@@ -432,27 +517,46 @@ export default function ScentFinder() {
                 </Question>
               ) : null}
 
-              {status === "ready" && step === "love" ? (
-                <Question key="love" title="What do they love?">
-                  <PillGrid
-                    options={ingredientOptions}
+              {status === "ready" && !isMatching && step === "love" ? (
+                <Question
+                  key="love"
+                  title="What do they love?"
+                  subtitle="Pick notes they adore."
+                  onSkip={skipCurrentStep}
+                >
+                  <NotePicker
+                    quickPicks={quickPicks}
+                    categories={ingredientCategories}
+                    isArabic={isArabic}
                     selected={loved}
                     onToggle={(value) => {
                       setLoved((values) => toggleValue(values, value));
                       setAvoided((values) =>
-                        values.filter((item) => normalize(item) !== normalize(value))
+                        values.filter(
+                          (item) =>
+                            normalizeFinderTerm(item) !== normalizeFinderTerm(value)
+                        )
                       );
                     }}
                   />
                 </Question>
               ) : null}
 
-              {status === "ready" && step === "avoid" ? (
-                <Question key="avoid" title="What should it avoid?">
-                  <PillGrid
-                    options={ingredientOptions}
+              {status === "ready" && !isMatching && step === "avoid" ? (
+                <Question
+                  key="avoid"
+                  title="What should it avoid?"
+                  subtitle="Choose notes they would rather not wear."
+                  onSkip={skipCurrentStep}
+                >
+                  <NotePicker
+                    quickPicks={quickPicks}
+                    categories={ingredientCategories}
+                    isArabic={isArabic}
                     selected={avoided}
-                    disabled={(value) => selectedLoved.has(normalize(value))}
+                    disabled={(value) =>
+                      selectedLoved.has(normalizeFinderTerm(value))
+                    }
                     onToggle={(value) =>
                       setAvoided((values) => toggleValue(values, value))
                     }
@@ -460,17 +564,27 @@ export default function ScentFinder() {
                 </Question>
               ) : null}
 
-              {status === "ready" && step === "season" ? (
-                <Question key="season" title="When should this fragrance perform best?">
+              {status === "ready" && !isMatching && step === "season" ? (
+                <Question
+                  key="season"
+                  title="When should this fragrance perform best?"
+                  subtitle="Choose one or more moments."
+                  onSkip={skipCurrentStep}
+                >
                   <div className="grid w-full max-w-3xl grid-cols-2 gap-4 sm:grid-cols-5">
                     {seasonOptions.map((option, index) => (
                       <OptionButton
                         key={option.value}
                         delay={index * 45}
-                        active={season === option.value}
-                        onClick={() => setSeason(option.value)}
+                        active={seasons.includes(option.value)}
+                        onClick={() =>
+                          setSeasons((values) => toggleValue(values, option.value))
+                        }
                         compact
                       >
+                        <span className="font-serif text-3xl leading-none text-[#7A6A4F]">
+                          {option.icon}
+                        </span>
                         <span className="label-caps">{option.label}</span>
                       </OptionButton>
                     ))}
@@ -478,16 +592,26 @@ export default function ScentFinder() {
                 </Question>
               ) : null}
 
-              {status === "ready" && step === "presence" ? (
-                <Question key="presence" title="How much presence should it leave behind?">
-                  <div className="grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
+              {status === "ready" && !isMatching && step === "presence" ? (
+                <Question
+                  key="presence"
+                  title="How much presence should it leave behind?"
+                  subtitle="Choose as many as feel right."
+                  onSkip={skipCurrentStep}
+                >
+                  <div className="grid w-full max-w-3xl grid-cols-2 gap-4 sm:grid-cols-3">
                     {presenceOptions.map((option, index) => (
                       <OptionButton
                         key={option.value}
                         delay={index * 55}
-                        active={presence === option.value}
-                        onClick={() => setPresence(option.value)}
+                        active={presences.includes(option.value)}
+                        onClick={() =>
+                          setPresences((values) => toggleValue(values, option.value))
+                        }
                       >
+                        <span className="font-serif text-4xl leading-none text-[#7A6A4F]">
+                          {option.icon}
+                        </span>
                         <span className="label-caps">{option.label}</span>
                       </OptionButton>
                     ))}
@@ -495,7 +619,7 @@ export default function ScentFinder() {
                 </Question>
               ) : null}
 
-              {status === "ready" && step === "results" ? (
+              {status === "ready" && !isMatching && step === "results" ? (
                 <div className="animate-scent-step-in">
                   <div className="mx-auto mb-8 max-w-2xl text-center">
                     <p className="label-caps mb-4 text-[#7A6A4F]">
@@ -523,10 +647,16 @@ export default function ScentFinder() {
                           <a
                             key={fragrance.id}
                             href={`/${locale}/fragrances/${fragrance.slug}`}
+                            onClick={(event) =>
+                              handleResultClick(event, fragrance, imageAlt)
+                            }
                             className="animate-scent-option-in group border border-[#7A6A4F]/35 bg-white/45 p-3 transition-colors hover:border-[#D4AF37]"
                             style={{animationDelay: `${index * 70}ms`}}
                           >
-                            <div className="relative aspect-[4/5] overflow-hidden bg-[#EAE4D8]">
+                            <div
+                              data-product-transition-source
+                              className="relative aspect-[4/5] overflow-hidden bg-[#EAE4D8]"
+                            >
                               <div className="absolute left-3 top-3 z-20 border border-[#D4AF37] bg-[#201B11] px-3 py-2 text-[#F9F6F0]">
                                 <span className="label-caps">
                                   {fragrance.displayMatch}% Match
@@ -582,12 +712,12 @@ export default function ScentFinder() {
                 type="button"
                 onClick={step === "results" ? resetFinder : previousStep}
                 className={`label-caps min-h-11 border border-[#201B11] px-5 transition-colors hover:bg-[#EAE4D8] ${
-                  currentStepIndex === 0 ? "invisible" : ""
+                  currentStepIndex === 0 && !isMatching ? "invisible" : ""
                 }`}
               >
-                {step === "results" ? "Start Over" : "Back"}
+                {step === "results" ? "Start Over" : isMatching ? "Cancel" : "Back"}
               </button>
-              {step !== "results" ? (
+              {!isMatching && step !== "results" ? (
                 <button
                   type="button"
                   onClick={nextStep}
@@ -596,6 +726,8 @@ export default function ScentFinder() {
                 >
                   {step === "presence" ? "Discover" : "Next"}
                 </button>
+              ) : isMatching ? (
+                <span className="label-caps text-[#7A6A4F]">Matching your selection...</span>
               ) : (
                 <a
                   href={`/${locale}/fragrances`}
@@ -612,19 +744,313 @@ export default function ScentFinder() {
   );
 }
 
+function ScentMatchingStage({stage}: {stage: number}) {
+  const messages = [
+    {
+      eyebrow: "Reading your preferences",
+      title: "Gathering the notes they love"
+    },
+    {
+      eyebrow: "Refining the match",
+      title: "Balancing season and presence"
+    },
+    {
+      eyebrow: "Almost there",
+      title: "Finding the closest scent match"
+    }
+  ];
+  const message = messages[stage] ?? messages[0];
+
+  return (
+    <div
+      className="animate-scent-step-in flex min-h-[360px] flex-col items-center justify-center text-center"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="relative mb-10 grid h-32 w-32 place-items-center" aria-hidden="true">
+        <span className="animate-scent-match-ring absolute inset-0 rounded-full border border-[#D4AF37]/55" />
+        <span className="animate-scent-match-ring absolute inset-4 rounded-full border border-[#7A6A4F]/45 [animation-delay:-1.4s]" />
+        <span className="animate-scent-match-pulse grid h-12 w-12 place-items-center rounded-full border border-[#D4AF37] bg-[#D4AF37]/10 font-serif text-2xl text-[#7A6A4F]">
+          V
+        </span>
+      </div>
+      <p className="label-caps mb-4 text-[#7A6A4F]">{message.eyebrow}</p>
+      <h2 className="max-w-2xl font-serif text-[clamp(2rem,5vw,3rem)] leading-tight">
+        {message.title}
+      </h2>
+      <div className="mt-8 flex gap-2" aria-hidden="true">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${
+              index <= stage ? "bg-[#D4AF37]" : "bg-[#7A6A4F]/30"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Question({
   title,
+  subtitle,
+  onSkip,
   children
 }: {
   title: string;
+  subtitle?: string;
+  onSkip?: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div className="animate-scent-step-in flex min-h-[360px] flex-col items-center justify-center text-center">
-      <h2 className="mb-10 max-w-3xl font-serif text-[clamp(2rem,5vw,3rem)] leading-tight">
+      <h2 className="mb-3 max-w-3xl font-serif text-[clamp(2rem,4vw,2.75rem)] leading-tight">
         {title}
       </h2>
+      {subtitle ? (
+        <p className="mb-7 text-sm leading-6 text-[#4B463E]">{subtitle}</p>
+      ) : (
+        <div className="mb-7" />
+      )}
       {children}
+      {onSkip ? (
+        <button
+          type="button"
+          onClick={onSkip}
+          className="focus-gold mt-8 text-sm text-[#7A6A4F] underline decoration-[#7A6A4F]/45 underline-offset-4 transition-colors hover:text-[#201B11]"
+        >
+          Skip this step
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function NotePicker({
+  quickPicks,
+  categories,
+  isArabic,
+  selected,
+  disabled,
+  onToggle
+}: {
+  quickPicks: FinderIngredient[];
+  categories: IngredientCategoryGroup[];
+  isArabic: boolean;
+  selected: string[];
+  disabled?: (value: string) => boolean;
+  onToggle: (value: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [openCategory, setOpenCategory] = useState<string | null>(
+    categories[0]?.category ?? null
+  );
+  const totalNotes = categories.reduce(
+    (sum, category) => sum + category.ingredients.length,
+    0
+  );
+
+  function isSelected(note: FinderIngredient) {
+    return selected.some((value) => normalizeFinderTerm(value) === note.key);
+  }
+
+  function noteButtonClass(note: FinderIngredient, compact = false) {
+    const isDisabled = disabled?.(note.name) ?? false;
+    const active = isSelected(note);
+
+    return `${compact ? "min-h-10 px-3 py-2" : "min-h-32 px-3 py-4"} focus-gold group relative border transition-all duration-300 ${
+      active
+        ? "border-[#D4AF37] bg-[#201B11] text-[#F9F6F0] shadow-[0_0_18px_rgba(212,175,55,0.18)]"
+        : "border-[#7A6A4F]/35 bg-white/35 text-[#201B11] hover:border-[#D4AF37] hover:bg-[#D4AF37]/10"
+    } ${isDisabled ? "cursor-not-allowed border-[#CDC5BB] text-[#8B8375] opacity-50" : ""}`;
+  }
+
+  return (
+    <div className="w-full max-w-3xl text-left">
+      <div className="mb-4 flex items-center gap-3 text-[#7A6A4F]">
+        <span aria-hidden="true" className="h-px w-7 bg-[#7A6A4F]/55" />
+        <span className="label-caps">Quick Picks</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {quickPicks.map((note, index) => {
+          const unavailable = disabled?.(note.name) ?? false;
+          const noteImage = ingredientFinderImage(note.name);
+
+          return (
+            <button
+              key={note.key}
+              type="button"
+              aria-pressed={isSelected(note)}
+              disabled={unavailable}
+              onClick={() => onToggle(note.name)}
+              style={{animationDelay: `${index * 40}ms`}}
+              className={`animate-scent-option-in ${noteButtonClass(note)}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`absolute right-3 top-3 h-4 w-4 rounded-full border ${
+                  isSelected(note)
+                    ? "border-[#D4AF37] bg-[#D4AF37]"
+                    : "border-[#7A6A4F]/35 bg-[#F9F6F0]"
+                }`}
+              />
+              {noteImage ? (
+                <Image
+                  src={noteImage}
+                  alt=""
+                  width={64}
+                  height={64}
+                  className="mx-auto mb-3 h-16 w-16 object-contain transition-transform duration-300 group-hover:scale-105"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={`mx-auto mb-3 grid h-16 w-16 place-items-center rounded-full border font-serif text-3xl leading-none ${
+                    isSelected(note) ? "text-[#D4AF37]" : "text-[#7A6A4F]"
+                  } ${isSelected(note) ? "border-[#D4AF37]/65" : "border-[#7A6A4F]/30"}`}
+                >
+                  {ingredientFinderIcon(note.name, note.category)}
+                </span>
+              )}
+              <span className="label-caps block pr-4 leading-5">{note.name}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        aria-expanded={showAll}
+        onClick={() => setShowAll((current) => !current)}
+        className="focus-gold group mt-5 flex min-h-20 w-full items-center justify-between gap-4 border border-[#7A6A4F]/25 bg-[#EAE4D8]/55 px-4 py-4 text-left transition-all duration-300 hover:border-[#D4AF37] hover:bg-[#EAE4D8]/80 sm:px-5"
+      >
+        <span className="flex min-w-0 items-center gap-4">
+          <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#7A6A4F] text-xl leading-none text-[#F9F6F0] transition-colors duration-300 group-hover:bg-[#201B11]">
+            {showAll ? "−" : "+"}
+          </span>
+          <span className="min-w-0">
+            <span className="block font-serif text-[1.35rem] leading-6">
+              {showAll ? "Hide note catalog" : `See all (${totalNotes})`}
+            </span>
+            <span className="mt-1.5 block text-xs leading-4 text-[#7A6A4F]">
+              Browse notes by scent family
+            </span>
+          </span>
+        </span>
+        <span
+          aria-hidden="true"
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#7A6A4F]/25 text-lg text-[#7A6A4F] transition-all duration-500 group-hover:border-[#D4AF37] ${
+            showAll ? "rotate-180" : "rotate-0"
+          }`}
+        >
+          ⌄
+        </span>
+      </button>
+
+      <div
+        aria-hidden={!showAll}
+        inert={!showAll}
+        className={`grid transition-[grid-template-rows,opacity,margin-top] duration-500 ease-out motion-reduce:transition-none ${
+          showAll
+            ? "mt-3 grid-rows-[1fr] opacity-100"
+            : "mt-0 grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="space-y-2">
+          {categories.map(({category, ingredients}) => {
+            const isOpen = openCategory === category;
+            const categoryId = `finder-category-${category.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+            const categoryImage = ingredients
+              .map((ingredient) => ingredientFinderImage(ingredient.name))
+              .find((image): image is string => Boolean(image));
+
+            return (
+              <section key={category} className="overflow-hidden border border-[#7A6A4F]/20 bg-white/35">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={categoryId}
+                  onClick={() => setOpenCategory((current) => (current === category ? null : category))}
+                  className="focus-gold flex min-h-15 w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-[#EAE4D8]/65"
+                >
+                  <span className="flex items-center gap-3">
+                    {categoryImage ? (
+                      <Image
+                        src={categoryImage}
+                        alt=""
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 object-contain"
+                      />
+                    ) : (
+                      <span aria-hidden="true" className="grid h-10 w-10 place-items-center rounded-full border border-[#7A6A4F]/25 font-serif text-2xl leading-none text-[#7A6A4F]">
+                        {ingredientCategoryIcon(category)}
+                      </span>
+                    )}
+                    <span>
+                      <span className="block font-serif text-xl leading-5">
+                        {ingredientCategoryLabel(category, isArabic)}
+                      </span>
+                      <span className="mt-1 block text-xs text-[#7A6A4F]">
+                        {ingredients.length} {ingredients.length === 1 ? "note" : "notes"}
+                      </span>
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="text-xl text-[#7A6A4F]">
+                    {isOpen ? "⌃" : "⌄"}
+                  </span>
+                </button>
+                <div
+                  id={categoryId}
+                  aria-hidden={!isOpen}
+                  inert={!isOpen}
+                  className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
+                    isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                  }`}
+                >
+                  <div className="min-h-0 overflow-hidden">
+                    <div className="flex flex-wrap gap-2 border-t border-[#7A6A4F]/15 p-3">
+                      {ingredients.map((note) => {
+                        const unavailable = disabled?.(note.name) ?? false;
+                        const noteImage = ingredientFinderImage(note.name);
+
+                        return (
+                          <button
+                            key={note.key}
+                            type="button"
+                            aria-pressed={isSelected(note)}
+                            disabled={unavailable}
+                            onClick={() => onToggle(note.name)}
+                            className={noteButtonClass(note, true)}
+                          >
+                            {noteImage ? (
+                              <Image
+                                src={noteImage}
+                                alt=""
+                                width={28}
+                                height={28}
+                                className="mr-2 h-7 w-7 shrink-0 object-contain"
+                              />
+                            ) : (
+                              <span aria-hidden="true" className="mr-2 font-serif text-base text-[#7A6A4F]">
+                                {ingredientFinderIcon(note.name, note.category)}
+                              </span>
+                            )}
+                            {note.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            );
+          })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -676,7 +1102,8 @@ function PillGrid({
       {options.map((option, index) => {
         const isDisabled = disabled?.(option) ?? false;
         const isSelected = selected.some(
-          (value) => normalize(value) === normalize(option)
+          (value) =>
+            normalizeFinderTerm(value) === normalizeFinderTerm(option)
         );
 
         return (

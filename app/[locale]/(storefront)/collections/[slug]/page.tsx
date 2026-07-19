@@ -7,6 +7,7 @@ import SalesBar from "@/components/storefront/layout/SalesBar";
 import {prisma} from "@/lib/prisma";
 import {getProductTransitionName} from "@/lib/product-image-transition";
 import CollectionFragranceLink from "@/components/storefront/product/CollectionFragranceLink";
+import CollectionPurchaseActions from "@/components/storefront/product/CollectionPurchaseActions";
 
 type CollectionDetailPageProps = {
   params: Promise<{
@@ -52,7 +53,8 @@ export default async function CollectionDetailPage({
                 orderBy: {price: "asc"},
                 take: 1,
                 select: {
-                  price: true
+                  price: true,
+                  stock: true
                 }
               }
             }
@@ -79,6 +81,9 @@ export default async function CollectionDetailPage({
     0
   );
   const offerPrice = Number(collection.offerPrice ?? 0);
+  const isAvailable =
+    products.length > 0 &&
+    products.every((product) => Number(product.variants[0]?.stock ?? 0) > 0);
   const discountPercent =
     combinedValue > 0 && offerPrice > 0
       ? Math.max(0, Math.round(((combinedValue - offerPrice) / combinedValue) * 100))
@@ -136,6 +141,18 @@ export default async function CollectionDetailPage({
                 <p className="font-serif text-2xl">{discountPercent}%</p>
               </div>
             </div>
+
+            <CollectionPurchaseActions
+              locale={locale}
+              id={collection.id}
+              slug={collection.slug}
+              nameEn={collection.nameEn}
+              nameAr={collection.nameAr}
+              image={collection.coverImage}
+              offerPrice={collection.offerPrice?.toString() ?? null}
+              combinedValue={combinedValue.toFixed(2)}
+              isAvailable={isAvailable}
+            />
 
             <Link
               href={`/${locale}/fragrances`}

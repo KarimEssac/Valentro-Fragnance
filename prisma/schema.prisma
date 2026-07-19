@@ -70,19 +70,21 @@ enum PaymentMethod {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  passwordHash   String
-  name           String?
-  phone          String?
-  role           Role      @default(CUSTOMER)
-  createdAt      DateTime  @default(now())
-  orders         Order[]
-  addresses      Address[]
-  appliedCoupons Coupon[]  @relation("CouponUsers")
-  reviews        Review[]
+  id              String           @id @default(cuid())
+  email           String           @unique
+  passwordHash    String
+  name            String?
+  phone           String?
+  role            Role             @default(CUSTOMER)
+  createdAt       DateTime         @default(now())
+  orders          Order[]
+  addresses       Address[]
+  appliedCoupons  Coupon[]         @relation("CouponUsers")
+  reviews         Review[]
+  restockRequests RestockRequest[]
 
   @@index([role])
+  @@index([role, createdAt])
 }
 
 model Address {
@@ -112,6 +114,7 @@ model Announcement {
   createdAt DateTime  @default(now())
 
   @@index([isActive])
+  @@index([createdAt])
 }
 
 model NewsletterSubscriber {
@@ -158,9 +161,11 @@ model Collection {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @default(now()) @updatedAt
   fragrances    FragranceCollection[]
+  orderItems    OrderItem[]
 
   @@index([isPublished, position])
   @@index([isOffer, isPublished, position])
+  @@index([isOffer, position, createdAt])
 }
 
 model Fragrance {
@@ -202,6 +207,7 @@ model Fragrance {
   @@index([discountIsActive, discountStartsAt, discountExpiresAt])
   @@index([gender])
   @@index([scentProfile])
+  @@index([position, createdAt])
 }
 
 model Review {
@@ -222,6 +228,7 @@ model Review {
   @@unique([fragranceId, userId])
   @@index([fragranceId, isPublished, createdAt])
   @@index([userId])
+  @@index([createdAt])
 }
 
 model FragranceCollection {
@@ -239,10 +246,12 @@ model FragranceIngredient {
   fragranceId String
   nameEn      String
   nameAr      String
+  category    String        @default("Base & Accent Notes")
   note        FragranceNote
   fragrance   Fragrance     @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
 
   @@index([fragranceId])
+  @@index([category])
   @@index([note])
 }
 
@@ -260,17 +269,39 @@ model FragranceImage {
 }
 
 model FragranceVariant {
-  id             String      @id @default(cuid())
-  fragranceId    String
-  sizeML         Int
-  price          Decimal     @db.Decimal(10, 2)
-  compareAtPrice Decimal?    @db.Decimal(10, 2)
-  stock          Int         @default(0)
-  sku            String      @unique
-  fragrance      Fragrance   @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
-  orderItems     OrderItem[]
+  id              String           @id @default(cuid())
+  fragranceId     String
+  sizeML          Int
+  price           Decimal          @db.Decimal(10, 2)
+  compareAtPrice  Decimal?         @db.Decimal(10, 2)
+  stock           Int              @default(0)
+  sku             String           @unique
+  fragrance       Fragrance        @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+  restockRequests RestockRequest[]
 
   @@index([fragranceId])
+  @@index([stock])
+}
+
+model RestockRequest {
+  id                String           @id @default(cuid())
+  variantId         String
+  userId            String?
+  email             String
+  locale            String           @default("en")
+  requestCount      Int              @default(1)
+  requestedAt       DateTime         @default(now())
+  notifiedAt        DateTime?
+  notificationCount Int              @default(0)
+  updatedAt         DateTime         @updatedAt
+  variant           FragranceVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([variantId, email])
+  @@index([variantId, notifiedAt])
+  @@index([userId])
+  @@index([requestedAt])
 }
 
 model Coupon {
@@ -296,6 +327,7 @@ model Coupon {
   @@index([startsAt])
   @@index([expiresAt])
   @@index([applicableTo])
+  @@index([createdAt])
 }
 
 model Order {
@@ -317,22 +349,27 @@ model Order {
 
   @@index([userId])
   @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
   @@index([couponId])
 }
 
 model OrderItem {
-  id              String           @id @default(cuid())
+  id              String            @id @default(cuid())
   orderId         String
-  variantId       String
+  variantId       String?
+  collectionId    String?
   fragranceNameEn String
   fragranceNameAr String
   sizeML          Int
   quantity        Int
-  unitPrice       Decimal          @db.Decimal(10, 2)
-  totalPrice      Decimal          @db.Decimal(10, 2)
-  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  variant         FragranceVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  unitPrice       Decimal           @db.Decimal(10, 2)
+  totalPrice      Decimal           @db.Decimal(10, 2)
+  order           Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant         FragranceVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  collection      Collection?       @relation(fields: [collectionId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([variantId])
+  @@index([collectionId])
 }

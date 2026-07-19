@@ -17,10 +17,12 @@ import {
   rankAutomaticCouponDiscounts
 } from "@/lib/coupon-discounts";
 import {validateCsrfToken, csrfCookieName} from "@/lib/csrf";
+import {sendOrderPlacedEmails} from "@/lib/order-email";
 import {prisma} from "@/lib/prisma";
 
 type OrderItemInput = {
-  variantId: unknown;
+  variantId?: unknown;
+  collectionId?: unknown;
   quantity: unknown;
 };
 
@@ -193,18 +195,31 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
 
   const items = payload.items.map((item) => {
     const orderItem = item as OrderItemInput;
-    const variantId = validateText(orderItem.variantId, "Cart item", {
-      max: 64,
-      min: 8,
-      pattern: /^[A-Za-z0-9_-]+$/
-    });
     const quantity = Number(orderItem.quantity);
 
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
       throw new Error("Cart item quantity is invalid");
     }
 
-    return {variantId, quantity};
+    const collectionId = typeof orderItem.collectionId === "string"
+      ? orderItem.collectionId.trim()
+      : "";
+
+    if (collectionId) {
+      if (!/^[A-Za-z0-9_-]{8,64}$/.test(collectionId)) {
+        throw new Error("Cart item is invalid");
+      }
+
+      return {kind: "collection" as const, collectionId, quantity};
+    }
+
+    const variantId = validateText(orderItem.variantId, "Cart item", {
+      max: 64,
+      min: 8,
+      pattern: /^[A-Za-z0-9_-]+$/
+    });
+
+    return {kind: "fragrance" as const, variantId, quantity};
   });
 
   return {
@@ -254,11 +269,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const quantities = new Map<string, number>();
-  checkout.items.forEach((item) => {
-    quantities.set(item.variantId, (quantities.get(item.variantId) ?? 0) + item.quantity);
-  });
-
   try {
     const guestPasswordHash = session?.user?.id
       ? ""
@@ -290,7 +300,7 @@ export async function POST(request: NextRequest) {
       const pricingTime = new Date();
       const pricing = await calculateCartPricing(
         tx,
-        Array.from(quantities, ([variantId, quantity]) => ({variantId, quantity})),
+        checkout.items,
         {
           now: pricingTime,
           requireAll: true
@@ -368,28 +378,31 @@ export async function POST(request: NextRequest) {
       const orderItems = [];
 
       for (const line of pricing.lines) {
-        const quantity = quantities.get(line.variantId) ?? 0;
+        const quantity = line.quantity;
 
         if (line.stock < quantity) {
           throw new Error(`${line.fragranceNameEn} is low on stock`);
         }
 
-        const stockUpdate = await tx.fragranceVariant.updateMany({
-          where: {
-            id: line.variantId,
-            stock: {gte: quantity}
-          },
-          data: {
-            stock: {decrement: quantity}
-          }
-        });
+        for (const inventoryVariantId of line.inventoryVariantIds) {
+          const stockUpdate = await tx.fragranceVariant.updateMany({
+            where: {
+              id: inventoryVariantId,
+              stock: {gte: quantity}
+            },
+            data: {
+              stock: {decrement: quantity}
+            }
+          });
 
-        if (stockUpdate.count !== 1) {
-          throw new Error(`${line.fragranceNameEn} is low on stock`);
+          if (stockUpdate.count !== 1) {
+            throw new Error(`${line.fragranceNameEn} is low on stock`);
+          }
         }
 
         orderItems.push({
-          variantId: line.variantId,
+          variantId: line.kind === "fragrance" ? line.variantId : null,
+          collectionId: line.collectionId,
           fragranceNameEn: line.fragranceNameEn,
           fragranceNameAr: line.fragranceNameAr,
           sizeML: line.sizeML,
@@ -437,6 +450,15 @@ export async function POST(request: NextRequest) {
         }
       });
     });
+
+    try {
+      await sendOrderPlacedEmails(order.id);
+    } catch (error) {
+      console.error(
+        "Order was placed, but order emails could not be prepared:",
+        error instanceof Error ? error.message : "Unknown email error"
+      );
+    }
 
     return NextResponse.json({
       message: "Order placed",

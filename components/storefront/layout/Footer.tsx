@@ -137,7 +137,7 @@ export default function Footer() {
       {/* Social & Legal Bottom Bar */}
       <div className="mx-auto mt-10 flex w-full max-w-container-max flex-col items-center justify-between gap-5 border-t border-muted-brass/20 pt-6 md:flex-row" dir={isRtl ? "rtl" : "ltr"}>
         {/* Social Icons */}
-        <div className="flex gap-5">
+        <div className="flex items-center gap-5">
           <a
             aria-label="Instagram"
             className="footer-social-link"
@@ -161,6 +161,14 @@ export default function Footer() {
             <svg className="footer-social-icon h-[22px] w-[22px] fill-current" viewBox="0 0 24 24">
               <path d="M9 8H7v3h2v9h3v-9h2.72l.42-3H12V6c0-.57.24-1 1-1h2V2h-3c-3.07 0-5 1.89-5 5v1z"/>
             </svg>
+          </a>
+          <a
+            href="https://karimessac.github.io/My-Portfolio/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-body-md text-body-md text-muted-brass transition-colors hover:text-gold"
+          >
+            Developed by Karim Essac
           </a>
         </div>
         <div className="text-center md:text-right flex flex-col md:flex-row gap-2 md:gap-8 opacity-80 hover:opacity-100 transition-opacity">

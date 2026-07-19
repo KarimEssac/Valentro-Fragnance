@@ -5,6 +5,18 @@ import {useRouter} from "next/navigation";
 import {useEffect, useMemo, useState} from "react";
 
 import Modal from "@/components/ui/Modal";
+import ValentroSelect from "@/components/ui/ValentroSelect";
+import {
+  avoidanceVerbs,
+  encodeFinderRule,
+  finderRuleLabel,
+  parseFinderRule,
+  type FinderRuleVerb
+} from "@/lib/finder-rules";
+import {
+  defaultIngredientCategories,
+  ingredientCategoryFor
+} from "@/lib/ingredient-categories";
 
 export type InventoryProduct = {
   id: string;
@@ -41,7 +53,7 @@ export type InventoryProduct = {
   }[];
   collections: string[];
   variants: {id: string; sku: string; sizeML: number; price: string; stock: number}[];
-  ingredients: {nameEn: string; note: string}[];
+  ingredients: {nameEn: string; note: string; category: string}[];
   avoidIf: string[];
   seasons: string[];
 };
@@ -55,53 +67,6 @@ const genders = ["HIM", "HER", "UNISEX"];
 const scents = ["VANILLA", "MUSK", "OUD", "FLORAL", "WOODY", "CITRUS", "AQUATIC", "SPICY", "POWDERY", "GOURMAND"];
 const sillages = ["SOFT_LANDING", "MODERATE", "NOTICEABLE", "STRONG", "ENORMOUS", "FILLS_THE_ROOM"];
 const seasons = ["SPRING", "SUMMER", "FALL", "WINTER", "ALL_YEAR"];
-const ingredientOptions = [
-  "Agarwood",
-  "Amber",
-  "Ambergris",
-  "Apple",
-  "Basil",
-  "Bergamot",
-  "Black Pepper",
-  "Cardamom",
-  "Cedarwood",
-  "Cinnamon",
-  "Clean Musk",
-  "Coconut",
-  "Coffee",
-  "Damask Rose",
-  "Frankincense",
-  "Geranium",
-  "Grapefruit",
-  "Incense",
-  "Iris",
-  "Jasmine",
-  "Labdanum",
-  "Lavender",
-  "Leather",
-  "Lemon",
-  "Mandarin",
-  "Madagascar Vanilla",
-  "Musk",
-  "Myrrh",
-  "Neroli",
-  "Orange Blossom",
-  "Oud",
-  "Patchouli",
-  "Pear",
-  "Pink Pepper",
-  "Rose",
-  "Saffron",
-  "Sandalwood",
-  "Tonka Bean",
-  "Tuberose",
-  "Vanilla",
-  "Vetiver",
-  "Violet",
-  "White Flowers",
-  "Woods",
-  "Ylang Ylang"
-];
 
 type VariantDraft = {
   id?: string;
@@ -120,8 +85,27 @@ type ImageDraft = {
   delete: boolean;
 };
 
+type IngredientEntry = {
+  name: string;
+  category: string;
+};
+
 function formatEnum(value: string) {
   return value.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+function uniqueTerms(values: string[]) {
+  const seen = new Set<string>();
+
+  return values
+    .map((value) => value.trim().replace(/\s+/g, " "))
+    .filter((value) => {
+      const key = value.toLocaleLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function inputClass() {
@@ -206,9 +190,10 @@ export default function AdminInventoryClient({locale, products}: Props) {
   const [stoppingDiscountId, setStoppingDiscountId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [status, setStatus] = useState("");
+  const [inventoryStatus, setInventoryStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
+  const [selectedIngredients, setSelectedIngredients] = useState<IngredientEntry[]>([]);
   const [selectedAvoidIf, setSelectedAvoidIf] = useState<string[]>([]);
   const [createVariants, setCreateVariants] = useState<VariantDraft[]>([
     {sizeML: "50", price: "", stock: "0"}
@@ -240,6 +225,35 @@ export default function AdminInventoryClient({locale, products}: Props) {
         .includes(normalized)
     );
   }, [products, query]);
+
+  const ingredientSuggestions = useMemo(() => {
+    const byName = new Map<string, IngredientEntry>();
+
+    products.forEach((product) => {
+      product.ingredients.forEach((ingredient) => {
+        const name = ingredient.nameEn.trim().replace(/\s+/g, " ");
+        const key = name.toLocaleLowerCase();
+        if (!name || byName.has(key)) return;
+        byName.set(key, {
+          name,
+          category: ingredientCategoryFor(name, ingredient.category)
+        });
+      });
+    });
+
+    return [...byName.values()].sort((first, second) =>
+      first.name.localeCompare(second.name)
+    );
+  }, [products]);
+  const ingredientCategories = useMemo(
+    () =>
+      uniqueTerms([
+        ...defaultIngredientCategories,
+        ...ingredientSuggestions.map((ingredient) => ingredient.category),
+        ...selectedIngredients.map((ingredient) => ingredient.category)
+      ]),
+    [ingredientSuggestions, selectedIngredients]
+  );
 
   const totalStock = products.reduce((sum, product) => sum + product.totalStock, 0);
   const lowStockCount = products.filter((product) => product.totalStock <= 5).length;
@@ -416,7 +430,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
     const form = new FormData(event.currentTarget);
     form.set("variants", JSON.stringify(createVariants));
     selectedSeasons.forEach((season) => form.append("seasons", season));
-    selectedIngredients.forEach((ingredient) => form.append("ingredients", ingredient));
+    form.set("ingredients", JSON.stringify(selectedIngredients));
     selectedAvoidIf.forEach((avoidIf) => form.append("avoidIf", avoidIf));
 
     try {
@@ -458,7 +472,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
         </div>
       </header>
 
-      <section className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <section className="mb-10 grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-3 2xl:grid-cols-6">
         {[
           ["Total Stock", totalStock],
           ["Low Stock Items", lowStockCount],
@@ -473,6 +487,12 @@ export default function AdminInventoryClient({locale, products}: Props) {
           </div>
         ))}
       </section>
+
+      {inventoryStatus ? (
+        <p role="status" className="mb-5 border border-gold/45 bg-gold/10 px-5 py-3 text-sm text-gold">
+          {inventoryStatus}
+        </p>
+      ) : null}
 
       {discountActionError ? (
         <p role="alert" className="mb-5 border border-red-700/55 bg-red-950/30 px-5 py-3 text-sm text-red-300">
@@ -727,8 +747,11 @@ export default function AdminInventoryClient({locale, products}: Props) {
             </div>
             <EditProductForm
               product={details}
+              ingredientSuggestions={ingredientSuggestions}
+              ingredientCategories={ingredientCategories}
               onClose={closeDetails}
-              onSaved={() => {
+              onSaved={(message) => {
+                setInventoryStatus(message);
                 closeDetails();
                 router.refresh();
               }}
@@ -781,9 +804,9 @@ export default function AdminInventoryClient({locale, products}: Props) {
                 <Field label="Slug"><input name="slug" required placeholder="rose-oud" className={inputClass()} /></Field>
                 <Field label="English Tagline"><input name="taglineEn" required className={inputClass()} /></Field>
                 <Field label="Arabic Tagline (Optional)"><input name="taglineAr" className={inputClass()} /></Field>
-                <Field label="Gender"><select name="gender" className={inputClass()}>{genders.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
-                <Field label="Scent Profile"><select name="scentProfile" className={inputClass()}>{scents.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
-                <Field label="Sillage"><select name="sillage" className={inputClass()}>{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
+                <Field label="Gender"><ValentroSelect name="gender">{genders.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
+                <Field label="Scent Profile"><ValentroSelect name="scentProfile">{scents.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
+                <Field label="Sillage"><ValentroSelect name="sillage">{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
                 <Field label="Longevity Hours"><input name="longevity" type="number" min="1" defaultValue="8" required className={inputClass()} /></Field>
                 <Field label="Display Order"><input name="position" type="number" min="1" placeholder="1 displays first" className={inputClass()} /></Field>
                 <Field label="Product Images">
@@ -809,16 +832,20 @@ export default function AdminInventoryClient({locale, products}: Props) {
               />
               <Field label="English Description"><textarea name="descriptionEn" required rows={3} className={inputClass()} /></Field>
               <Field label="Arabic Description (Optional)"><textarea name="descriptionAr" rows={3} className={inputClass()} /></Field>
-              <SearchableMultiSelect
-                label="Ingredients"
-                options={ingredientOptions.filter((option) => !selectedAvoidIf.includes(option))}
+              <IngredientEditor
+                suggestions={ingredientSuggestions}
+                categories={ingredientCategories}
                 selected={selectedIngredients}
                 onChange={setSelectedIngredients}
               />
-              <SearchableMultiSelect
-                label="Avoid If"
-                options={ingredientOptions.filter((option) => !selectedIngredients.includes(option))}
-                selected={selectedAvoidIf}
+              <FinderRuleEditor
+                label="Avoid If Customer"
+                verbs={avoidanceVerbs}
+                rules={selectedAvoidIf}
+                ingredientOptions={uniqueTerms([
+                  ...ingredientSuggestions.map((ingredient) => ingredient.name),
+                  ...selectedIngredients.map((ingredient) => ingredient.name)
+                ])}
                 onChange={setSelectedAvoidIf}
               />
               <div>
@@ -935,20 +962,29 @@ function VariantEditor({
 
 function EditProductForm({
   product,
+  ingredientSuggestions,
+  ingredientCategories,
   onClose,
   onSaved
 }: {
   product: InventoryProduct;
+  ingredientSuggestions: IngredientEntry[];
+  ingredientCategories: string[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (message: string) => void;
 }) {
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [selectedSeasons, setSelectedSeasons] = useState<string[]>(product.seasons);
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>(
-    product.ingredients.map((ingredient) => ingredient.nameEn)
+  const [selectedIngredients, setSelectedIngredients] = useState<IngredientEntry[]>(
+    product.ingredients.map((ingredient) => ({
+      name: ingredient.nameEn,
+      category: ingredientCategoryFor(ingredient.nameEn, ingredient.category)
+    }))
   );
-  const [selectedAvoidIf, setSelectedAvoidIf] = useState<string[]>(product.avoidIf);
+  const [selectedAvoidIf, setSelectedAvoidIf] = useState<string[]>(
+    product.avoidIf.filter((value) => parseFinderRule(value))
+  );
   const [images, setImages] = useState<ImageDraft[]>(
     product.images.map((image, index) => ({
       id: image.id,
@@ -1045,7 +1081,7 @@ function EditProductForm({
       });
       const result = (await response.json()) as {message?: string};
       if (!response.ok) throw new Error(result.message ?? "Unable to update product");
-      onSaved();
+      onSaved(result.message ?? "Product updated.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to update product");
     } finally {
@@ -1061,24 +1097,28 @@ function EditProductForm({
         <Field label="Slug"><input name="slug" defaultValue={product.slug} required className={inputClass()} /></Field>
         <Field label="English Tagline"><input name="taglineEn" defaultValue={product.taglineEn} required className={inputClass()} /></Field>
         <Field label="Arabic Tagline (Optional)"><input name="taglineAr" defaultValue={product.taglineAr === product.taglineEn ? "" : product.taglineAr} className={inputClass()} /></Field>
-        <Field label="Gender"><select name="gender" defaultValue={product.gender} className={inputClass()}>{genders.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
-        <Field label="Scent Profile"><select name="scentProfile" defaultValue={product.scentProfile} className={inputClass()}>{scents.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
-        <Field label="Sillage"><select name="sillage" defaultValue={product.sillage} className={inputClass()}>{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</select></Field>
+        <Field label="Gender"><ValentroSelect name="gender" defaultValue={product.gender}>{genders.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
+        <Field label="Scent Profile"><ValentroSelect name="scentProfile" defaultValue={product.scentProfile}>{scents.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
+        <Field label="Sillage"><ValentroSelect name="sillage" defaultValue={product.sillage}>{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
         <Field label="Longevity Hours"><input name="longevity" type="number" min="1" defaultValue={product.longevity} required className={inputClass()} /></Field>
         <Field label="Display Order"><input name="position" type="number" min="1" defaultValue={product.position} placeholder="Leave empty to move last" className={inputClass()} /></Field>
       </div>
       <Field label="English Description"><textarea name="descriptionEn" defaultValue={product.descriptionEn} required rows={3} className={inputClass()} /></Field>
       <Field label="Arabic Description (Optional)"><textarea name="descriptionAr" defaultValue={product.descriptionAr === product.descriptionEn ? "" : product.descriptionAr} rows={3} className={inputClass()} /></Field>
-      <SearchableMultiSelect
-        label="Ingredients"
-        options={ingredientOptions.filter((option) => !selectedAvoidIf.includes(option))}
+      <IngredientEditor
+        suggestions={ingredientSuggestions}
+        categories={ingredientCategories}
         selected={selectedIngredients}
         onChange={setSelectedIngredients}
       />
-      <SearchableMultiSelect
-        label="Avoid If"
-        options={ingredientOptions.filter((option) => !selectedIngredients.includes(option))}
-        selected={selectedAvoidIf}
+      <FinderRuleEditor
+        label="Avoid If Customer"
+        verbs={avoidanceVerbs}
+        rules={selectedAvoidIf}
+        ingredientOptions={uniqueTerms([
+          ...ingredientSuggestions.map((ingredient) => ingredient.name),
+          ...selectedIngredients.map((ingredient) => ingredient.name)
+        ])}
         onChange={setSelectedAvoidIf}
       />
       <div>
@@ -1217,40 +1257,133 @@ function SearchableMultiSelect({
   label,
   options,
   selected,
-  onChange
+  onChange,
+  description
 }: {
   label: string;
   options: string[];
   selected: string[];
   onChange: (values: string[]) => void;
+  description?: string;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = options
-    .filter((option) => option.toLowerCase().includes(query.toLowerCase()))
-    .slice(0, 12);
+  const [isOpen, setIsOpen] = useState(false);
+  const cleanedQuery = query.trim().replace(/\s+/g, " ");
+  const menuId = `inventory-${label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}-menu`;
+  const sameTerm = (first: string, second: string) =>
+    first.trim().replace(/\s+/g, " ").toLocaleLowerCase() ===
+    second.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  const matchingOption = options.find((option) => sameTerm(option, cleanedQuery));
+  const alreadySelected = selected.some((item) => sameTerm(item, cleanedQuery));
+  const visibleOptions = options
+    .filter((option) => option.toLocaleLowerCase().includes(cleanedQuery.toLocaleLowerCase()))
+    .slice(0, 10);
 
   function toggle(option: string) {
     onChange(
-      selected.includes(option)
-        ? selected.filter((item) => item !== option)
+      selected.some((item) => sameTerm(item, option))
+        ? selected.filter((item) => !sameTerm(item, option))
         : [...selected, option]
     );
+  }
+
+  function addTypedValue() {
+    if (!cleanedQuery || alreadySelected) return;
+    onChange([...selected, matchingOption ?? cleanedQuery]);
+    setQuery("");
+    setIsOpen(false);
+  }
+
+  function chooseSuggestion(option: string) {
+    toggle(option);
+    setQuery("");
+    setIsOpen(false);
   }
 
   return (
     <div>
       <p className="label-caps mb-2 text-gold">{label}</p>
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={`Search ${label.toLowerCase()}`}
-        className={inputClass()}
-      />
+      <div className="relative">
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addTypedValue();
+            }
+            if (event.key === "Escape") setIsOpen(false);
+          }}
+          placeholder={`Type or search ${label.toLowerCase()}`}
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls={menuId}
+          aria-haspopup="listbox"
+          className="label-caps min-h-10 w-full border border-outline bg-surface py-2 pl-4 pr-12 text-left text-parchment outline-none transition-colors placeholder:text-on-surface/45 focus:border-gold"
+        />
+        <button
+          type="button"
+          aria-label={`Show saved ${label.toLowerCase()}`}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setIsOpen((open) => !open)}
+          className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gold"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+        {isOpen ? (
+          <div id={menuId} role="listbox" className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto border border-outline bg-surface p-1 shadow-[0_18px_45px_rgba(0,0,0,0.32)]">
+            {visibleOptions.map((option) => {
+              const isSelected = selected.some((item) => sameTerm(item, option));
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => chooseSuggestion(option)}
+                  className={`label-caps flex min-h-10 w-full items-center justify-between px-3 text-left transition-colors ${
+                    isSelected
+                      ? "bg-gold/15 text-gold"
+                      : "text-parchment hover:bg-surface-mid hover:text-gold"
+                  }`}
+                >
+                  {option}
+                  {isSelected ? <span aria-hidden="true">✓</span> : null}
+                </button>
+              );
+            })}
+            {cleanedQuery && !alreadySelected ? (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={addTypedValue}
+                className="label-caps flex min-h-10 w-full items-center border-t border-outline px-3 text-left text-gold transition-colors hover:bg-gold hover:text-surface-hi"
+              >
+                {matchingOption ? `Add \u201c${matchingOption}\u201d` : `Add new \u201c${cleanedQuery}\u201d`}
+              </button>
+            ) : null}
+            {visibleOptions.length === 0 && !cleanedQuery ? (
+              <p className="px-3 py-3 text-sm text-on-surface/60">No saved values yet.</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xs text-on-surface/55">
+        {description ?? "Choose a saved value or type a new one and press Enter."}
+      </p>
       {selected.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {selected.map((item) => (
             <button
-              key={item}
+              key={`${item}-${selected.indexOf(item)}`}
               type="button"
               onClick={() => toggle(item)}
               className="label-caps border border-gold px-3 py-1 text-gold"
@@ -1260,22 +1393,276 @@ function SearchableMultiSelect({
           ))}
         </div>
       ) : null}
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {filtered.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => toggle(option)}
-            className={`label-caps min-h-10 border px-3 text-left transition-colors ${
-              selected.includes(option)
-                ? "border-parchment bg-parchment text-surface-hi"
-                : "border-outline text-parchment hover:border-gold hover:text-gold"
-            }`}
+    </div>
+  );
+}
+
+function IngredientEditor({
+  suggestions,
+  categories,
+  selected,
+  onChange
+}: {
+  suggestions: IngredientEntry[];
+  categories: string[];
+  selected: IngredientEntry[];
+  onChange: (values: IngredientEntry[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [category, setCategory] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const cleanedQuery = query.trim().replace(/\s+/g, " ");
+  const menuId = "inventory-ingredient-suggestions";
+  const sameTerm = (first: string, second: string) =>
+    first.trim().replace(/\s+/g, " ").toLocaleLowerCase() ===
+    second.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  const matchingSuggestion = suggestions.find((ingredient) =>
+    sameTerm(ingredient.name, cleanedQuery)
+  );
+  const alreadySelected = selected.some((ingredient) =>
+    sameTerm(ingredient.name, cleanedQuery)
+  );
+  const visibleSuggestions = suggestions
+    .filter((ingredient) =>
+      ingredient.name.toLocaleLowerCase().includes(cleanedQuery.toLocaleLowerCase())
+    )
+    .slice(0, 10);
+  const selectedCategory =
+    category === "__new__" ? newCategory.trim().replace(/\s+/g, " ") : category;
+  const canAdd = Boolean(
+    cleanedQuery && !alreadySelected && (matchingSuggestion || selectedCategory)
+  );
+
+  function removeIngredient(name: string) {
+    onChange(selected.filter((ingredient) => !sameTerm(ingredient.name, name)));
+  }
+
+  function addIngredient() {
+    if (!canAdd) return;
+
+    const ingredient = matchingSuggestion ?? {
+      name: cleanedQuery,
+      category: selectedCategory
+    };
+    onChange([...selected, ingredient]);
+    setQuery("");
+    setCategory("");
+    setNewCategory("");
+    setIsOpen(false);
+  }
+
+  function chooseSuggestion(ingredient: IngredientEntry) {
+    setQuery(ingredient.name);
+    setCategory(ingredient.category);
+    setNewCategory("");
+    setIsOpen(false);
+  }
+
+  return (
+    <div>
+      <p className="label-caps mb-2 text-gold">Ingredients</p>
+      <p className="mb-4 text-xs leading-5 text-on-surface/60">
+        Choose a saved note or add a new one. Every new ingredient needs a scent category.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1.25fr)_minmax(11rem,0.9fr)_auto] sm:items-end">
+        <div className="relative">
+          <span className="label-caps mb-2 block text-on-surface/65">Ingredient</span>
+          <input
+            value={query}
+            onChange={(event) => {
+              const value = event.target.value;
+              setQuery(value);
+              const suggestion = suggestions.find((ingredient) => sameTerm(ingredient.name, value));
+              if (suggestion) {
+                setCategory(suggestion.category);
+                setNewCategory("");
+              }
+              setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addIngredient();
+              }
+              if (event.key === "Escape") setIsOpen(false);
+            }}
+            placeholder="Type or search an ingredient"
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-controls={menuId}
+            aria-haspopup="listbox"
+            className="label-caps min-h-10 w-full border border-outline bg-surface py-2 pl-4 pr-4 text-left text-parchment outline-none transition-colors placeholder:text-on-surface/45 focus:border-gold"
+          />
+          {isOpen ? (
+            <div
+              id={menuId}
+              role="listbox"
+              className="absolute left-0 z-30 mt-2 max-h-72 w-full max-w-[calc(100vw-3rem)] overflow-y-auto border border-outline bg-surface p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.32)] sm:w-[30rem]"
+            >
+              {visibleSuggestions.map((ingredient) => {
+                const isSelected = selected.some((item) =>
+                  sameTerm(item.name, ingredient.name)
+                );
+                return (
+                  <button
+                    key={ingredient.name}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => chooseSuggestion(ingredient)}
+                    className={`label-caps grid min-h-12 w-full grid-cols-[minmax(0,1fr)_minmax(8rem,0.85fr)] items-center gap-4 border-b border-outline/15 px-3 py-2 text-left transition-colors last:border-b-0 ${
+                      isSelected
+                        ? "bg-gold/15 text-gold"
+                        : "text-parchment hover:bg-surface-mid hover:text-gold"
+                    }`}
+                  >
+                    <span className="min-w-0 leading-4">{ingredient.name}</span>
+                    <span className="min-w-0 text-[10px] leading-4 text-on-surface/55">
+                      {ingredient.category}
+                    </span>
+                  </button>
+                );
+              })}
+              {visibleSuggestions.length === 0 && !cleanedQuery ? (
+                <p className="px-3 py-3 text-sm text-on-surface/60">No saved ingredients yet.</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <div>
+          <span className="label-caps mb-2 block text-on-surface/65">Category</span>
+          <ValentroSelect
+            value={category}
+            onChange={(event) => {
+              setCategory(event.target.value);
+              if (event.target.value !== "__new__") setNewCategory("");
+            }}
           >
-            {option}
-          </button>
-        ))}
+            <option value="">Choose category</option>
+            {categories.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+            <option value="__new__">Add a new category...</option>
+          </ValentroSelect>
+        </div>
+        <button
+          type="button"
+          onClick={addIngredient}
+          disabled={!canAdd}
+          className="label-caps min-h-10 border border-gold px-4 text-gold transition-colors hover:bg-gold hover:text-surface-hi disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Add ingredient
+        </button>
       </div>
+      {category === "__new__" ? (
+        <div className="mt-3 max-w-sm">
+          <span className="label-caps mb-2 block text-on-surface/65">New category</span>
+          <input
+            value={newCategory}
+            onChange={(event) => setNewCategory(event.target.value)}
+            placeholder="For example, Mineral & Marine"
+            maxLength={80}
+            className="label-caps min-h-10 w-full border border-outline bg-surface px-4 text-parchment outline-none placeholder:text-on-surface/45 focus:border-gold"
+          />
+        </div>
+      ) : null}
+      {selected.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {selected.map((ingredient) => (
+            <button
+              key={ingredient.name}
+              type="button"
+              onClick={() => removeIngredient(ingredient.name)}
+              className="label-caps border border-gold px-3 py-1 text-gold"
+            >
+              {ingredient.name} <span className="text-on-surface/55">· {ingredient.category}</span> ×
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FinderRuleEditor({
+  label,
+  verbs,
+  rules,
+  ingredientOptions,
+  onChange
+}: {
+  label: string;
+  verbs: readonly FinderRuleVerb[];
+  rules: string[];
+  ingredientOptions: string[];
+  onChange: (rules: string[]) => void;
+}) {
+  const [verb, setVerb] = useState<FinderRuleVerb>(verbs[0]);
+  const [ingredient, setIngredient] = useState("");
+  const parsedRules = rules.flatMap((value) => {
+    const rule = parseFinderRule(value);
+    return rule ? [{value, rule}] : [];
+  });
+
+  function addRule() {
+    if (!ingredient) return;
+    const nextRule = encodeFinderRule({verb, ingredient});
+    if (rules.includes(nextRule)) return;
+    onChange([...rules, nextRule]);
+    setIngredient("");
+  }
+
+  return (
+    <div className="border border-outline/60 bg-surface/45 p-4">
+      <p className="label-caps text-gold">{label}</p>
+      <p className="mt-2 text-xs leading-5 text-on-surface/60">
+        Choose a customer preference and an ingredient. Legacy free-text rules are not used.
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(10rem,0.8fr)_minmax(12rem,1.2fr)_auto] sm:items-end">
+        <label className="block">
+          <span className="label-caps mb-2 block text-on-surface/65">Customer</span>
+          <ValentroSelect value={verb} onChange={(event) => setVerb(event.target.value as FinderRuleVerb)}>
+            {verbs.map((option) => (
+              <option key={option} value={option}>{formatEnum(option)}</option>
+            ))}
+          </ValentroSelect>
+        </label>
+        <label className="block">
+          <span className="label-caps mb-2 block text-on-surface/65">Ingredient</span>
+          <ValentroSelect value={ingredient} onChange={(event) => setIngredient(event.target.value)}>
+            <option value="">Select ingredient</option>
+            {ingredientOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </ValentroSelect>
+        </label>
+        <button
+          type="button"
+          disabled={!ingredient}
+          onClick={addRule}
+          className="label-caps min-h-10 border border-gold px-4 text-gold transition-colors hover:bg-gold hover:text-surface-hi disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Add rule
+        </button>
+      </div>
+      {parsedRules.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {parsedRules.map(({value, rule}) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onChange(rules.filter((item) => item !== value))}
+              className="label-caps border border-gold px-3 py-1.5 text-gold transition-colors hover:bg-gold hover:text-surface-hi"
+            >
+              {finderRuleLabel(rule)} ×
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -35,7 +35,8 @@ export default async function AdminInventoryPage({
         orderBy: [{note: "asc"}, {nameEn: "asc"}],
         select: {
           nameEn: true,
-          note: true
+          note: true,
+          category: true
         }
       }
     }

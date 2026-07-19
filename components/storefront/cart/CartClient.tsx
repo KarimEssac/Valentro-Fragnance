@@ -402,6 +402,11 @@ export default function CartClient() {
         <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start lg:gap-10">
           <section className="space-y-3 lg:space-y-5">
             {items.map((item) => {
+              const isCollection = item.itemType === "collection";
+              const itemHref = isCollection
+                ? `/${locale}/collections/${item.slug}`
+                : `/${locale}/fragrances/${item.slug}`;
+              const itemMeta = isCollection ? "Collection" : `${item.sizeML}ml`;
               const lineTotal = Number(item.price) * item.quantity;
               const originalLineTotal =
                 Number(item.originalPrice ?? item.price) * item.quantity;
@@ -410,7 +415,9 @@ export default function CartClient() {
                 ? productDiscountBadge(item.discount, (amount) =>
                     priceFormatter.format(amount)
                   )
-                : "Sale";
+                : isCollection
+                  ? "Bundle offer"
+                  : "Sale";
 
               return (
                 <article
@@ -418,12 +425,15 @@ export default function CartClient() {
                   className="flex items-center gap-3 border border-outline/70 bg-surface p-3 lg:grid lg:grid-cols-[120px_1fr] lg:gap-5 lg:p-5"
                 >
                   <Link
-                    href={`/${locale}/fragrances/${item.slug}`}
-                    onClick={(event) =>
-                      navigateToFragrance(event, item.slug, item.image, item.name)
+                    href={itemHref}
+                    onClick={
+                      isCollection
+                        ? undefined
+                        : (event) =>
+                            navigateToFragrance(event, item.slug, item.image, item.name)
                     }
-                    data-product-image-transition-link
-                    data-product-transition-source
+                    data-product-image-transition-link={isCollection ? undefined : true}
+                    data-product-transition-source={isCollection ? undefined : true}
                     className="relative h-16 w-14 shrink-0 overflow-hidden bg-surface-mid lg:aspect-[4/5] lg:h-auto lg:w-full"
                   >
                     {item.image ? (
@@ -440,18 +450,21 @@ export default function CartClient() {
                   <div className="flex flex-1 items-center justify-between gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-5">
                     <div className="flex flex-col min-w-0">
                       <Link
-                        href={`/${locale}/fragrances/${item.slug}`}
-                        onClick={(event) =>
-                          navigateToFragrance(event, item.slug, item.image, item.name)
+                        href={itemHref}
+                        onClick={
+                          isCollection
+                            ? undefined
+                            : (event) =>
+                                navigateToFragrance(event, item.slug, item.image, item.name)
                         }
-                        data-product-image-transition-link
+                        data-product-image-transition-link={isCollection ? undefined : true}
                         className="truncate font-serif text-base leading-tight text-parchment transition-colors hover:text-gold lg:text-2xl lg:whitespace-normal"
                       >
                         {item.name}
                       </Link>
                       <div className="flex items-center gap-2 mt-0.5 text-xs text-on-surface/75 lg:hidden">
                         <span className="label-caps font-semibold text-gold">
-                          {item.sizeML}ml
+                          {itemMeta}
                         </span>
                         <span>•</span>
                         <span className="text-parchment">
@@ -465,7 +478,7 @@ export default function CartClient() {
                       </div>
                       <div className="hidden lg:block">
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <p className="label-caps text-gold">{item.sizeML}ml</p>
+                          <p className="label-caps text-gold">{itemMeta}</p>
                           {hasProductDiscount ? (
                             <span className="label-caps border border-gold/55 bg-gold/10 px-2 py-1 text-[9px] text-gold">
                               {discountLabel}

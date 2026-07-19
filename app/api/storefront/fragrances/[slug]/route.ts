@@ -7,10 +7,10 @@ import type {Session} from "next-auth";
 import {authOptions} from "@/lib/auth";
 import {prisma} from "@/lib/prisma";
 import {
-  getStorefrontFragranceDetail,
   STOREFRONT_FRAGRANCES_TAG,
   STOREFRONT_TESTIMONIALS_TAG
-} from "@/lib/storefront-data";
+} from "@/lib/cache-tags";
+import {getStorefrontFragranceDetail} from "@/lib/storefront-data";
 import type {StorefrontFragranceDetail} from "@/lib/storefront-data";
 
 type RouteContext = {

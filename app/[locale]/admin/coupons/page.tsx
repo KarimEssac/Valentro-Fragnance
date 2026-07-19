@@ -13,7 +13,7 @@ type AdminCouponsPageProps = {
 export default async function AdminCouponsPage({params}: AdminCouponsPageProps) {
   const {locale} = await params;
   const t = await getTranslations({locale, namespace: "admin"});
-  const [coupons, users] = await Promise.all([
+  const [coupons, users, userOrderTotals] = await Promise.all([
     prisma.coupon.findMany({
       orderBy: [{createdAt: "desc"}],
       include: {
@@ -37,15 +37,26 @@ export default async function AdminCouponsPage({params}: AdminCouponsPageProps) 
       select: {
         id: true,
         name: true,
-        email: true,
-        orders: {
-          select: {
-            total: true
-          }
-        }
+        email: true
       }
+    }),
+    prisma.order.groupBy({
+      by: ["userId"],
+      where: {user: {role: "CUSTOMER"}},
+      _count: {_all: true},
+      _sum: {total: true}
     })
   ]);
+
+  const totalsByUser = new Map(
+    userOrderTotals.map((total) => [
+      total.userId,
+      {
+        orderCount: total._count._all,
+        totalSpent: Number(total._sum.total ?? 0)
+      }
+    ])
+  );
 
   return (
     <AdminShell title={t("coupons")} fullWidth framed={false} showTitle={false}>
@@ -73,8 +84,8 @@ export default async function AdminCouponsPage({params}: AdminCouponsPageProps) 
           id: user.id,
           name: user.name,
           email: user.email,
-          orderCount: user.orders.length,
-          totalSpent: user.orders.reduce((sum, order) => sum + Number(order.total), 0)
+          orderCount: totalsByUser.get(user.id)?.orderCount ?? 0,
+          totalSpent: totalsByUser.get(user.id)?.totalSpent ?? 0
         }))}
       />
     </AdminShell>

@@ -1,9 +1,7 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
 
 type RouteContext = {
@@ -11,11 +9,6 @@ type RouteContext = {
     id: string;
   }>;
 };
-
-async function requireAdmin() {
-  const session = (await getServerSession(authOptions)) as Session | null;
-  return session?.user?.role === "ADMIN";
-}
 
 async function refreshFragranceRating(fragranceId: string) {
   const aggregate = await prisma.review.aggregate({
@@ -37,7 +30,7 @@ async function refreshFragranceRating(fragranceId: string) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  if (!(await requireAdmin())) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -132,8 +125,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   });
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
-  if (!(await requireAdmin())) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 

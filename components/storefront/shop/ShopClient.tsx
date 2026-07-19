@@ -6,6 +6,7 @@ import {useRouter, useSearchParams} from "next/navigation";
 import type {MouseEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
+import ValentroSelect from "@/components/ui/ValentroSelect";
 import {productDiscountBadge} from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
 import {startProductImageTransition} from "@/lib/product-image-transition";
@@ -507,18 +508,18 @@ export default function ShopClient({
         >
           Sort
         </label>
-        <select
+        <ValentroSelect
           id="shop-sort"
           value={sort}
           onChange={(event) => setSort(event.target.value)}
-          className="w-full border border-outline bg-transparent px-3 py-3 text-sm text-parchment outline-none focus:border-gold focus:ring-0"
+          className="min-h-12 text-sm"
         >
           {sortOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </ValentroSelect>
       </div>
 
       <div className="space-y-8">

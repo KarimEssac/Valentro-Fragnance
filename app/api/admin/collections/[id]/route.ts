@@ -1,11 +1,10 @@
 import {NextResponse} from "next/server";
+import type {NextRequest} from "next/server";
 import {revalidateTag} from "next/cache";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
-import {STOREFRONT_COLLECTIONS_TAG} from "@/lib/storefront-data";
+import {STOREFRONT_COLLECTIONS_TAG} from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -15,10 +14,8 @@ type RouteContext = {
   }>;
 };
 
-export async function DELETE(_request: Request, context: RouteContext) {
-  const session = (await getServerSession(authOptions)) as Session | null;
-
-  if (session?.user.role !== "ADMIN") {
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({message: "Unauthorized"}, {status: 401});
   }
 
@@ -27,7 +24,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   try {
     const collection = await prisma.collection.findUnique({
       where: {id},
-      select: {id: true, isOffer: true}
+      select: {id: true, isOffer: true, position: true}
     });
 
     if (!collection?.isOffer) {
@@ -36,19 +33,13 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     await prisma.$transaction(async (tx) => {
       await tx.collection.delete({where: {id}});
-
-      const remainingOffers = await tx.collection.findMany({
-        where: {isOffer: true},
-        orderBy: [{position: "asc"}, {createdAt: "asc"}],
-        select: {id: true}
+      await tx.collection.updateMany({
+        where: {
+          isOffer: true,
+          position: {gt: collection.position}
+        },
+        data: {position: {decrement: 1}}
       });
-
-      for (const [index, offer] of remainingOffers.entries()) {
-        await tx.collection.update({
-          where: {id: offer.id},
-          data: {position: index + 1}
-        });
-      }
     });
 
     revalidateTag(STOREFRONT_COLLECTIONS_TAG, "max");

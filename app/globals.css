@@ -469,6 +469,28 @@ html[data-product-image-transition="fallback"]
   }
 }
 
+@keyframes scent-match-ring {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.72);
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
+@keyframes scent-match-pulse {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
 @keyframes sidebar-drawer-in {
   from {
     opacity: 0;
@@ -538,6 +560,14 @@ html[data-product-image-transition="fallback"]
   animation: scent-option-in 300ms ease-out both;
 }
 
+.animate-scent-match-ring {
+  animation: scent-match-ring 2.8s ease-out infinite;
+}
+
+.animate-scent-match-pulse {
+  animation: scent-match-pulse 1.8s ease-in-out infinite;
+}
+
 .animate-sidebar-drawer-in {
   animation: sidebar-drawer-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -563,6 +593,8 @@ html[data-product-image-transition="fallback"]
   .animate-scent-modal-in,
   .animate-scent-step-in,
   .animate-scent-option-in,
+  .animate-scent-match-ring,
+  .animate-scent-match-pulse,
   .animate-sidebar-drawer-in,
   .animate-sidebar-drawer-out,
   .animate-cart-drawer-in,

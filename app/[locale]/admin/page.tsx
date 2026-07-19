@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {getTranslations} from "next-intl/server";
-import {OrderStatus, Prisma} from "@prisma/client";
+import type {Prisma} from "@prisma/client";
 
 import {prisma} from "@/lib/prisma";
 
@@ -10,12 +10,26 @@ type AdminPageProps = {
   }>;
 };
 
-const revenueStatuses: OrderStatus[] = [
-  "CONFIRMED",
-  "PROCESSING",
-  "SHIPPED",
-  "DELIVERED"
-];
+type DashboardSummary = {
+  currentRevenue: Prisma.Decimal;
+  previousRevenue: Prisma.Decimal;
+  averageOrderValue: Prisma.Decimal;
+  previousAverageOrderValue: Prisma.Decimal;
+  currentOrders: number;
+  previousOrders: number;
+  activeOrders: number;
+  pendingOrders: number;
+  newCustomers: number;
+  previousNewCustomers: number;
+  publishedFragrances: number;
+  activeCoupons: number;
+  lowStockCount: number;
+};
+
+type MonthlyRevenue = {
+  month: Date;
+  total: Prisma.Decimal;
+};
 
 function numberFromDecimal(value: Prisma.Decimal | null | undefined) {
   return value ? Number(value.toString()) : 0;
@@ -89,68 +103,74 @@ export default async function AdminPage({params}: AdminPageProps) {
   previousPeriodStart.setDate(previousPeriodStart.getDate() - 60);
   const chartStart = monthStart(addMonths(now, -5));
 
-  const [
-    currentRevenue,
-    previousRevenue,
-    currentOrders,
-    previousOrders,
-    activeOrders,
-    pendingOrders,
-    newCustomers,
-    previousNewCustomers,
-    publishedFragrances,
-    activeCoupons,
-    lowStockVariants,
-    recentOrders,
-    monthlyOrders
-  ] = await Promise.all([
-    prisma.order.aggregate({
-      where: {
-        status: {in: revenueStatuses},
-        createdAt: {gte: currentPeriodStart}
-      },
-      _sum: {total: true},
-      _avg: {total: true}
-    }),
-    prisma.order.aggregate({
-      where: {
-        status: {in: revenueStatuses},
-        createdAt: {gte: previousPeriodStart, lt: currentPeriodStart}
-      },
-      _sum: {total: true},
-      _avg: {total: true}
-    }),
-    prisma.order.count({
-      where: {createdAt: {gte: currentPeriodStart}}
-    }),
-    prisma.order.count({
-      where: {createdAt: {gte: previousPeriodStart, lt: currentPeriodStart}}
-    }),
-    prisma.order.count({
-      where: {
-        status: {in: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED"]}
-      }
-    }),
-    prisma.order.count({where: {status: "PENDING"}}),
-    prisma.user.count({
-      where: {
-        role: "CUSTOMER",
-        createdAt: {gte: currentPeriodStart}
-      }
-    }),
-    prisma.user.count({
-      where: {
-        role: "CUSTOMER",
-        createdAt: {gte: previousPeriodStart, lt: currentPeriodStart}
-      }
-    }),
-    prisma.fragrance.count({where: {isPublished: true}}),
-    prisma.coupon.count({where: {isActive: true}}),
+  const [summaryRows, lowStockVariants, recentOrders, monthlyRevenue] =
+    await Promise.all([
+    prisma.$queryRaw<DashboardSummary[]>`
+      SELECT
+        COALESCE(SUM("total") FILTER (
+          WHERE "status"::text IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+            AND "createdAt" >= ${currentPeriodStart}
+        ), 0)::numeric AS "currentRevenue",
+        COALESCE(SUM("total") FILTER (
+          WHERE "status"::text IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+            AND "createdAt" >= ${previousPeriodStart}
+            AND "createdAt" < ${currentPeriodStart}
+        ), 0)::numeric AS "previousRevenue",
+        COALESCE(AVG("total") FILTER (
+          WHERE "status"::text IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+            AND "createdAt" >= ${currentPeriodStart}
+        ), 0)::numeric AS "averageOrderValue",
+        COALESCE(AVG("total") FILTER (
+          WHERE "status"::text IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+            AND "createdAt" >= ${previousPeriodStart}
+            AND "createdAt" < ${currentPeriodStart}
+        ), 0)::numeric AS "previousAverageOrderValue",
+        COUNT(*) FILTER (
+          WHERE "createdAt" >= ${currentPeriodStart}
+        )::integer AS "currentOrders",
+        COUNT(*) FILTER (
+          WHERE "createdAt" >= ${previousPeriodStart}
+            AND "createdAt" < ${currentPeriodStart}
+        )::integer AS "previousOrders",
+        COUNT(*) FILTER (
+          WHERE "status"::text IN ('PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED')
+        )::integer AS "activeOrders",
+        COUNT(*) FILTER (
+          WHERE "status"::text = 'PENDING'
+        )::integer AS "pendingOrders",
+        (
+          SELECT COUNT(*)::integer
+          FROM "User"
+          WHERE "role"::text = 'CUSTOMER'
+            AND "createdAt" >= ${currentPeriodStart}
+        ) AS "newCustomers",
+        (
+          SELECT COUNT(*)::integer
+          FROM "User"
+          WHERE "role"::text = 'CUSTOMER'
+            AND "createdAt" >= ${previousPeriodStart}
+            AND "createdAt" < ${currentPeriodStart}
+        ) AS "previousNewCustomers",
+        (
+          SELECT COUNT(*)::integer FROM "Fragrance" WHERE "isPublished" = true
+        ) AS "publishedFragrances",
+        (
+          SELECT COUNT(*)::integer FROM "Coupon" WHERE "isActive" = true
+        ) AS "activeCoupons",
+        (
+          SELECT COUNT(*)::integer FROM "FragranceVariant" WHERE "stock" <= 5
+        ) AS "lowStockCount"
+      FROM "Order"
+    `,
     prisma.fragranceVariant.findMany({
       where: {stock: {lte: 5}},
       orderBy: {stock: "asc"},
       take: 5,
-      include: {
+      select: {
+        id: true,
+        sizeML: true,
+        sku: true,
+        stock: true,
         fragrance: {
           select: {
             nameEn: true,
@@ -162,7 +182,11 @@ export default async function AdminPage({params}: AdminPageProps) {
     prisma.order.findMany({
       orderBy: {createdAt: "desc"},
       take: 5,
-      include: {
+      select: {
+        id: true,
+        status: true,
+        total: true,
+        createdAt: true,
         user: {
           select: {
             name: true,
@@ -171,18 +195,19 @@ export default async function AdminPage({params}: AdminPageProps) {
         }
       }
     }),
-    prisma.order.findMany({
-      where: {
-        status: {in: revenueStatuses},
-        createdAt: {gte: chartStart}
-      },
-      select: {
-        createdAt: true,
-        total: true
-      },
-      orderBy: {createdAt: "asc"}
-    })
+    prisma.$queryRaw<MonthlyRevenue[]>`
+      SELECT
+        date_trunc('month', "createdAt") AS "month",
+        COALESCE(SUM("total"), 0)::numeric AS "total"
+      FROM "Order"
+      WHERE "status"::text IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+        AND "createdAt" >= ${chartStart}
+      GROUP BY date_trunc('month', "createdAt")
+      ORDER BY "month" ASC
+    `
   ]);
+
+  const summary = summaryRows[0];
 
   const currency = new Intl.NumberFormat(locale, {
     style: "currency",
@@ -195,21 +220,24 @@ export default async function AdminPage({params}: AdminPageProps) {
     day: "numeric"
   });
 
-  const revenue = numberFromDecimal(currentRevenue._sum.total);
-  const previousRevenueValue = numberFromDecimal(previousRevenue._sum.total);
-  const averageOrderValue = numberFromDecimal(currentRevenue._avg.total);
-  const previousAverageOrderValue = numberFromDecimal(previousRevenue._avg.total);
+  const revenue = numberFromDecimal(summary.currentRevenue);
+  const previousRevenueValue = numberFromDecimal(summary.previousRevenue);
+  const averageOrderValue = numberFromDecimal(summary.averageOrderValue);
+  const previousAverageOrderValue = numberFromDecimal(
+    summary.previousAverageOrderValue
+  );
+
+  const revenueByMonth = new Map(
+    monthlyRevenue.map((entry) => [
+      `${entry.month.getFullYear()}-${entry.month.getMonth()}`,
+      numberFromDecimal(entry.total)
+    ])
+  );
 
   const months = Array.from({length: 6}, (_, index) => {
     const date = monthStart(addMonths(now, index - 5));
     const key = `${date.getFullYear()}-${date.getMonth()}`;
-    const total = monthlyOrders
-      .filter(
-        (order) =>
-          order.createdAt.getFullYear() === date.getFullYear() &&
-          order.createdAt.getMonth() === date.getMonth()
-      )
-      .reduce((sum, order) => sum + numberFromDecimal(order.total), 0);
+    const total = revenueByMonth.get(key) ?? 0;
 
     return {
       key,
@@ -218,7 +246,7 @@ export default async function AdminPage({params}: AdminPageProps) {
     };
   });
   const maxMonthlyRevenue = Math.max(...months.map((month) => month.total), 1);
-  const needsAttention = pendingOrders + lowStockVariants.length;
+  const needsAttention = summary.pendingOrders + summary.lowStockCount;
 
   return (
     <section className="mx-auto max-w-container px-gutter py-10 text-parchment sm:py-12 lg:px-16">
@@ -243,14 +271,14 @@ export default async function AdminPage({params}: AdminPageProps) {
         />
         <StatCard
           label="Active Orders"
-          value={compact.format(activeOrders)}
-          trend={formatPercentChange(currentOrders, previousOrders)}
+          value={compact.format(summary.activeOrders)}
+          trend={formatPercentChange(summary.currentOrders, summary.previousOrders)}
           detail="orders in motion"
         />
         <StatCard
           label="Pending Confirmation"
-          value={compact.format(pendingOrders)}
-          detail={pendingOrders > 0 ? "requires admin response" : "no pending orders"}
+          value={compact.format(summary.pendingOrders)}
+          detail={summary.pendingOrders > 0 ? "requires admin response" : "no pending orders"}
         />
         <StatCard
           label="Average Order Value"
@@ -260,13 +288,13 @@ export default async function AdminPage({params}: AdminPageProps) {
         />
         <StatCard
           label="New Customers"
-          value={compact.format(newCustomers)}
-          trend={formatPercentChange(newCustomers, previousNewCustomers)}
+          value={compact.format(summary.newCustomers)}
+          trend={formatPercentChange(summary.newCustomers, summary.previousNewCustomers)}
           detail="created this period"
         />
         <StatCard
           label="Inventory Watch"
-          value={compact.format(lowStockVariants.length)}
+          value={compact.format(summary.lowStockCount)}
           detail="variants at 5 units or less"
         />
       </section>
@@ -313,13 +341,13 @@ export default async function AdminPage({params}: AdminPageProps) {
                 href={`/${locale}/admin/orders`}
                 className="block border-l-2 border-gold pl-4 transition-colors hover:text-gold"
               >
-                {pendingOrders} orders are still pending confirmation.
+                {summary.pendingOrders} orders are still pending confirmation.
               </Link>
               <Link
-                href={`/${locale}/admin/fragrances`}
+                href={`/${locale}/admin/inventory`}
                 className="block border-l-2 border-outline pl-4 transition-colors hover:text-gold"
               >
-                {lowStockVariants.length} fragrance variants are low on stock.
+                {summary.lowStockCount} fragrance variants are low on stock.
               </Link>
             </div>
           </div>
@@ -328,11 +356,11 @@ export default async function AdminPage({params}: AdminPageProps) {
             <p className="label-caps mb-2 text-gold">Catalogue Health</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="font-serif text-3xl">{publishedFragrances}</p>
+                <p className="font-serif text-3xl">{summary.publishedFragrances}</p>
                 <p className="label-caps mt-1 text-on-surface/70">Published</p>
               </div>
               <div>
-                <p className="font-serif text-3xl">{activeCoupons}</p>
+                <p className="font-serif text-3xl">{summary.activeCoupons}</p>
                 <p className="label-caps mt-1 text-on-surface/70">Coupons</p>
               </div>
             </div>

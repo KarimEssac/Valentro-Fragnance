@@ -4,7 +4,7 @@ import {useLocale} from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
-import type {FormEvent} from "react";
+import type {FormEvent, ReactNode} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 
 import Modal from "@/components/ui/Modal";
@@ -21,6 +21,7 @@ type SessionResponse = {
   user?: {
     id?: string;
     role?: string;
+    email?: string | null;
   };
 };
 
@@ -73,6 +74,51 @@ function formatScentProfile(value: string) {
     .join(" ");
 }
 
+function ProductInformationDisclosure({
+  id,
+  title,
+  isOpen,
+  onToggle,
+  children
+}: {
+  id: string;
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="border-b border-outline/70">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={id}
+        onClick={onToggle}
+        className="focus-gold flex min-h-14 w-full items-center justify-between gap-5 py-4 text-left text-parchment transition-colors hover:text-gold"
+      >
+        <span className="label-caps text-xs">{title}</span>
+        <span aria-hidden="true" className="font-serif text-2xl leading-none">
+          {isOpen ? "−" : "+"}
+        </span>
+      </button>
+      <div
+        id={id}
+        aria-hidden={!isOpen}
+        inert={!isOpen}
+        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
+          isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="border-t border-outline/45 pb-5 pt-4 text-sm leading-6 text-on-surface/80">
+            {children}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function ProductDetailClient({
   slug,
   initialProduct
@@ -95,6 +141,11 @@ export default function ProductDetailClient({
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [cartStatus, setCartStatus] = useState("");
+  const [showRestockModal, setShowRestockModal] = useState(false);
+  const [restockEmail, setRestockEmail] = useState("");
+  const [restockStatus, setRestockStatus] = useState("");
+  const [restockSubmitting, setRestockSubmitting] = useState(false);
+  const [restockSaved, setRestockSaved] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -104,6 +155,9 @@ export default function ProductDetailClient({
   const [reviewToDelete, setReviewToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [openProductInformation, setOpenProductInformation] = useState<string | null>(
+    "scent-details"
+  );
   const transitionStyle = transitionPreview
     ? {viewTransitionName: getProductTransitionName(slug)}
     : undefined;
@@ -114,6 +168,15 @@ export default function ProductDetailClient({
         style: "currency",
         currency: "EGP",
         maximumFractionDigits: 0
+      }),
+    [locale]
+  );
+  const reviewDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        day: "numeric",
+        month: "short",
+        year: "numeric"
       }),
     [locale]
   );
@@ -183,6 +246,9 @@ export default function ProductDetailClient({
         if (isMounted) {
           setIsSignedIn(Boolean(data.user?.id));
           setIsAdmin(data.user?.role === "ADMIN");
+          if (data.user?.email) {
+            setRestockEmail((current) => current || data.user?.email || "");
+          }
         }
       } catch {
         if (isMounted) {
@@ -289,6 +355,49 @@ export default function ProductDetailClient({
   function buyNow() {
     if (performAddToCart()) {
       router.push(`/${locale}/checkout`);
+    }
+  }
+
+  async function submitRestockRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedVariant) return;
+
+    setRestockSubmitting(true);
+    setRestockStatus("");
+
+    try {
+      const response = await fetch("/api/storefront/restock-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          variantId: selectedVariant.id,
+          email: restockEmail,
+          locale
+        })
+      });
+      const result = (await response.json()) as {message?: string};
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to save your restock request");
+      }
+
+      setRestockSaved(true);
+      setRestockStatus(
+        result.message ??
+          (isArabic
+            ? "سنرسل لك رسالة عند توفر هذا العطر."
+            : "We'll email you when this fragrance is back in stock.")
+      );
+    } catch (error) {
+      setRestockSaved(false);
+      setRestockStatus(
+        error instanceof Error ? error.message : "Unable to save your restock request"
+      );
+    } finally {
+      setRestockSubmitting(false);
     }
   }
 
@@ -633,12 +742,121 @@ export default function ProductDetailClient({
               </button>
             </div>
 
+            <div className="mb-6 border-t border-outline/70">
+              <ProductInformationDisclosure
+                id="scent-details"
+                title={isArabic ? "الطابع والأداء" : "Scent Profile & Performance"}
+                isOpen={openProductInformation === "scent-details"}
+                onToggle={() =>
+                  setOpenProductInformation((current) =>
+                    current === "scent-details" ? null : "scent-details"
+                  )
+                }
+              >
+                <dl className="grid grid-cols-2 gap-x-5 gap-y-4">
+                  <div>
+                    <dt className="label-caps text-[10px] text-gold">
+                      {isArabic ? "الطابع" : "Profile"}
+                    </dt>
+                    <dd className="mt-1 text-parchment">
+                      {formatScentProfile(product.scentProfile)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="label-caps text-[10px] text-gold">
+                      {isArabic ? "الفوحان" : "Sillage"}
+                    </dt>
+                    <dd className="mt-1 text-parchment">
+                      {formatScentProfile(product.sillage)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="label-caps text-[10px] text-gold">
+                      {isArabic ? "الثبات" : "Longevity"}
+                    </dt>
+                    <dd className="mt-1 text-parchment">
+                      {product.longevity} {isArabic ? "ساعات" : "hours"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="label-caps text-[10px] text-gold">
+                      {isArabic ? "النوتات" : "Notes"}
+                    </dt>
+                    <dd className="mt-1 text-parchment">
+                      {product.ingredients.length > 0
+                        ? product.ingredients
+                            .map((ingredient) =>
+                              isArabic ? ingredient.nameAr : ingredient.nameEn
+                            )
+                            .join(" · ")
+                        : isArabic
+                          ? "تركيبة فريدة"
+                          : "Signature composition"}
+                    </dd>
+                  </div>
+                </dl>
+              </ProductInformationDisclosure>
+
+              <ProductInformationDisclosure
+                id="delivery-payment"
+                title={isArabic ? "التوصيل والدفع" : "Delivery & Payment"}
+                isOpen={openProductInformation === "delivery-payment"}
+                onToggle={() =>
+                  setOpenProductInformation((current) =>
+                    current === "delivery-payment" ? null : "delivery-payment"
+                  )
+                }
+              >
+                <p>
+                  {isArabic
+                    ? "التوصيل متاح إلى المحافظات المدعومة في مصر. الدفع عند الاستلام، وسيتواصل فريقنا معك لتأكيد الطلب."
+                    : "Delivery is available across supported Egyptian governorates. Pay by cash on delivery, then our team will contact you to confirm the order."}
+                </p>
+              </ProductInformationDisclosure>
+
+              <ProductInformationDisclosure
+                id="care-returns"
+                title={isArabic ? "العناية والاسترجاع" : "Care & Returns"}
+                isOpen={openProductInformation === "care-returns"}
+                onToggle={() =>
+                  setOpenProductInformation((current) =>
+                    current === "care-returns" ? null : "care-returns"
+                  )
+                }
+              >
+                <p>
+                  {isArabic
+                    ? "احفظ العطر بعيدًا عن الحرارة وأشعة الشمس المباشرة. يمكن طلب استرجاع المنتجات المؤهلة غير المفتوحة خلال 30 يومًا من الاستلام."
+                    : "Store your fragrance away from heat and direct sunlight. Eligible unopened items can be requested for return within 30 days of delivery."}
+                </p>
+                <Link
+                  href={`/${locale}/refund-policy`}
+                  className="label-caps focus-gold mt-3 inline-flex text-[10px] text-gold underline-offset-4 hover:underline"
+                >
+                  {isArabic ? "عرض سياسة الاسترجاع" : "View refund policy"}
+                </Link>
+              </ProductInformationDisclosure>
+            </div>
+
             <p className="label-caps flex items-center gap-2 text-on-surface/70">
               <span className="h-2 w-2 bg-gold" />
               {selectedVariant.stock > 0
                 ? "In Stock - Ready for immediate dispatch"
                 : "Currently out of stock"}
             </p>
+            {selectedVariant.stock < 1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setRestockStatus("");
+                  setRestockSaved(false);
+                  setShowRestockModal(true);
+                }}
+                className="label-caps focus-gold mt-5 inline-flex min-h-12 w-full items-center justify-center border border-gold px-8 text-gold transition-colors hover:bg-gold hover:text-surface-hi"
+              >
+                {isArabic ? "هل ترغب بهذا العطر؟" : "Want that product?"}
+              </button>
+            ) : null}
             {cartStatus ? (
               <p className="mt-4 text-sm text-gold">{cartStatus}</p>
             ) : null}
@@ -781,9 +999,17 @@ export default function ProductDetailClient({
                     <p className="mb-6 flex-grow text-base leading-7 text-on-surface/80">
                       &ldquo;{reviewMessage}&rdquo;
                     </p>
-                    <p className="label-caps text-gold">
-                      - {review.reviewerName}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                      <p className="label-caps text-gold">
+                        - {review.reviewerName}
+                      </p>
+                      <time
+                        dateTime={review.createdAt}
+                        className="text-[10px] font-semibold uppercase tracking-[0.12em] text-on-surface/55"
+                      >
+                        {reviewDateFormatter.format(new Date(review.createdAt))}
+                      </time>
+                    </div>
                   </article>
                 );
               })}
@@ -795,6 +1021,78 @@ export default function ProductDetailClient({
           )}
         </section>
       </div>
+      <Modal
+        isOpen={showRestockModal}
+        title={isArabic ? "هل ترغب بهذا العطر؟" : "Want that product?"}
+        onClose={() => {
+          if (!restockSubmitting) setShowRestockModal(false);
+        }}
+      >
+        {restockSaved ? (
+          <div className="space-y-6">
+            <p role="status" className="text-sm leading-7 text-on-surface/85">
+              {restockStatus}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowRestockModal(false)}
+              className="label-caps focus-gold min-h-12 w-full border border-parchment bg-parchment px-6 text-surface-hi transition-colors hover:border-gold hover:bg-gold"
+            >
+              {isArabic ? "إغلاق" : "Close"}
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submitRestockRequest} className="space-y-6">
+            <p className="text-sm leading-7 text-on-surface/80">
+              {isArabic
+                ? `أدخل بريدك الإلكتروني وسنخبرك عند توفر ${productName}${selectedVariant ? ` بحجم ${selectedVariant.sizeML} مل` : ""}. يساعدنا طلبك أيضًا على إعطاء هذا العطر أولوية أعلى في إعادة التخزين.`
+                : `Enter your email and we'll let you know when ${productName}${selectedVariant ? ` ${selectedVariant.sizeML}ml` : ""} is available again. Your request also helps us prioritize this fragrance for restocking.`}
+            </p>
+            <label className="block">
+              <span className="label-caps mb-2 block text-gold">
+                {isArabic ? "البريد الإلكتروني" : "Email address"}
+              </span>
+              <input
+                type="email"
+                value={restockEmail}
+                onChange={(event) => setRestockEmail(event.target.value)}
+                autoComplete="email"
+                required
+                placeholder="you@example.com"
+                className="focus-gold w-full border border-outline bg-surface px-4 py-3 text-parchment outline-none placeholder:text-on-surface/45 focus:border-gold"
+              />
+            </label>
+            {restockStatus ? (
+              <p role="alert" className="text-sm text-red-300">
+                {restockStatus}
+              </p>
+            ) : null}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowRestockModal(false)}
+                disabled={restockSubmitting}
+                className="label-caps min-h-11 border border-outline px-6 text-parchment transition-colors hover:bg-surface-mid disabled:opacity-50"
+              >
+                {isArabic ? "إلغاء" : "Cancel"}
+              </button>
+              <button
+                type="submit"
+                disabled={restockSubmitting}
+                className="label-caps focus-gold min-h-11 border border-parchment bg-parchment px-6 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-wait disabled:opacity-50"
+              >
+                {restockSubmitting
+                  ? isArabic
+                    ? "جارٍ الحفظ..."
+                    : "Saving..."
+                  : isArabic
+                    ? "أخبرني عند التوفر"
+                    : "Notify me"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
       <Modal
         isOpen={Boolean(reviewToDelete)}
         title={isArabic ? "حذف التقييم" : "Delete Review"}

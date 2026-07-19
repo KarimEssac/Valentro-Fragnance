@@ -1,10 +1,8 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
 import {CouponApplicability, CouponType, Prisma} from "@prisma/client";
-import {getServerSession} from "next-auth";
-import type {Session} from "next-auth";
 
-import {authOptions} from "@/lib/auth";
+import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
 
 type RouteContext = {
@@ -87,9 +85,8 @@ function asUserIds(value: unknown) {
     .filter((item) => /^[A-Za-z0-9_-]+$/.test(item));
 }
 
-async function assertAdmin() {
-  const session = (await getServerSession(authOptions)) as Session | null;
-  if (session?.user.role !== "ADMIN") throw new Error("Unauthorized");
+async function assertAdmin(request: NextRequest) {
+  if (!(await isAdminRequest(request))) throw new Error("Unauthorized");
 }
 
 function parsePayload(payload: CouponUpdatePayload) {
@@ -133,7 +130,7 @@ function parsePayload(payload: CouponUpdatePayload) {
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    await assertAdmin();
+    await assertAdmin(request);
     const {id} = await context.params;
     const payload = (await request.json()) as CouponUpdatePayload;
     const parsed = parsePayload(payload);
@@ -177,10 +174,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  void request;
-
   try {
-    await assertAdmin();
+    await assertAdmin(request);
     const {id} = await context.params;
 
     await prisma.coupon.delete({where: {id}});
