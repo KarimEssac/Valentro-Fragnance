@@ -20,6 +20,17 @@ function formatScentProfile(value: string) {
     .join(" ");
 }
 
+function cloudinaryBlurPreview(url: string) {
+  const uploadMarker = "/image/upload/";
+
+  if (!url.includes(uploadMarker)) return null;
+
+  return url.replace(
+    uploadMarker,
+    `${uploadMarker}e_blur:1000,f_auto,q_auto:low,w_64/`
+  );
+}
+
 export default function SignatureCollectionSection({
   initialFragrances
 }: {
@@ -142,14 +153,25 @@ export default function SignatureCollectionSection({
   }
 
   return (
-    <section className="bg-bg px-gutter pb-12 pt-20 text-parchment sm:pb-14 sm:pt-24 lg:pb-16 lg:pt-32">
+    <section
+      data-signature-collection
+      className="bg-bg px-gutter pb-12 pt-20 text-parchment sm:pb-14 sm:pt-24 lg:pb-16 lg:pt-32"
+    >
       <div className="mx-auto max-w-container">
         <div className="mb-10 flex items-end justify-between gap-6 sm:mb-14">
-          <h2 className="font-serif text-3xl leading-tight text-parchment sm:text-5xl">
-            The Signature Collection
-          </h2>
+          <div>
+            <h2 className="font-serif text-3xl leading-tight text-parchment sm:text-5xl">
+              The Signature Collection
+            </h2>
+            <Link
+              href={`/${locale}/fragrances`}
+              className="label-caps mt-4 inline-flex border-b border-parchment pb-1 text-parchment transition-colors duration-300 hover:border-gold hover:text-gold"
+            >
+              {isArabic ? "تصفح الكل" : "Browse All"}
+            </Link>
+          </div>
 
-          <div className="hidden items-center gap-3 md:flex">
+          <div className="hidden shrink-0 items-center gap-3 md:flex">
             <button
               type="button"
               aria-label="Previous fragrances"
@@ -208,6 +230,9 @@ export default function SignatureCollectionSection({
                   ? fragrance.primaryImage.altAr
                   : fragrance.primaryImage.altEn
                 : name;
+              const blurPreview = fragrance.primaryImage
+                ? cloudinaryBlurPreview(fragrance.primaryImage.url)
+                : null;
 
               return (
                 <Link
@@ -225,26 +250,55 @@ export default function SignatureCollectionSection({
                     className="img-shimmer relative mb-6 flex aspect-[3/4] items-center justify-center overflow-hidden border border-outline bg-surface-mid/40"
                   >
                     {fragrance.primaryImage ? (
-                      <Image
-                        src={fragrance.primaryImage.url}
-                        alt={imageAlt}
-                        fill
-                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 360px, 82vw"
-                        className="relative z-10 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
-                        onLoad={(event) => {
-                          event.currentTarget.dataset.loaded = "true";
-                        }}
-                        onError={(event) => {
-                          event.currentTarget.style.display = "none";
-                        }}
-                      />
+                      <>
+                        <Image
+                          src={fragrance.primaryImage.url}
+                          alt={imageAlt}
+                          fill
+                          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 360px, 82vw"
+                          className="signature-product-image relative z-20 h-full w-full scale-100 transform-gpu object-cover will-change-transform group-hover:scale-[1.035]"
+                          onLoad={(event) => {
+                            event.currentTarget.dataset.loaded = "true";
+                            event.currentTarget
+                              .closest<HTMLElement>("[data-product-transition-source]")
+                              ?.removeAttribute("data-image-error");
+                          }}
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                            event.currentTarget
+                              .closest<HTMLElement>("[data-product-transition-source]")
+                              ?.setAttribute("data-image-error", "true");
+                          }}
+                        />
+                        {blurPreview ? (
+                          <Image
+                            src={blurPreview}
+                            alt=""
+                            aria-hidden="true"
+                            fill
+                            unoptimized
+                            className="signature-product-placeholder pointer-events-none absolute inset-0 z-10 h-full w-full object-cover"
+                            onLoad={(event) => {
+                              event.currentTarget.dataset.loaded = "true";
+                            }}
+                          />
+                        ) : null}
+                      </>
                     ) : null}
-                    <div className="absolute inset-0 z-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,248,236,0.9),rgba(227,210,186,0.62))] px-8 text-center font-serif text-3xl leading-tight text-parchment/70">
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,248,236,0.9),rgba(227,210,186,0.62))]"
+                    />
+                    <div
+                      className={`signature-image-fallback absolute inset-0 z-[15] flex items-center justify-center px-8 text-center font-serif text-3xl leading-tight text-parchment/70 transition-opacity duration-300 ${
+                        fragrance.primaryImage ? "opacity-0" : "opacity-100"
+                      }`}
+                    >
                       {name}
                     </div>
-                    <div className="absolute inset-0 z-20 bg-gradient-to-t from-parchment/35 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                    <div className="absolute inset-0 z-30 bg-gradient-to-t from-parchment/35 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                     {fragrance.discount ? (
-                      <span className="label-caps absolute right-3 top-3 z-30 bg-gold px-3 py-2 text-surface-hi">
+                      <span className="label-caps absolute right-3 top-3 z-40 bg-gold px-3 py-2 text-surface-hi">
                         {formatDiscountBadge(fragrance.discount)}
                       </span>
                     ) : null}

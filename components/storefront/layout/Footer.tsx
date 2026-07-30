@@ -162,6 +162,16 @@ export default function Footer() {
               <path d="M9 8H7v3h2v9h3v-9h2.72l.42-3H12V6c0-.57.24-1 1-1h2V2h-3c-3.07 0-5 1.89-5 5v1z"/>
             </svg>
           </a>
+          <span
+            aria-label="TikTok"
+            className="footer-social-link"
+            role="img"
+            title="TikTok"
+          >
+            <svg className="footer-social-icon h-[22px] w-[22px] fill-current" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M16.4 3c.4 2.4 1.8 3.9 4.1 4.1v3.1a7.4 7.4 0 0 1-4-1.2v6.4c0 3.8-2.2 5.6-5.2 5.6A5.1 5.1 0 0 1 6 16c0-3.2 2.4-5.3 5.8-5.1v3.2c-1.5-.2-2.6.5-2.6 1.9 0 1.2.9 2 2 2 1.3 0 2-.8 2-2.5V3h3.2Z" />
+            </svg>
+          </span>
           <a
             href="https://karimessac.github.io/My-Portfolio/"
             target="_blank"

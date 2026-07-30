@@ -1,4 +1,5 @@
 import AdminEmailTemplatesClient from "@/components/admin/AdminEmailTemplatesClient";
+import {renderBulkDiscountEmailTemplate} from "@/lib/bulk-discount-email";
 import {renderNewsletterEmailTemplate} from "@/lib/newsletter-email";
 import {
   renderRestockDemandOwnerEmailTemplate,
@@ -95,11 +96,33 @@ export default async function AdminEmailTemplatesPage({
       }
     }
   });
+  const bulkDiscountTemplate = renderBulkDiscountEmailTemplate({
+    coupon: {
+      id: "cbulkpreview2026",
+      code: "BULK-VIP15",
+      type: "PERCENTAGE",
+      value: "15",
+      minOrderAmount: "1200",
+      startsAt: "2026-08-01T00:00:00.000Z",
+      expiresAt: "2026-08-31T23:59:59.000Z"
+    },
+    recipient: {
+      id: "ccustomerpreview2026",
+      name: "Layla Hassan",
+      email: "layla.customer@example.com"
+    }
+  });
 
   return (
     <AdminEmailTemplatesClient
       locale={locale}
-      templates={[...orderTemplates, newsletterTemplate, restockTemplate, restockOwnerTemplate]}
+      templates={[
+        ...orderTemplates,
+        bulkDiscountTemplate,
+        newsletterTemplate,
+        restockTemplate,
+        restockOwnerTemplate
+      ]}
     />
   );
 }

@@ -94,6 +94,10 @@ const sortOptions = [
   {value: "name", label: "Name"}
 ];
 
+const PRICE_MIN = 0;
+const PRICE_MAX = 5000;
+const PRICE_STEP = 1;
+
 function formatEnum(value: string) {
   return value
     .toLowerCase()
@@ -259,6 +263,8 @@ export default function ShopClient({
   }
   const [selectedScents, setSelectedScents] = useState<string[]>([]);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
+  const [minimumPrice, setMinimumPrice] = useState(PRICE_MIN);
+  const [maximumPrice, setMaximumPrice] = useState(PRICE_MAX);
   const [sort, setSort] = useState("position");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -318,6 +324,16 @@ export default function ShopClient({
 
     return catalogItems
       .filter((item) => {
+        const itemMinimumPrice = itemMinPrice(item);
+        const itemMaximumPrice = itemMaxPrice(item) || itemMinimumPrice;
+        const matchesPrice =
+          itemMaximumPrice >= minimumPrice &&
+          itemMinimumPrice <= maximumPrice;
+
+        if (!matchesPrice) {
+          return false;
+        }
+
         if (
           selectedItemTypes.length > 0 &&
           !selectedItemTypes.includes(item.kind)
@@ -405,6 +421,8 @@ export default function ShopClient({
   }, [
     catalogItems,
     isArabic,
+    maximumPrice,
+    minimumPrice,
     query,
     selectedGenders,
     selectedItemTypes,
@@ -419,6 +437,8 @@ export default function ShopClient({
     selectedGenders.length > 0 ||
     selectedScents.length > 0 ||
     selectedNotes.length > 0 ||
+    minimumPrice !== PRICE_MIN ||
+    maximumPrice !== PRICE_MAX ||
     sort !== "position";
 
   const activeFilterCount =
@@ -427,6 +447,7 @@ export default function ShopClient({
     selectedScents.length +
     selectedNotes.length +
     (query ? 1 : 0) +
+    (minimumPrice !== PRICE_MIN || maximumPrice !== PRICE_MAX ? 1 : 0) +
     (sort !== "position" ? 1 : 0);
 
   useEffect(() => {
@@ -443,6 +464,8 @@ export default function ShopClient({
     setSelectedGenders([]);
     setSelectedScents([]);
     setSelectedNotes([]);
+    setMinimumPrice(PRICE_MIN);
+    setMaximumPrice(PRICE_MAX);
     setSort("position");
   }
 
@@ -477,6 +500,12 @@ export default function ShopClient({
       combined: combined ? priceFormatter.format(combined) : ""
     };
   }
+
+  const priceRangeSize = PRICE_MAX - PRICE_MIN;
+  const minimumPricePercent =
+    ((minimumPrice - PRICE_MIN) / priceRangeSize) * 100;
+  const maximumPricePercent =
+    ((maximumPrice - PRICE_MIN) / priceRangeSize) * 100;
 
   const filterControls = (
     <>
@@ -565,6 +594,112 @@ export default function ShopClient({
 
         <div>
           <h2 className="label-caps mb-4 border-b border-outline/70 pb-3 text-parchment">
+            Price
+          </h2>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
+            <label className="block">
+              <span className="label-caps mb-2 block text-on-surface/65">
+                Start
+              </span>
+              <span className="flex min-h-11 items-center border border-outline bg-surface px-3 focus-within:border-gold">
+                <span className="mr-2 text-xs text-on-surface/55">EGP</span>
+                <input
+                  type="number"
+                  min={PRICE_MIN}
+                  max={maximumPrice}
+                  step={PRICE_STEP}
+                  value={minimumPrice}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (!Number.isFinite(value)) return;
+                    setMinimumPrice(
+                      Math.min(maximumPrice, Math.max(PRICE_MIN, value))
+                    );
+                  }}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-parchment outline-none focus:ring-0"
+                />
+              </span>
+            </label>
+            <span className="pb-3 text-on-surface/45" aria-hidden="true">
+              –
+            </span>
+            <label className="block">
+              <span className="label-caps mb-2 block text-on-surface/65">
+                End
+              </span>
+              <span className="flex min-h-11 items-center border border-outline bg-surface px-3 focus-within:border-gold">
+                <span className="mr-2 text-xs text-on-surface/55">EGP</span>
+                <input
+                  type="number"
+                  min={minimumPrice}
+                  max={PRICE_MAX}
+                  step={PRICE_STEP}
+                  value={maximumPrice}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (!Number.isFinite(value)) return;
+                    setMaximumPrice(
+                      Math.max(minimumPrice, Math.min(PRICE_MAX, value))
+                    );
+                  }}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-parchment outline-none focus:ring-0"
+                />
+              </span>
+            </label>
+          </div>
+
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between text-xs text-on-surface/65">
+              <span>{priceFormatter.format(minimumPrice)}</span>
+              <span>{priceFormatter.format(maximumPrice)}</span>
+            </div>
+            <div className="relative h-8" data-price-range>
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-outline" />
+              <div
+                className="absolute top-1/2 h-0.5 -translate-y-1/2 bg-gold"
+                style={{
+                  left: `${minimumPricePercent}%`,
+                  right: `${100 - maximumPricePercent}%`
+                }}
+              />
+              <input
+                type="range"
+                aria-label="Start price"
+                min={PRICE_MIN}
+                max={PRICE_MAX}
+                step={PRICE_STEP}
+                value={minimumPrice}
+                onChange={(event) =>
+                  setMinimumPrice(
+                    Math.min(maximumPrice, Number(event.target.value))
+                  )
+                }
+                className="shop-price-range absolute inset-0 z-[2] h-8 w-full"
+              />
+              <input
+                type="range"
+                aria-label="End price"
+                min={PRICE_MIN}
+                max={PRICE_MAX}
+                step={PRICE_STEP}
+                value={maximumPrice}
+                onChange={(event) =>
+                  setMaximumPrice(
+                    Math.max(minimumPrice, Number(event.target.value))
+                  )
+                }
+                className="shop-price-range absolute inset-0 z-[3] h-8 w-full"
+              />
+            </div>
+            <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface/50">
+              <span>{priceFormatter.format(PRICE_MIN)}</span>
+              <span>{priceFormatter.format(PRICE_MAX)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="label-caps mb-4 border-b border-outline/70 pb-3 text-parchment">
             Scent Profile
           </h2>
           <div className="space-y-3">
@@ -617,7 +752,7 @@ export default function ShopClient({
   );
 
   return (
-    <section className="bg-bg px-gutter pb-24 pt-10 text-parchment sm:pt-14 lg:px-16">
+    <section className="bg-bg px-gutter pb-24 text-parchment lg:px-16">
       <div className="mx-auto max-w-container">
         <div className="mb-10 border-b border-outline/70 pb-8">
           <p className="label-caps mb-4 text-gold">Fragrance Catalogue</p>

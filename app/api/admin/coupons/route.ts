@@ -3,6 +3,7 @@ import type {NextRequest} from "next/server";
 import {CouponApplicability, CouponType, Prisma} from "@prisma/client";
 
 import {isAdminRequest} from "@/lib/admin-auth";
+import {sendBulkDiscountEmails} from "@/lib/bulk-discount-email";
 import {prisma} from "@/lib/prisma";
 
 type CouponPayload = {
@@ -247,7 +248,19 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({message: "Coupon created", coupon}, {status: 201});
+    const emailDelivery =
+      mode === "bulk" ? await sendBulkDiscountEmails(coupon) : null;
+    const message = !emailDelivery
+      ? "Coupon created"
+      : !emailDelivery.configured
+        ? "Bulk coupon created; email delivery is not configured"
+        : emailDelivery.sent === emailDelivery.recipients
+          ? `Bulk coupon created and emailed to ${emailDelivery.sent} customer${
+              emailDelivery.sent === 1 ? "" : "s"
+            }`
+          : `Bulk coupon created; emailed ${emailDelivery.sent} of ${emailDelivery.recipients} customers`;
+
+    return NextResponse.json({message, coupon, emailDelivery}, {status: 201});
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create coupon";
     return NextResponse.json({message}, {status: message === "Unauthorized" ? 401 : 400});

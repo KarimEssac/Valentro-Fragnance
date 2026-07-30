@@ -123,7 +123,7 @@ export default function CategoriesSection() {
                   alt={category.alt}
                   fill
                   sizes="(min-width: 1024px) 31vw, (min-width: 768px) 33vw, 100vw"
-                  className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+                  className="category-product-image scale-100 transform-gpu object-cover object-center will-change-transform group-hover:scale-[1.02]"
                   onLoad={(event) => {
                     event.currentTarget.dataset.loaded = "true";
                   }}

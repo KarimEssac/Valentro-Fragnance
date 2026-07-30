@@ -3,6 +3,7 @@
 import {useState} from "react";
 
 import ValentroSelect from "@/components/ui/ValentroSelect";
+import type {RenderedBulkDiscountEmailTemplate} from "@/lib/bulk-discount-email";
 import type {OrderEmailTemplateKind, RenderedOrderEmailTemplate} from "@/lib/order-email";
 import type {RenderedNewsletterEmailTemplate} from "@/lib/newsletter-email";
 import type {
@@ -12,11 +13,13 @@ import type {
 
 type EmailTemplateKind =
   | OrderEmailTemplateKind
+  | "bulk-discount-awarded"
   | "newsletter"
   | "restock-available"
   | "restock-request-owner";
 type EmailTemplatePreview =
   | RenderedOrderEmailTemplate
+  | RenderedBulkDiscountEmailTemplate
   | RenderedNewsletterEmailTemplate
   | RenderedRestockEmailTemplate
   | RenderedRestockDemandOwnerEmailTemplate;
@@ -30,6 +33,7 @@ const kindOrder: EmailTemplateKind[] = [
   "admin-order-placed",
   "customer-order-placed",
   "customer-order-shipped",
+  "bulk-discount-awarded",
   "newsletter",
   "restock-available",
   "restock-request-owner"
@@ -112,6 +116,11 @@ export default function AdminEmailTemplatesClient({
                 <>
                   <p>layla.customer@example.com</p>
                   <p>Emporio Armani 50ml</p>
+                </>
+              ) : selected.kind === "bulk-discount-awarded" ? (
+                <>
+                  <p>Layla Hassan · 15% off</p>
+                  <p>BULK-VIP15 · EGP 1,200 minimum</p>
                 </>
               ) : (
                 <>

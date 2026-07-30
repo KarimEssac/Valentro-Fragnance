@@ -585,6 +585,9 @@ export default function AdminCouponsClient({locale, coupons, customers}: Props) 
                   <p className="text-sm text-[#7c766d]">No customers match this cohort yet.</p>
                 )}
               </div>
+              <p className="mt-4 border-t border-[#7A6A4F]/20 pt-4 text-xs leading-5 text-[#7c766d]">
+                Creating the bulk discount emails the offer to every matched account.
+              </p>
             </div>
             </div>
             <button
