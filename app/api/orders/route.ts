@@ -3,7 +3,7 @@ import {NextResponse} from "next/server";
 import {Prisma, PaymentMethod} from "@prisma/client";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
-import {randomBytes} from "crypto";
+import {createHash, randomBytes} from "crypto";
 import {hash} from "bcryptjs";
 
 import {authOptions} from "@/lib/auth";
@@ -177,7 +177,7 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
     throw new Error("Governorate is not supported");
   }
 
-  if (payload.paymentMethod !== "CASH_ON_DELIVERY") {
+  if (payload.paymentMethod !== "CASH_ON_DELIVERY" && payload.paymentMethod !== "INSTAPAY") {
     throw new Error("Selected payment method is not available yet");
   }
 
@@ -234,6 +234,7 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
     phone,
     notes,
     couponCode,
+    paymentMethod: payload.paymentMethod as PaymentMethod,
     items
   };
 }
@@ -270,6 +271,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const claimToken = checkout.paymentMethod === PaymentMethod.INSTAPAY
+      ? randomBytes(32).toString("hex")
+      : null;
     const guestPasswordHash = session?.user?.id
       ? ""
       : await hash(randomBytes(32).toString("hex"), 12);
@@ -407,6 +411,7 @@ export async function POST(request: NextRequest) {
           fragranceNameAr: line.fragranceNameAr,
           sizeML: line.sizeML,
           quantity,
+          reservedVariantIds: line.inventoryVariantIds,
           unitPrice: new Prisma.Decimal(line.originalPrice),
           totalPrice: new Prisma.Decimal(line.originalLineTotal)
         });
@@ -422,7 +427,10 @@ export async function POST(request: NextRequest) {
       return tx.order.create({
         data: {
           userId: customerId,
-          paymentMethod: PaymentMethod.CASH_ON_DELIVERY,
+          paymentMethod: checkout.paymentMethod,
+          instapayClaimTokenHash: claimToken
+            ? createHash("sha256").update(claimToken).digest("hex")
+            : null,
           subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
           discountAmount: new Prisma.Decimal(discountAmount.toFixed(2)),
           total: new Prisma.Decimal(total.toFixed(2)),
@@ -452,7 +460,7 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      await sendOrderPlacedEmails(order.id);
+      await sendOrderPlacedEmails(order.id, claimToken);
     } catch (error) {
       console.error(
         "Order was placed, but order emails could not be prepared:",
@@ -463,7 +471,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: "Order placed",
       orderId: order.id,
-      total: order.total.toString()
+      total: order.total.toString(),
+      claimToken
     });
   } catch (error) {
     return NextResponse.json(

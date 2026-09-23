@@ -74,7 +74,7 @@ export default function CategoriesSection() {
   }, []);
 
   return (
-    <section className="bg-bg px-gutter py-20 text-parchment sm:py-24 lg:py-32">
+    <section className="bg-surface px-gutter py-20 text-parchment sm:py-24 lg:py-32">
       <div className="mx-auto max-w-container">
         <header className="mx-auto mb-10 max-w-2xl text-center sm:mb-16">
           <h2 className="font-serif text-4xl leading-tight text-parchment sm:text-6xl">

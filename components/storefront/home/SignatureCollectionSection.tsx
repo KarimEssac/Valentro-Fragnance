@@ -142,7 +142,7 @@ export default function SignatureCollectionSection({
   }
 
   return (
-    <section className="bg-bg px-gutter pb-12 pt-20 text-parchment sm:pb-14 sm:pt-24 lg:pb-16 lg:pt-32">
+    <section className="bg-surface px-gutter pb-12 pt-20 text-parchment sm:pb-14 sm:pt-24 lg:pb-16 lg:pt-32">
       <div className="mx-auto max-w-container">
         <div className="mb-10 flex items-end justify-between gap-6 sm:mb-14">
           <h2 className="font-serif text-3xl leading-tight text-parchment sm:text-5xl">

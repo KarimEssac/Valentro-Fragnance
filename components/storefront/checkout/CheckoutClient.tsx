@@ -7,6 +7,7 @@ import type {FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
 import ValentroSelect from "@/components/ui/ValentroSelect";
+import InstapayPayment from "@/components/storefront/checkout/InstapayPayment";
 import {
   cartPricingRequestItems,
   cartOriginalSubtotal,
@@ -164,6 +165,9 @@ export default function CheckoutClient() {
   const [missingFields, setMissingFields] = useState<MissingField[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [orderTotal, setOrderTotal] = useState("");
+  const [claimToken, setClaimToken] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH_ON_DELIVERY" | "INSTAPAY">("CASH_ON_DELIVERY");
   const [checkoutDiscount, setCheckoutDiscount] = useState<CheckoutDiscount | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCouponCode, setAppliedCouponCode] = useState("");
@@ -472,7 +476,7 @@ export default function CheckoutClient() {
         ...form,
         csrfToken,
         couponCode: appliedCouponCode,
-        paymentMethod: "CASH_ON_DELIVERY",
+        paymentMethod,
         billingAddress: "same",
         items: cartPricingRequestItems(items)
       })
@@ -480,6 +484,8 @@ export default function CheckoutClient() {
     const data = (await response.json()) as {
       message?: string;
       orderId?: string;
+      total?: string;
+      claimToken?: string | null;
     };
 
     setIsSubmitting(false);
@@ -493,21 +499,23 @@ export default function CheckoutClient() {
     window.dispatchEvent(new Event("valentro-cart-updated"));
     setItems([]);
     setOrderId(data.orderId ?? "");
-    setStatus("Order placed. We will contact you to confirm delivery.");
+    setOrderTotal(data.total ?? "0");
+    setClaimToken(data.claimToken ?? "");
+    setStatus(paymentMethod === "INSTAPAY" ? "Order reserved. Complete the InstaPay transfer below." : "Order placed. We will contact you to confirm delivery.");
   }
 
   if (orderId) {
     return (
       <main className="min-h-screen bg-bg px-gutter pb-20 pt-[104px] text-parchment sm:pt-36 lg:px-16">
         <section className="mx-auto max-w-2xl border border-outline bg-surface px-6 py-10 text-center">
-          <p className="label-caps text-gold">Order Confirmed</p>
+          <p className="label-caps text-gold">{paymentMethod === "INSTAPAY" ? "Order Reserved" : "Order Confirmed"}</p>
           <h1 className="mt-3 font-serif text-4xl leading-tight sm:text-5xl">
-            Thank you for your purchase
+            {paymentMethod === "INSTAPAY" ? "Complete your InstaPay transfer" : "Thank you for your purchase"}
           </h1>
           <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-on-surface/75">
-            Your order number is {orderId}. A Valentro advisor will contact you
-            before dispatch.
+            Your order number is {orderId}. {paymentMethod === "INSTAPAY" ? "Your payment awaits manual verification." : "A Valentro advisor will contact you before dispatch."}
           </p>
+          {paymentMethod === "INSTAPAY" ? <div className="mt-7 text-left"><InstapayPayment orderId={orderId} total={orderTotal} locale={locale} initialClaimToken={claimToken} claimed={false} verified={false} /></div> : null}
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
             <Link
               href={`/${locale}/orders/${orderId}`}
@@ -715,19 +723,16 @@ export default function CheckoutClient() {
                 <input
                   type="radio"
                   name="paymentMethod"
-                  checked
-                  readOnly
+                  checked={paymentMethod === "CASH_ON_DELIVERY"}
+                  onChange={() => setPaymentMethod("CASH_ON_DELIVERY")}
                   className="h-4 w-4 accent-parchment"
                 />
                 Cash on Delivery (COD)
               </label>
-              <label className="flex min-h-12 cursor-not-allowed items-center justify-between gap-3 px-4 text-sm text-on-surface/55">
+              <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-4 text-sm">
                 <span className="flex items-center gap-3">
-                  <input type="radio" disabled className="h-4 w-4" />
-                  Instapay
-                </span>
-                <span className="label-caps border border-outline px-2 py-1 text-[10px] text-gold">
-                  Soon
+                  <input type="radio" name="paymentMethod" checked={paymentMethod === "INSTAPAY"} onChange={() => setPaymentMethod("INSTAPAY")} className="h-4 w-4 accent-parchment" />
+                  InstaPay
                 </span>
               </label>
             </div>
@@ -771,7 +776,7 @@ export default function CheckoutClient() {
             disabled={isSubmitting || !csrfToken || discountLoading}
             className="label-caps flex min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-60 lg:hidden"
           >
-            {isSubmitting ? "Placing Order..." : "Complete Purchase"}
+            {isSubmitting ? "Placing Order..." : paymentMethod === "INSTAPAY" ? "Continue to InstaPay" : "Complete Purchase"}
           </button>
         </form>
 
@@ -978,7 +983,7 @@ export default function CheckoutClient() {
             disabled={isSubmitting || !csrfToken || discountLoading}
             className="label-caps mt-6 hidden min-h-12 w-full items-center justify-center border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-60 lg:flex"
           >
-            {isSubmitting ? "Placing Order..." : "Complete Purchase"}
+            {isSubmitting ? "Placing Order..." : paymentMethod === "INSTAPAY" ? "Continue to InstaPay" : "Complete Purchase"}
           </button>
           <Link
             href={`/${locale}/cart`}

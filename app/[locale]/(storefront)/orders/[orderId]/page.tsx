@@ -3,6 +3,7 @@ import {notFound} from "next/navigation";
 import type {OrderStatus} from "@prisma/client";
 
 import Navbar from "@/components/storefront/layout/Navbar";
+import InstapayPayment from "@/components/storefront/checkout/InstapayPayment";
 import SalesBar from "@/components/storefront/layout/SalesBar";
 import {prisma} from "@/lib/prisma";
 
@@ -243,11 +244,26 @@ export default async function OrderTrackingPage({
             )}
           </section>
 
+          {order.paymentMethod === "INSTAPAY" && !isCancelled ? (
+            <div className="mt-7">
+              <InstapayPayment
+                orderId={order.id}
+                total={order.total.toString()}
+                locale={locale}
+                claimed={Boolean(order.instapayClaimedAt)}
+                verified={Boolean(order.instapayVerifiedAt)}
+              />
+            </div>
+          ) : null}
+
           <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
             <section className="border border-outline bg-surface p-4 sm:p-5">
               <h2 className="font-serif text-3xl leading-tight">
                 Order Details
               </h2>
+              <p className="mt-2 text-sm text-on-surface/70">
+                Payment: {order.paymentMethod === "INSTAPAY" ? "InstaPay" : "Cash on delivery"}
+              </p>
               <div className="mt-5 divide-y divide-outline/60">
                 {order.items.map((item) => (
                   <div

@@ -32,6 +32,29 @@
       }
     }
   },
+  "whyChoose": {
+    "eyebrow": "The Valentro difference",
+    "title": "Why choose Valentro?",
+    "intro": "We don't just create fragrances. We create experiences that stay, leave a mark, and become part of who you are.",
+    "features": {
+      "longevity": {"title": "Exceptional longevity", "description": "Formulated to last for hours, staying with you from day to night without fading."},
+      "projection": {"title": "Powerful projection & sillage", "description": "A confident trail that leaves a lasting impression wherever you go."},
+      "concentration": {"title": "Premium concentration", "description": "Crafted as Extrait de Parfum for the highest quality and performance."},
+      "ingredients": {"title": "Purity of ingredients", "description": "Sourced from the finest raw materials, carefully selected for their purity and richness."},
+      "craftsmanship": {"title": "Masterful craftsmanship", "description": "Blended with precision and passion by experts who understand the art of fine perfumery."},
+      "identity": {"title": "Signature identity", "description": "Unique, distinctive scents that reflect your personality and set you apart."},
+      "detail": {"title": "Luxury in every detail", "description": "From the bottle to the cap, every element is designed to deliver an elevated experience."},
+      "excellence": {"title": "Consistent excellence", "description": "Every bottle, every time. Uncompromising quality you can always trust."}
+    },
+    "closingLabel": "Made to make an impression",
+    "closing": "Valentro isn't just a fragrance. It's a statement.",
+    "promises": {
+      "luxury": "The most luxurious brand ever",
+      "quality": "Premium quality ingredients",
+      "extrait": "Extrait de Parfum concentration",
+      "legacy": "Made to leave a legacy"
+    }
+  },
   "admin": {
     "dashboard": "Dashboard Overview",
     "announcements": "Announcements",

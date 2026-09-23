@@ -206,7 +206,8 @@ function statusPill(label: string) {
 
 export function renderOrderEmailTemplate(
   kind: OrderEmailTemplateKind,
-  order: OrderEmailOrder
+  order: OrderEmailOrder,
+  claimToken?: string | null
 ): RenderedOrderEmailTemplate {
   const number = orderNumber(order);
   const customerName = order.user.name || "there";
@@ -219,7 +220,7 @@ export function renderOrderEmailTemplate(
 
   if (kind === "admin-order-placed") {
     const previewText = `${customerName} placed ${itemLabel} in order ${number}.`;
-    const message = `${customerName} has placed a new order through the Valentro Atelier.`;
+    const message = `${customerName} has placed a new ${order.paymentMethod === "INSTAPAY" ? "InstaPay" : "cash on delivery"} order through the Valentro Atelier.${order.paymentMethod === "INSTAPAY" ? " Awaiting customer transfer and manual verification." : ""}`;
     const content = `${statusPill("New order")}${meta}${items}${summary}`;
 
     return {
@@ -236,6 +237,23 @@ export function renderOrderEmailTemplate(
         message,
         content
       })
+    };
+  }
+
+  if (order.paymentMethod === "INSTAPAY") {
+    const claimUrl = claimToken ? `${url}#claim=${encodeURIComponent(claimToken)}` : url;
+    const previewText = `Your InstaPay order ${number} is reserved and awaiting payment.`;
+    const message = `Thank you, ${customerName}. Your order is reserved. Transfer ${price(order.total)} by scanning the InstaPay QR code on your order page. Select Living Expenses as the purpose and enter your full order ID in the transfer note: ${order.id}. Then select “I sent payment” on the order page. We will verify your transfer manually.`;
+    const content = `${statusPill("Awaiting InstaPay transfer")}${meta}${items}${summary}`;
+    return {
+      kind,
+      label: "InstaPay instructions · Customer",
+      audience: "Customer who placed the order",
+      trigger: "When an InstaPay order is reserved",
+      subject: `Complete your InstaPay transfer · ${number}`,
+      previewText,
+      text: `${previewText}\n\n${message}\n\nOpen your private order link: ${claimUrl}`,
+      html: emailShell({previewText, heading: "Complete your InstaPay transfer", message, content, cta: {label: "Scan QR and confirm transfer", href: claimUrl}})
     };
   }
 
@@ -400,7 +418,7 @@ function logDelivery(kind: string, recipient: string, result: EmailDeliveryResul
   }
 }
 
-export async function sendOrderPlacedEmails(orderId: string) {
+export async function sendOrderPlacedEmails(orderId: string, claimToken?: string | null) {
   const order = await findOrderForEmail(orderId);
 
   if (!order) {
@@ -411,7 +429,7 @@ export async function sendOrderPlacedEmails(orderId: string) {
   const adminEmail = (
     process.env.ORDER_NOTIFICATION_EMAIL ?? process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? ""
   ).trim().toLowerCase();
-  const customerTemplate = renderOrderEmailTemplate("customer-order-placed", order);
+  const customerTemplate = renderOrderEmailTemplate("customer-order-placed", order, claimToken);
   const adminTemplate = renderOrderEmailTemplate("admin-order-placed", order);
 
   if (adminEmail) {

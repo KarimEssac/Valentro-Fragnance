@@ -36,6 +36,11 @@ export type AdminOrderRow = {
   discountAmount: string;
   total: string;
   status: string;
+  paymentMethod: string;
+  instapayClaimedAt: string | null;
+  instapayVerifiedAt: string | null;
+  paymentMethodChangedAt: string | null;
+  paymentMethodChangeReason: string | null;
   itemCount: number;
   itemsPreview: string;
   addressSnapshot: unknown;
@@ -134,6 +139,7 @@ export default function AdminOrdersClient({
   );
   const [message, setMessage] = useState("");
   const [updatingOrderId, setUpdatingOrderId] = useState("");
+  const [conversionReason, setConversionReason] = useState("");
 
   const dateFormatter = useMemo(
     () =>
@@ -169,6 +175,7 @@ export default function AdminOrdersClient({
         order.customerName,
         order.customerEmail,
         order.status,
+        order.paymentMethod,
         order.itemsPreview
       ]
         .join(" ")
@@ -193,6 +200,11 @@ export default function AdminOrdersClient({
   );
 
   async function updateOrderStatus(orderId: string, nextStatus: string) {
+    if (nextStatus === "CANCELLED" && !window.confirm("Cancel this order and release its reserved stock and coupon?")) return;
+    await updateOrder(orderId, {status: nextStatus});
+  }
+
+  async function updateOrder(orderId: string, payload: {status?: string; action?: string; reason?: string}) {
     setUpdatingOrderId(orderId);
     setMessage("");
 
@@ -200,11 +212,11 @@ export default function AdminOrdersClient({
       const response = await fetch(`/api/admin/orders/${orderId}`, {
         method: "PATCH",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({status: nextStatus})
+        body: JSON.stringify(payload)
       });
       const result = (await response.json()) as {
         message?: string;
-        order?: {status: string};
+        order?: Partial<AdminOrderRow>;
       };
 
       if (!response.ok) {
@@ -214,11 +226,12 @@ export default function AdminOrdersClient({
       setOrderRows((current) =>
         current.map((order) =>
           order.id === orderId
-            ? {...order, status: result.order?.status ?? nextStatus}
+            ? {...order, ...result.order}
             : order
         )
       );
-      setMessage("Order status updated.");
+      setMessage("Order updated.");
+      if (payload.action === "convertToCash") setConversionReason("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update order");
     } finally {
@@ -242,6 +255,32 @@ export default function AdminOrdersClient({
           <p className="mt-3 text-sm text-on-surface/70">
             {dateFormatter.format(new Date(order.createdAt))}
           </p>
+        </div>
+
+        <div className="border-b border-outline/60 py-5">
+          <p className="label-caps mb-3 text-gold">Payment</p>
+          <p className="text-sm text-parchment">{order.paymentMethod === "INSTAPAY" ? "InstaPay" : "Cash on delivery"}</p>
+          {order.paymentMethod === "INSTAPAY" ? (
+            <>
+              <p className="mt-2 text-sm text-on-surface/75">
+                {order.instapayVerifiedAt ? "Transfer verified by admin" : order.instapayClaimedAt ? "Customer claims transfer sent — verify in InstaPay" : "Awaiting customer transfer claim"}
+              </p>
+              <p className="mt-2 break-all font-mono text-xs text-on-surface/65">Transfer note: {order.id}</p>
+              {!order.instapayVerifiedAt && order.status !== "CANCELLED" ? (
+                <div className="mt-4 space-y-3">
+                  <button type="button" disabled={updatingOrderId === order.id} onClick={() => {
+                    if (window.confirm("Have you independently found this transfer in InstaPay?")) updateOrder(order.id, {action: "verifyInstapay"});
+                  }} className="label-caps min-h-10 w-full border border-gold px-3 text-gold disabled:opacity-50">Mark transfer verified</button>
+                  <p className="text-xs leading-5 text-on-surface/65">After contacting the customer, you can switch this unverified order to cash on delivery.</p>
+                  <input value={conversionReason} onChange={(event) => setConversionReason(event.target.value)} maxLength={300} placeholder="Reason for changing payment method" aria-label="Reason for changing payment method" className="min-h-10 w-full border border-outline bg-surface-hi px-3 text-sm text-parchment" />
+                  <button type="button" disabled={updatingOrderId === order.id || conversionReason.trim().length < 5} onClick={() => updateOrder(order.id, {action: "convertToCash", reason: conversionReason})} className="label-caps min-h-10 w-full border border-outline px-3 disabled:opacity-50">Switch to cash on delivery</button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          {order.paymentMethodChangedAt ? (
+            <p className="mt-3 text-xs leading-5 text-on-surface/65">Changed from InstaPay on {dateFormatter.format(new Date(order.paymentMethodChangedAt))}. Reason: {order.paymentMethodChangeReason}</p>
+          ) : null}
         </div>
 
         <div className="border-b border-outline/60 py-5">
@@ -427,6 +466,7 @@ export default function AdminOrdersClient({
                     </div>
                     <StatusBadge status={order.status} />
                   </div>
+                  <p className="mt-2 text-xs text-gold">{order.paymentMethod === "INSTAPAY" ? order.instapayVerifiedAt ? "InstaPay verified" : order.instapayClaimedAt ? "InstaPay · customer claims paid" : "InstaPay · awaiting transfer" : "Cash on delivery"}</p>
 
                   <div className="mt-4 min-w-0">
                     <p className="font-semibold text-parchment">
@@ -508,6 +548,7 @@ export default function AdminOrdersClient({
                       </td>
                       <td className="px-6 py-5">
                         <StatusBadge status={order.status} />
+                        <p className="mt-2 text-xs text-gold">{order.paymentMethod === "INSTAPAY" ? order.instapayVerifiedAt ? "InstaPay verified" : order.instapayClaimedAt ? "InstaPay · claims paid" : "InstaPay · awaiting" : "Cash on delivery"}</p>
                       </td>
                       <td className="py-5 pl-6">
                         <button

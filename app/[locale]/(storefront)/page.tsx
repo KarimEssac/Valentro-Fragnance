@@ -4,6 +4,7 @@ import NewsTicker from "@/components/storefront/home/NewsTicker";
 import ScentFinder from "@/components/storefront/home/ScentFinder";
 import SignatureCollectionSection from "@/components/storefront/home/SignatureCollectionSection";
 import TestimonialsSection from "@/components/storefront/home/TestimonialsSection";
+import WhyChooseSection from "@/components/storefront/home/WhyChooseSection";
 import Navbar from "@/components/storefront/layout/Navbar";
 import SalesBar from "@/components/storefront/layout/SalesBar";
 import {
@@ -30,6 +31,7 @@ export default async function HomePage() {
       <SignatureCollectionSection initialFragrances={fragrances} />
       <CategoriesSection />
       <TestimonialsSection initialTestimonials={testimonials} />
+      <WhyChooseSection />
       <ScentFinder />
     </main>
   );
