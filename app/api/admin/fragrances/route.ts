@@ -9,7 +9,7 @@ import {
   parseFinderRule,
   type FinderRuleVerb
 } from "@/lib/finder-rules";
-import {uploadFragranceImages} from "@/lib/fragrance-images";
+import {uploadFragranceImages, uploadFragranceReferenceImage} from "@/lib/fragrance-images";
 import {
   inferIngredientCategory,
   normalizeIngredientCategory
@@ -236,11 +236,13 @@ export async function POST(request: NextRequest) {
     if (!sillageValues.has(sillage)) throw new Error("Sillage is invalid");
 
     const variants = variantsFrom(form, slug);
-    const [uploadedImages, signatureCollection] = await Promise.all([
+    const referenceFile = form.get("referenceImage");
+    const [uploadedImages, referenceImageUrl, signatureCollection] = await Promise.all([
       uploadFragranceImages(
         form.getAll("images").filter((value): value is File => value instanceof File),
         slug
       ),
+      uploadFragranceReferenceImage(referenceFile instanceof File ? referenceFile : null, slug),
       prisma.collection.findUnique({
         where: {slug: "signature-line"},
         select: {id: true}
@@ -278,6 +280,7 @@ export async function POST(request: NextRequest) {
           taglineAr,
           descriptionEn,
           descriptionAr,
+          referenceImageUrl,
           gender,
           scentProfile,
           avoidIf: finderRuleValues(form, "avoidIf", "avoid-if rules", avoidanceVerbs),

@@ -448,13 +448,13 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
     <>
       <div
         dir={isRtl ? "rtl" : "ltr"}
-        className={`fixed inset-x-0 top-11 z-50 flex justify-center px-4 sm:top-12 transition-transform duration-300 ease-in-out ${
+        className={`storefront-navbar fixed inset-x-0 z-50 flex justify-center px-4 transition-transform duration-300 ease-in-out ${
           visible ? "translate-y-0" : "-translate-y-[calc(100%+3rem)]"
         }`}
       >
         <div
           ref={navRef}
-          className="flex h-11 max-w-[calc(100vw-2rem)] items-center justify-between gap-4 rounded-full border border-outline/55 bg-surface-hi px-4 shadow-[0_8px_28px_rgba(74,47,22,0.16)] sm:h-12 sm:gap-5 sm:px-5"
+          className="storefront-navbar-bar flex max-w-[calc(100vw-2rem)] items-center justify-between gap-4 rounded-full border border-outline/55 bg-surface-hi px-4 shadow-[0_8px_28px_rgba(74,47,22,0.16)] sm:gap-5 sm:px-5"
         >
           <button
             type="button"
@@ -488,8 +488,6 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           </button>
         </div>
       </div>
-
-      <div aria-hidden="true" className="h-24" />
 
       {menu}
       <SideCart open={cartOpen} onClose={() => setCartOpen(false)} />

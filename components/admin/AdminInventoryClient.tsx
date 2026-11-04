@@ -6,6 +6,7 @@ import {useEffect, useMemo, useState} from "react";
 
 import Modal from "@/components/ui/Modal";
 import ValentroSelect from "@/components/ui/ValentroSelect";
+import ReferenceImageField from "@/components/admin/ReferenceImageField";
 import {
   avoidanceVerbs,
   encodeFinderRule,
@@ -27,6 +28,7 @@ export type InventoryProduct = {
   taglineAr: string;
   descriptionEn: string;
   descriptionAr: string;
+  referenceImageUrl: string | null;
   gender: string;
   scentProfile: string;
   sillage: string;
@@ -813,6 +815,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
                   <input name="images" type="file" accept="image/*" multiple className="w-full text-sm text-on-surface/80 file:mr-4 file:border file:border-parchment file:bg-transparent file:px-4 file:py-2 file:text-parchment file:transition-colors hover:file:border-gold hover:file:text-gold" />
                 </Field>
               </div>
+              <ReferenceImageField />
               <VariantEditor
                 variants={createVariants}
                 onChange={updateCreateVariant}
@@ -1053,6 +1056,7 @@ function EditProductForm({
       sillage: form.get("sillage"),
       longevity: form.get("longevity"),
       position: form.get("position"),
+      removeReferenceImage: form.get("removeReferenceImage") === "true",
       ingredients: selectedIngredients,
       avoidIf: selectedAvoidIf,
       seasons: selectedSeasons,
@@ -1068,6 +1072,10 @@ function EditProductForm({
     };
     const body = new FormData();
     body.set("payload", JSON.stringify(payload));
+    const referenceFile = form.get("referenceImage");
+    if (referenceFile instanceof File && referenceFile.size > 0) {
+      body.set("referenceImage", referenceFile);
+    }
     form.getAll("newImages").forEach((file) => {
       if (file instanceof File && file.size > 0) {
         body.append("images", file);
@@ -1244,6 +1252,10 @@ function EditProductForm({
           />
         </Field>
       </div>
+      <ReferenceImageField
+        currentImageUrl={product.referenceImageUrl}
+        productName={product.nameEn}
+      />
       {status ? <p className="text-sm text-gold">{status}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <button type="button" onClick={onClose} className="label-caps min-h-12 border border-outline px-6 text-parchment transition-colors hover:border-gold hover:text-gold">Cancel</button>

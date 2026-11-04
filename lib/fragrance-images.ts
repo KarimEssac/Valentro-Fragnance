@@ -2,7 +2,12 @@ import sharp from "sharp";
 
 import {uploadBufferToCloudinary} from "@/lib/cloudinary";
 
-async function uploadOptimizedImages(files: File[], slug: string, folder: string) {
+async function uploadOptimizedImages(
+  files: File[],
+  slug: string,
+  folder: string,
+  maxDimension = 2000
+) {
   const saved: string[] = [];
 
   for (const [index, file] of files.entries()) {
@@ -22,8 +27,8 @@ async function uploadOptimizedImages(files: File[], slug: string, folder: string
     const optimized = await sharp(original)
       .rotate()
       .resize({
-        width: 2000,
-        height: 2000,
+        width: maxDimension,
+        height: maxDimension,
         fit: "inside",
         withoutEnlargement: true
       })
@@ -54,4 +59,10 @@ export async function uploadFragranceImages(files: File[], slug: string) {
 
 export async function uploadCollectionImages(files: File[], slug: string) {
   return uploadOptimizedImages(files, slug, "valentro/collections");
+}
+
+export async function uploadFragranceReferenceImage(file: File | null, slug: string) {
+  if (!file || !file.size) return null;
+  const images = await uploadOptimizedImages([file], slug, "valentro/references", 800);
+  return images[0] ?? null;
 }

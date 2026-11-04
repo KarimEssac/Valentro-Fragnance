@@ -1,7 +1,6 @@
 import Image from "next/image";
 import type {Metadata} from "next";
 
-import Navbar from "@/components/storefront/layout/Navbar";
 
 type AboutUsPageProps = {
   params: Promise<{
@@ -36,6 +35,8 @@ const valentroLinks: SocialLink[] = [
 
 const aboutHeroImage =
   "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1782725829/valentro/site/about-us-heritage.webp";
+const karimPortraitImage =
+  "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793826533/valentro/site/team/karim-essac-bcfe6a1d28dc.webp";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -127,9 +128,8 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
 
   return (
     <>
-      <Navbar cartCount={0} />
       <main className="bg-bg text-on-surface" dir={isArabic ? "rtl" : "ltr"}>
-      <section className="mx-auto flex max-w-container flex-col items-center justify-center px-gutter pb-12 pt-6 text-center sm:pb-16 sm:pt-10">
+      <section className="mx-auto flex max-w-container flex-col items-center justify-center px-gutter pb-12 text-center sm:pb-16">
         <p className="label-caps mb-5 text-gold">Valentro Maison</p>
         <h1 className="font-serif text-[clamp(3rem,10vw,7rem)] leading-[0.95] text-parchment">
           About Us
@@ -204,13 +204,13 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
 
       <section className="mx-auto grid max-w-container items-center gap-10 px-gutter md:grid-cols-12 lg:px-16">
         <div className="order-2 md:order-1 md:col-span-5 md:col-start-2">
-          <div className="relative aspect-square overflow-hidden border border-outline/60 bg-surface-hi">
+          <div className="relative aspect-square overflow-hidden border border-outline/60">
             <Image
               src="/uploads/fragrances/ultra-male.png"
               alt="Valentro fragrance bottle"
               fill
               sizes="(min-width: 1024px) 38vw, 100vw"
-              className="object-contain p-8"
+              className="object-cover"
             />
           </div>
         </div>
@@ -284,17 +284,14 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
           </div>
         </div>
         <div className="md:col-span-5">
-          <div className="flex aspect-[3/4] items-center justify-center border border-outline/60 bg-surface-hi p-6">
-            <div className="flex h-full w-full flex-col items-center justify-center border border-outline/50 px-6 text-center">
-              <span className="material-symbols-outlined mb-5 text-4xl text-gold">
-                terminal
-              </span>
-              <span className="font-serif text-4xl leading-tight text-parchment">
-                Digital
-                <br />
-                Craftsmanship
-              </span>
-            </div>
+          <div className="relative aspect-[3/4] overflow-hidden border border-outline/60 bg-surface-hi">
+            <Image
+              src={karimPortraitImage}
+              alt="Karim Essac, website developer at Valentro"
+              fill
+              sizes="(min-width: 768px) 42vw, 100vw"
+              className="object-cover object-top"
+            />
           </div>
         </div>
       </section>

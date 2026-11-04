@@ -2,8 +2,6 @@ import {getTranslations} from "next-intl/server";
 import {headers} from "next/headers";
 
 import LoginClient from "@/components/storefront/auth/LoginClient";
-import Navbar from "@/components/storefront/layout/Navbar";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 
 type LoginPageProps = {
   params: Promise<{
@@ -33,11 +31,7 @@ export default async function LoginPage({params}: LoginPageProps) {
 
   return (
     <>
-      <div className="absolute inset-x-0 top-0 z-50">
-        <SalesBar />
-        <Navbar cartCount={0} />
-      </div>
-      <main className="flex min-h-screen items-center justify-center bg-bg px-gutter pb-16 pt-32 text-on-surface sm:pt-40">
+      <main className="flex min-h-[calc(100svh_-_104px)] items-start justify-center bg-bg px-gutter pb-16 text-on-surface sm:min-h-[calc(100svh_-_112px)]">
         <section className="w-full max-w-md border border-outline bg-surface p-6 sm:p-8">
           <p className="label-caps text-gold">VALENTRO</p>
           <h1 className="mt-4 font-serif text-3xl leading-tight text-parchment sm:text-4xl">

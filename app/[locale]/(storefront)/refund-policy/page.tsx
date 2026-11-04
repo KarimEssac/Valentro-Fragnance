@@ -1,7 +1,5 @@
 import type {Metadata} from "next";
 import {getTranslations} from "next-intl/server";
-import Navbar from "@/components/storefront/layout/Navbar";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 
 type RefundPageProps = {
   params: Promise<{
@@ -63,13 +61,10 @@ export default async function RefundPolicyPage({params}: RefundPageProps) {
 
   return (
     <div className="min-h-screen bg-parchment-base text-on-surface selection:bg-warm-gold selection:text-deep-onyx" dir={isRtl ? "rtl" : "ltr"}>
-      <SalesBar />
-      <Navbar cartCount={0} />
-
       {/* Main Content */}
       <main className="flex-grow">
         {/* Hero Section */}
-        <section className="px-margin-mobile md:px-margin-desktop py-section-gap max-w-container-max mx-auto text-center relative overflow-hidden">
+        <section className="px-margin-mobile md:px-margin-desktop pb-section-gap max-w-container-max mx-auto text-center relative overflow-hidden">
           <div className="relative z-10 max-w-3xl mx-auto">
             <span className="font-label-caps text-label-caps text-muted-brass uppercase tracking-widest mb-6 block">
               {t("subtitle")}

@@ -178,6 +178,7 @@ model Fragrance {
   taglineAr         String
   descriptionEn     String
   descriptionAr     String
+  referenceImageUrl String?
   gender            Gender
   scentProfile      ScentProfile
   avoidIf           String[]

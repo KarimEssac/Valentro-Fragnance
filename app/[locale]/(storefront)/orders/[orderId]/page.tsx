@@ -2,9 +2,7 @@ import Link from "next/link";
 import {notFound} from "next/navigation";
 import type {OrderStatus} from "@prisma/client";
 
-import Navbar from "@/components/storefront/layout/Navbar";
 import InstapayPayment from "@/components/storefront/checkout/InstapayPayment";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 import {prisma} from "@/lib/prisma";
 
 type OrderTrackingPageProps = {
@@ -124,12 +122,7 @@ export default async function OrderTrackingPage({
 
   return (
     <>
-      <div className="absolute inset-x-0 top-0 z-50">
-        <SalesBar />
-        <Navbar cartCount={0} />
-      </div>
-
-      <main className="min-h-screen bg-bg px-gutter pb-16 pt-[104px] text-parchment sm:pt-36 lg:px-16">
+      <main className="min-h-screen bg-bg px-gutter pb-16 text-parchment lg:px-16">
         <div className="mx-auto max-w-container">
           <header className="border-b border-outline/70 pb-6">
             <p className="label-caps text-gold">Order Tracking</p>

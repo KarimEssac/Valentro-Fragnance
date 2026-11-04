@@ -2,8 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {notFound} from "next/navigation";
 
-import Navbar from "@/components/storefront/layout/Navbar";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 import {prisma} from "@/lib/prisma";
 import {getProductTransitionName} from "@/lib/product-image-transition";
 import CollectionFragranceLink from "@/components/storefront/product/CollectionFragranceLink";
@@ -91,9 +89,7 @@ export default async function CollectionDetailPage({
 
   return (
     <main className="min-h-screen bg-bg text-parchment">
-      <SalesBar />
-      <Navbar cartCount={0} />
-      <section className="px-gutter pb-24 pt-12 lg:px-16">
+      <section className="px-gutter pb-24 lg:px-16">
         <div className="mx-auto grid max-w-container gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
           <div
             data-product-transition-target={slug}

@@ -5,8 +5,6 @@ import ScentFinder from "@/components/storefront/home/ScentFinder";
 import SignatureCollectionSection from "@/components/storefront/home/SignatureCollectionSection";
 import TestimonialsSection from "@/components/storefront/home/TestimonialsSection";
 import WhyChooseSection from "@/components/storefront/home/WhyChooseSection";
-import Navbar from "@/components/storefront/layout/Navbar";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 import {
   getActiveAnnouncement,
   getStorefrontFragrances,
@@ -22,10 +20,6 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen bg-bg">
-      <div className="absolute inset-x-0 top-0 z-50">
-        <SalesBar initialSale={announcement} />
-        <Navbar cartCount={0} />
-      </div>
       <HeroSection />
       <NewsTicker initialSale={announcement} />
       <SignatureCollectionSection initialFragrances={fragrances} />

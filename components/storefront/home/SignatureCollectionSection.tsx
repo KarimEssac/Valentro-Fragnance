@@ -11,6 +11,7 @@ import {productDiscountBadge} from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
 import {startProductImageTransition} from "@/lib/product-image-transition";
 import type {StorefrontFragrance} from "@/lib/storefront-data";
+import FragranceReference from "@/components/storefront/product/FragranceReference";
 
 function formatScentProfile(value: string) {
   return value
@@ -144,10 +145,19 @@ export default function SignatureCollectionSection({
   return (
     <section className="bg-surface px-gutter pb-12 pt-20 text-parchment sm:pb-14 sm:pt-24 lg:pb-16 lg:pt-32">
       <div className="mx-auto max-w-container">
-        <div className="mb-10 flex items-end justify-between gap-6 sm:mb-14">
-          <h2 className="font-serif text-3xl leading-tight text-parchment sm:text-5xl">
-            The Signature Collection
-          </h2>
+        <div className="mb-3 flex items-end justify-between gap-6 sm:mb-7">
+          <div className="flex flex-col items-start">
+            <h2 className="font-serif text-3xl leading-tight text-parchment sm:text-5xl">
+              The Signature Collection
+            </h2>
+            <Link
+              href={`/${locale}/fragrances`}
+              className="label-caps focus-gold mt-2 inline-flex min-h-5 items-center gap-2 text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-parchment hover:decoration-parchment"
+            >
+              {isArabic ? "تصفح الكل" : "Browse all"}
+              <span aria-hidden="true">{isArabic ? "\u2190" : "\u2192"}</span>
+            </Link>
+          </div>
 
           <div className="hidden items-center gap-3 md:flex">
             <button
@@ -243,8 +253,13 @@ export default function SignatureCollectionSection({
                       {name}
                     </div>
                     <div className="absolute inset-0 z-20 bg-gradient-to-t from-parchment/35 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                    <FragranceReference
+                      imageUrl={fragrance.referenceImageUrl}
+                      productName={name}
+                      isArabic={isArabic}
+                    />
                     {fragrance.discount ? (
-                      <span className="label-caps absolute right-3 top-3 z-30 bg-gold px-3 py-2 text-surface-hi">
+                      <span className="label-caps absolute bottom-3 end-3 z-30 bg-gold px-3 py-2 text-surface-hi">
                         {formatDiscountBadge(fragrance.discount)}
                       </span>
                     ) : null}

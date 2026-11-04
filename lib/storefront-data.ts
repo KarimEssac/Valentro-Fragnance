@@ -23,6 +23,7 @@ export type StorefrontFragrance = {
   nameAr: string;
   taglineEn: string;
   taglineAr: string;
+  referenceImageUrl: string | null;
   gender: string;
   scentProfile: string;
   avoidIf: string[];
@@ -57,6 +58,7 @@ export type StorefrontFragranceDetail = {
   taglineAr: string;
   descriptionEn: string;
   descriptionAr: string;
+  referenceImageUrl: string | null;
   gender: string;
   scentProfile: string;
   sillage: string;
@@ -185,6 +187,7 @@ const getCachedFragrances = unstable_cache(
         nameAr: true,
         taglineEn: true,
         taglineAr: true,
+        referenceImageUrl: true,
         gender: true,
         scentProfile: true,
         avoidIf: true,
@@ -244,6 +247,7 @@ const getCachedFragrances = unstable_cache(
         nameAr: fragrance.nameAr,
         taglineEn: fragrance.taglineEn,
         taglineAr: fragrance.taglineAr,
+        referenceImageUrl: fragrance.referenceImageUrl,
         gender: fragrance.gender,
         scentProfile: fragrance.scentProfile,
         avoidIf: fragrance.avoidIf,
@@ -266,7 +270,7 @@ const getCachedFragrances = unstable_cache(
       };
     });
   },
-  ["storefront-fragrances-v2"],
+  ["storefront-fragrances-v3"],
   {revalidate: 60, tags: [STOREFRONT_FRAGRANCES_TAG]}
 );
 
@@ -287,6 +291,7 @@ const getCachedFragranceDetail = unstable_cache(
         taglineAr: true,
         descriptionEn: true,
         descriptionAr: true,
+        referenceImageUrl: true,
         gender: true,
         scentProfile: true,
         sillage: true,
@@ -338,6 +343,7 @@ const getCachedFragranceDetail = unstable_cache(
       taglineAr: fragrance.taglineAr,
       descriptionEn: fragrance.descriptionEn,
       descriptionAr: fragrance.descriptionAr,
+      referenceImageUrl: fragrance.referenceImageUrl,
       gender: fragrance.gender,
       scentProfile: fragrance.scentProfile,
       sillage: fragrance.sillage,
@@ -377,7 +383,7 @@ const getCachedFragranceDetail = unstable_cache(
       })
     };
   },
-  ["storefront-fragrance-detail-v2"],
+  ["storefront-fragrance-detail-v3"],
   {revalidate: 60, tags: [STOREFRONT_FRAGRANCES_TAG]}
 );
 
@@ -388,23 +394,13 @@ export function getStorefrontFragranceDetail(slug: string) {
 const getCachedTestimonials = unstable_cache(
   async (limit: number): Promise<StorefrontTestimonial[]> => {
     const testimonials = await prisma.testimonial.findMany({
-      where: {isPublished: true},
+      where: {
+        isPublished: true,
+        review: {is: {isPublished: true, fragrance: {isPublished: true}}}
+      },
       orderBy: [{position: "asc"}, {createdAt: "desc"}],
       take: Math.max(1, Math.min(limit, 12)),
       include: {
-        fragrance: {
-          select: {
-            slug: true,
-            nameEn: true,
-            nameAr: true,
-            isPublished: true,
-            images: {
-              orderBy: [{isPrimary: "desc"}, {position: "asc"}],
-              take: 1,
-              select: {url: true, altEn: true, altAr: true}
-            }
-          }
-        },
         review: {
           select: {
             messageEn: true,
@@ -428,21 +424,22 @@ const getCachedTestimonials = unstable_cache(
       }
     });
 
-    return testimonials.map((testimonial) => {
-      const selectedFragrance =
-        testimonial.review?.fragrance ?? testimonial.fragrance;
+    return testimonials.flatMap((testimonial) => {
+      const review = testimonial.review;
+      if (!review) return [];
+      const selectedFragrance = review.fragrance;
       const fragranceImage = selectedFragrance?.images[0] ?? null;
 
-      return {
+      return [{
         id: testimonial.id,
-        messageEn: testimonial.review?.messageEn ?? testimonial.messageEn,
-        messageAr: testimonial.review?.messageAr ?? testimonial.messageAr,
+        messageEn: review.messageEn,
+        messageAr: review.messageAr ?? review.messageEn,
         image: fragranceImage ?? {
           url: testimonial.imageUrl,
           altEn: testimonial.imageAltEn,
           altAr: testimonial.imageAltAr
         },
-        rating: testimonial.review?.rating ?? testimonial.rating,
+        rating: review.rating,
         position: testimonial.position,
         fragrance:
           selectedFragrance?.isPublished
@@ -452,10 +449,10 @@ const getCachedTestimonials = unstable_cache(
                 nameAr: selectedFragrance.nameAr
               }
             : null
-      };
+      }];
     });
   },
-  ["storefront-testimonials-v1"],
+  ["storefront-testimonials-v2"],
   {revalidate: 60, tags: [STOREFRONT_TESTIMONIALS_TAG]}
 );
 

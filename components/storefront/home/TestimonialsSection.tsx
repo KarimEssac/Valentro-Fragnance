@@ -98,15 +98,13 @@ export default function TestimonialsSection({
     if (didStart) event.preventDefault();
   }
   const carouselRef = useRef<HTMLDivElement>(null);
-  const [testimonials, setTestimonials] = useState<StorefrontTestimonial[]>(
-    initialTestimonials ?? []
-  );
-  const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    initialTestimonials ? "ready" : "loading"
-  );
+  const [fetchedTestimonials, setFetchedTestimonials] = useState<StorefrontTestimonial[]>([]);
+  const [fetchStatus, setFetchStatus] = useState<"loading" | "ready" | "error">("loading");
+  const testimonials = initialTestimonials ?? fetchedTestimonials;
+  const status = initialTestimonials !== undefined ? "ready" : fetchStatus;
 
   useEffect(() => {
-    if (initialTestimonials) return;
+    if (initialTestimonials !== undefined) return;
 
     let isMounted = true;
 
@@ -122,12 +120,12 @@ export default function TestimonialsSection({
 
         const data = (await response.json()) as StorefrontTestimonial[];
         if (isMounted) {
-          setTestimonials(data);
-          setStatus("ready");
+          setFetchedTestimonials(data);
+          setFetchStatus("ready");
         }
       } catch {
         if (isMounted) {
-          setStatus("error");
+          setFetchStatus("error");
         }
       }
     }

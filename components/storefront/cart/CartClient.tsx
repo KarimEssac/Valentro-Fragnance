@@ -364,7 +364,7 @@ export default function CartClient() {
 
   if (items.length === 0) {
     return (
-      <main className="min-h-screen bg-bg px-gutter pb-24 pt-28 sm:pt-36 text-parchment lg:px-16">
+      <main className="min-h-screen bg-bg px-gutter pb-24 text-parchment lg:px-16">
         <section className="mx-auto max-w-container border border-outline bg-surface px-6 py-12 text-center">
           <p className="label-caps text-gold">Cart</p>
           <h1 className="mt-4 font-serif text-4xl leading-tight text-parchment sm:text-5xl">
@@ -385,7 +385,7 @@ export default function CartClient() {
   }
 
   return (
-    <main className="min-h-screen bg-bg px-gutter pb-24 pt-[96px] sm:pt-36 text-parchment lg:px-16">
+    <main className="min-h-screen bg-bg px-gutter pb-24 text-parchment lg:px-16">
       <div className="mx-auto max-w-container">
         <div className="hidden lg:flex mb-10 flex-col justify-between gap-4 border-b border-outline/60 pb-8 sm:flex-row sm:items-end">
           <div>

@@ -19,7 +19,7 @@ The VPS deployment scripts and production configuration live in `/opt/valentro`.
 - Product images remain in the existing Cloudinary account.
 - Database backups run daily at 02:00 UTC and before subsequent deployments, under `/opt/valentro/backups`. Hostinger's weekly VPS backups are separate. Copy database backups off the VPS for independent recovery.
 
-The existing Resend sender is `onboarding@resend.dev`. To send store email to arbitrary customers, verify a sending domain in Resend and update `NEWSLETTER_FROM_EMAIL` in the production configuration.
+Production email uses the verified Resend domain `valentro-fragrance.com` and sends from `Valentro <admins@valentro-fragrance.com>`. `ORDER_NOTIFICATION_EMAIL` points to the store's notification inbox in the private production configuration. Namecheap forwards incoming mail for the `admins` alias to that inbox without a paid mailbox. Development email settings remain separate from production.
 
 ## Operations
 

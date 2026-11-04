@@ -1,7 +1,5 @@
 import type {Metadata} from "next";
 import {getTranslations} from "next-intl/server";
-import Navbar from "@/components/storefront/layout/Navbar";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 
 type PrivacyPageProps = {
   params: Promise<{
@@ -28,16 +26,10 @@ export default async function PrivacyPolicyPage({params}: PrivacyPageProps) {
 
   return (
     <div className="min-h-screen bg-parchment-base text-on-surface selection:bg-warm-gold selection:text-deep-onyx" dir={isRtl ? "rtl" : "ltr"}>
-      {/* Navigation Header */}
-      <div className="absolute inset-x-0 top-0 z-50">
-        <SalesBar />
-        <Navbar cartCount={0} />
-      </div>
-
       {/* Main Content */}
-      <main className="pt-32 pb-section-gap max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
+      <main className="pb-section-gap max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
         {/* Introduction */}
-        <section className="grid grid-cols-12 gap-gutter mb-section-gap items-center min-h-[614px]">
+        <section className="grid grid-cols-12 gap-gutter mb-section-gap items-center">
           <div className="col-span-12 md:col-span-8 md:col-start-3 text-center">
             <span className="font-label-caps text-label-caps text-muted-brass block mb-8 uppercase tracking-widest">
               {t("subtitle")}

@@ -2,8 +2,6 @@ import type {Metadata} from "next";
 import Link from "next/link";
 import {getTranslations} from "next-intl/server";
 
-import Navbar from "@/components/storefront/layout/Navbar";
-import SalesBar from "@/components/storefront/layout/SalesBar";
 
 type TermsPageProps = {
   params: Promise<{
@@ -44,13 +42,8 @@ export default async function TermsAndConditionsPage({params}: TermsPageProps) {
       className="min-h-screen bg-parchment-base text-on-surface selection:bg-warm-gold selection:text-deep-onyx"
       dir={isRtl ? "rtl" : "ltr"}
     >
-      <div className="absolute inset-x-0 top-0 z-50">
-        <SalesBar />
-        <Navbar cartCount={0} />
-      </div>
-
-      <main className="mx-auto max-w-container-max px-margin-mobile pb-section-gap pt-32 md:px-margin-desktop">
-        <section className="mx-auto max-w-3xl py-16 text-center md:py-24">
+      <main className="mx-auto max-w-container-max px-margin-mobile pb-section-gap md:px-margin-desktop">
+        <section className="mx-auto max-w-3xl pb-16 text-center md:pb-24">
           <span className="font-label-caps mb-6 block text-label-caps uppercase tracking-widest text-muted-brass">
             {t("subtitle")}
           </span>

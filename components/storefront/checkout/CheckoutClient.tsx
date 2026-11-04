@@ -506,7 +506,7 @@ export default function CheckoutClient() {
 
   if (orderId) {
     return (
-      <main className="min-h-screen bg-bg px-gutter pb-20 pt-[104px] text-parchment sm:pt-36 lg:px-16">
+      <main className="min-h-screen bg-bg px-gutter pb-20 text-parchment lg:px-16">
         <section className="mx-auto max-w-2xl border border-outline bg-surface px-6 py-10 text-center">
           <p className="label-caps text-gold">{paymentMethod === "INSTAPAY" ? "Order Reserved" : "Order Confirmed"}</p>
           <h1 className="mt-3 font-serif text-4xl leading-tight sm:text-5xl">
@@ -537,7 +537,7 @@ export default function CheckoutClient() {
 
   if (items.length === 0) {
     return (
-      <main className="min-h-screen bg-bg px-gutter pb-20 pt-[104px] text-parchment sm:pt-36 lg:px-16">
+      <main className="min-h-screen bg-bg px-gutter pb-20 text-parchment lg:px-16">
         <section className="mx-auto max-w-2xl border border-outline bg-surface px-6 py-10 text-center">
           <p className="label-caps text-gold">Checkout</p>
           <h1 className="mt-3 font-serif text-4xl leading-tight sm:text-5xl">
@@ -555,7 +555,7 @@ export default function CheckoutClient() {
   }
 
   return (
-    <main className="min-h-screen bg-bg px-gutter pb-16 pt-[96px] text-parchment sm:pt-32 lg:px-16">
+    <main className="min-h-screen bg-bg px-gutter pb-16 text-parchment lg:px-16">
       <div className="mx-auto grid max-w-container gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-10">
         <form id="checkout-form" onSubmit={submitOrder} noValidate className="space-y-7">
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-on-surface/70">

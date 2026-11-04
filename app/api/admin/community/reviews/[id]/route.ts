@@ -1,8 +1,10 @@
 import {NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
+import {revalidateTag} from "next/cache";
 
 import {isAdminRequest} from "@/lib/admin-auth";
 import {prisma} from "@/lib/prisma";
+import {STOREFRONT_FRAGRANCES_TAG, STOREFRONT_TESTIMONIALS_TAG} from "@/lib/cache-tags";
 
 type RouteContext = {
   params: Promise<{
@@ -75,6 +77,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       where: {reviewId: id},
       data: {isPublished: false}
     });
+    revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
 
     return NextResponse.json({
       message: "Review removed from testimonials.",
@@ -116,6 +119,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       isPublished: true
     }
   });
+  revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
 
   return NextResponse.json({
     message: "Review selected as a storefront testimonial.",
@@ -153,6 +157,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   ]);
 
   await refreshFragranceRating(review.fragranceId);
+  revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
+  revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
 
   return NextResponse.json({message: "Review deleted."});
 }

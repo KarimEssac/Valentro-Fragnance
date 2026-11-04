@@ -57,6 +57,7 @@ export default async function AdminInventoryPage({
       taglineAr: fragrance.taglineAr,
       descriptionEn: fragrance.descriptionEn,
       descriptionAr: fragrance.descriptionAr,
+      referenceImageUrl: fragrance.referenceImageUrl,
       gender: fragrance.gender,
       scentProfile: fragrance.scentProfile,
       sillage: fragrance.sillage,

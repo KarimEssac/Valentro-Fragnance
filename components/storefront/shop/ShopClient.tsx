@@ -7,6 +7,7 @@ import type {MouseEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
 import ValentroSelect from "@/components/ui/ValentroSelect";
+import FragranceReference from "@/components/storefront/product/FragranceReference";
 import {productDiscountBadge} from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
 import {startProductImageTransition} from "@/lib/product-image-transition";
@@ -21,6 +22,7 @@ export type ShopFragrance = {
   taglineAr: string;
   gender: string;
   scentProfile: string;
+  referenceImageUrl: string | null;
   primaryImage: {
     url: string;
     altEn: string;
@@ -617,7 +619,7 @@ export default function ShopClient({
   );
 
   return (
-    <section className="bg-bg px-gutter pb-24 pt-10 text-parchment sm:pt-14 lg:px-16">
+    <section className="bg-bg px-gutter pb-24 text-parchment lg:px-16">
       <div className="mx-auto max-w-container">
         <div className="mb-10 border-b border-outline/70 pb-8">
           <p className="label-caps mb-4 text-gold">Fragrance Catalogue</p>
@@ -833,8 +835,13 @@ function FragranceCard({
             {name}
           </div>
         ) : null}
+        <FragranceReference
+          imageUrl={fragrance.referenceImageUrl}
+          productName={name}
+          isArabic={isArabic}
+        />
         {fragrance.discount ? (
-          <span className="label-caps absolute right-3 top-3 z-20 bg-gold px-3 py-2 text-surface-hi">
+          <span className="label-caps absolute bottom-3 end-3 z-20 bg-gold px-3 py-2 text-surface-hi">
             {formatDiscountBadge(fragrance.discount)}
           </span>
         ) : null}
@@ -956,10 +963,10 @@ function CollectionCard({
         <h2 className="font-serif text-[clamp(1.35rem,2.6vw,1.9rem)] leading-tight text-parchment">
           {name}
         </h2>
-        <p className="mx-auto mt-2 line-clamp-2 min-h-10 max-w-[17rem] text-sm leading-5 text-on-surface/70">
+        <p className="mx-auto mt-2 line-clamp-2 max-w-[17rem] text-sm leading-5 text-on-surface/70">
           {description || "A limited bundle curated by Valentro."}
         </p>
-        <p className="label-caps mt-3 text-on-surface/70">
+        <p className="label-caps mt-2 text-on-surface/70">
           {prices.price}
           {prices.combined ? (
             <span className="ml-2 text-on-surface/45 line-through">{prices.combined}</span>

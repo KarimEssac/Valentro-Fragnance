@@ -1,5 +1,7 @@
 "use client";
 
+import FragranceReference from "@/components/storefront/product/FragranceReference";
+
 import {useLocale} from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
@@ -483,7 +485,7 @@ export default function ProductDetailClient({
     return (
       <main
         data-route-loading="true"
-        className="min-h-screen bg-bg px-gutter pb-24 pt-32 text-parchment lg:px-16"
+        className="min-h-screen bg-bg px-gutter pb-24 text-parchment lg:px-16"
       >
         <div className="mx-auto grid max-w-container gap-10 md:grid-cols-12 md:items-start">
           <div className="flex flex-col gap-6 md:col-span-7 md:flex-row">
@@ -519,7 +521,7 @@ export default function ProductDetailClient({
 
   if (status === "error" || !product || !selectedVariant) {
     return (
-      <main className="min-h-screen bg-bg px-gutter pb-24 pt-36 text-parchment lg:px-16">
+      <main className="min-h-screen bg-bg px-gutter pb-24 text-parchment lg:px-16">
         <div className="mx-auto max-w-container border border-outline bg-surface px-5 py-6 text-on-surface">
           This fragrance could not be loaded.
         </div>
@@ -528,7 +530,7 @@ export default function ProductDetailClient({
   }
 
   return (
-    <main className="min-h-screen bg-bg px-gutter pb-24 pt-32 text-parchment lg:px-16">
+    <main className="min-h-screen bg-bg px-gutter pb-24 text-parchment lg:px-16">
       <div className="mx-auto max-w-container">
         <section className="grid grid-cols-1 gap-10 md:grid-cols-12 md:items-start">
           <div className="md:col-span-7 flex flex-col gap-6 md:flex-row">
@@ -589,10 +591,16 @@ export default function ProductDetailClient({
                 />
               ) : null}
               {product.discount ? (
-                <span className="label-caps absolute right-4 top-4 z-30 bg-gold px-4 py-2.5 text-surface-hi shadow-lg shadow-bg/20">
+                <span className="label-caps absolute bottom-4 end-4 z-30 bg-gold px-4 py-2.5 text-surface-hi shadow-lg shadow-bg/20">
                   {formatDiscountBadge(product.discount)}
                 </span>
               ) : null}
+              <FragranceReference
+                imageUrl={product.referenceImageUrl}
+                productName={isArabic ? product.nameAr : product.nameEn}
+                isArabic={isArabic}
+                variant="detail"
+              />
               {images.length > 1 ? (
                 <div className="absolute inset-x-4 top-1/2 z-20 flex -translate-y-1/2 justify-between">
                   <button
@@ -809,8 +817,8 @@ export default function ProductDetailClient({
               >
                 <p>
                   {isArabic
-                    ? "التوصيل متاح إلى المحافظات المدعومة في مصر. الدفع عند الاستلام، وسيتواصل فريقنا معك لتأكيد الطلب."
-                    : "Delivery is available across supported Egyptian governorates. Pay by cash on delivery, then our team will contact you to confirm the order."}
+                    ? "التوصيل متاح إلى المحافظات المدعومة في مصر. الدفع عند الاستلام أو عبر إنستاباي، وسيتواصل فريقنا معك لتأكيد الطلب."
+                    : "Delivery is available across supported Egyptian governorates. Pay by cash on delivery or via Instapay — our team will contact you to confirm the order."}
                 </p>
               </ProductInformationDisclosure>
 

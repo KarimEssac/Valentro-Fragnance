@@ -10,7 +10,7 @@ import {
   parseFinderRule,
   type FinderRuleVerb
 } from "@/lib/finder-rules";
-import {uploadFragranceImages} from "@/lib/fragrance-images";
+import {uploadFragranceImages, uploadFragranceReferenceImage} from "@/lib/fragrance-images";
 import {
   inferIngredientCategory,
   normalizeIngredientCategory
@@ -266,13 +266,17 @@ async function requestData(request: NextRequest) {
 
     return {
       data,
-      files: form.getAll("images").filter((value): value is File => value instanceof File)
+      files: form.getAll("images").filter((value): value is File => value instanceof File),
+      referenceFile: form.get("referenceImage") instanceof File
+        ? form.get("referenceImage") as File
+        : null
     };
   }
 
   return {
     data: (await request.json()) as Record<string, unknown>,
-    files: []
+    files: [],
+    referenceFile: null
   };
 }
 
@@ -284,11 +288,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const {id} = await context.params;
   let data: Record<string, unknown>;
   let files: File[];
+  let referenceFile: File | null;
 
   try {
     const parsed = await requestData(request);
     data = parsed.data;
     files = parsed.files;
+    referenceFile = parsed.referenceFile;
   } catch (error) {
     return NextResponse.json(
       {message: error instanceof Error ? error.message : "Invalid request"},
@@ -320,7 +326,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!scentValues.has(scentProfile)) throw new Error("Scent profile is invalid");
     if (!sillageValues.has(sillage)) throw new Error("Sillage is invalid");
 
-    const uploadedImages = await uploadFragranceImages(files, slug);
+    const [uploadedImages, uploadedReferenceUrl] = await Promise.all([
+      uploadFragranceImages(files, slug),
+      uploadFragranceReferenceImage(referenceFile, slug)
+    ]);
 
     const deletedImageUrls: string[] = [];
 
@@ -330,6 +339,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         select: {
           id: true,
           position: true,
+          referenceImageUrl: true,
           variants: {
             select: {id: true, stock: true}
           },
@@ -340,6 +350,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
 
       if (!existing) throw new Error("Fragrance was not found");
+
+      const referenceImageUrl = uploadedReferenceUrl ?? (
+        data.removeReferenceImage === true ? null : existing.referenceImageUrl
+      );
+      if (existing.referenceImageUrl && existing.referenceImageUrl !== referenceImageUrl) {
+        deletedImageUrls.push(existing.referenceImageUrl);
+      }
 
       const existingVariantIds = new Set(existing.variants.map((variant) => variant.id));
       const existingVariantStock = new Map(
@@ -360,6 +377,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           taglineAr,
           descriptionEn,
           descriptionAr,
+          referenceImageUrl,
           gender,
           scentProfile,
           avoidIf: finderRuleArray(data, "avoidIf", "avoid-if rules", avoidanceVerbs),
