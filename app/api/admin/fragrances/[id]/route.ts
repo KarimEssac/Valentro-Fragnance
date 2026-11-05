@@ -625,7 +625,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     ];
 
     await prisma.$transaction(async (tx) => {
-      // Preserve order items history by unlinking variant foreign keys before deletion
+      // 1. Preserve order items history by unlinking variant foreign keys before deletion
       if (variantIds.length > 0) {
         await tx.orderItem.updateMany({
           where: {variantId: {in: variantIds}},
@@ -633,20 +633,44 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         });
       }
 
-      // Detach or remove testimonials connected to this fragrance or its customer reviews
+      // 2. Remove testimonials referencing this fragrance or its reviews
+      if (reviewIds.length > 0) {
+        await tx.testimonial.deleteMany({
+          where: {reviewId: {in: reviewIds}}
+        });
+        await tx.review.deleteMany({
+          where: {id: {in: reviewIds}}
+        });
+      }
       await tx.testimonial.deleteMany({
-        where: {
-          OR: [
-            {fragranceId: id},
-            ...(reviewIds.length > 0 ? [{reviewId: {in: reviewIds}}] : [])
-          ]
-        }
+        where: {fragranceId: id}
       });
 
-      // Delete the fragrance (cascades variants, ingredients, images, collections, and reviews)
+      // 3. Remove restock requests and variants
+      if (variantIds.length > 0) {
+        await tx.restockRequest.deleteMany({
+          where: {variantId: {in: variantIds}}
+        });
+        await tx.fragranceVariant.deleteMany({
+          where: {id: {in: variantIds}}
+        });
+      }
+
+      // 4. Remove ingredients, images, and collection connections
+      await tx.fragranceIngredient.deleteMany({
+        where: {fragranceId: id}
+      });
+      await tx.fragranceImage.deleteMany({
+        where: {fragranceId: id}
+      });
+      await tx.fragranceCollection.deleteMany({
+        where: {fragranceId: id}
+      });
+
+      // 5. Delete the fragrance itself
       await tx.fragrance.delete({where: {id}});
 
-      // Compact display positions for remaining fragrances
+      // 6. Compact display positions for remaining fragrances
       await tx.fragrance.updateMany({
         where: {position: {gt: fragrance.position}},
         data: {position: {decrement: 1}}
