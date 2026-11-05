@@ -33,8 +33,7 @@ const valentroLinks: SocialLink[] = [
   {label: "TikTok", href: "#valentro-tiktok", icon: "tiktok"}
 ];
 
-const aboutHeroImage =
-  "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1782725829/valentro/site/about-us-heritage.webp";
+const aboutHeroImage = "/magnito-hero.png";
 const karimPortraitImage =
   "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793826533/valentro/site/team/karim-essac-bcfe6a1d28dc.webp";
 
@@ -166,11 +165,11 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
           <div className="relative aspect-[4/5] overflow-hidden border border-outline/60 bg-surface-hi">
             <Image
               src={aboutHeroImage}
-              alt="Valentro fragrance atmosphere"
+              alt="Valentro Magnito fragrance"
               fill
               priority
-              sizes="(min-width: 1024px) 42vw, 100vw"
-              className="object-cover"
+              unoptimized
+              className="object-cover object-[10%_center]"
             />
           </div>
         </div>
@@ -206,8 +205,8 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
         <div className="order-2 md:order-1 md:col-span-5 md:col-start-2">
           <div className="relative aspect-square overflow-hidden border border-outline/60">
             <Image
-              src="/uploads/fragrances/ultra-male.png"
-              alt="Valentro fragrance bottle"
+              src="/images/about/dark-ember.png"
+              alt="Valentro Dark Ember fragrance"
               fill
               sizes="(min-width: 1024px) 38vw, 100vw"
               className="object-cover"
@@ -239,12 +238,14 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
 
       <section className="mx-auto grid max-w-container items-center gap-10 px-gutter md:grid-cols-12 lg:px-16">
         <div className="md:col-span-5 md:col-start-2">
-          <div className="flex aspect-square items-center justify-center border border-outline/60 bg-surface-hi p-8">
-            <div className="flex h-full w-full flex-col items-center justify-center border border-outline/50 text-center">
-              <span className="label-caps mb-5 text-gold">CEO</span>
-              <span className="font-serif text-5xl text-parchment">Peter</span>
-              <span className="font-serif text-5xl text-parchment">Emil</span>
-            </div>
+          <div className="relative aspect-square overflow-hidden border border-outline/60 bg-surface-hi">
+            <Image
+              src="/images/team/PeterEmil.jpeg"
+              alt="Peter Emil, CEO of Valentro"
+              fill
+              sizes="(min-width: 768px) 42vw, 100vw"
+              className="object-cover object-top"
+            />
           </div>
         </div>
         <div className="md:col-span-5">

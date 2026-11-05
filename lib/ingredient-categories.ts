@@ -148,6 +148,7 @@ const categoryKeywords: Array<{category: string; keywords: string[]}> = [
   }
 ];
 
+// Keep specific notes before shared family artwork so existing illustrations take priority.
 const ingredientFinderImages: Array<{keywords: string[]; src: string}> = [
   {keywords: ["bergamot"], src: "/images/ingredients/bergamot.png"},
   {keywords: ["madagascar vanilla", "vanilla"], src: "/images/ingredients/madagascar-vanilla.png"},
@@ -157,8 +158,37 @@ const ingredientFinderImages: Array<{keywords: string[]; src: string}> = [
   {keywords: ["labdanum"], src: "/images/ingredients/labdanum.png"},
   {keywords: ["amber woods"], src: "/images/ingredients/amber-woods.png"},
   {keywords: ["mandarin"], src: "/images/ingredients/mandarin.png"},
-  {keywords: ["clean musk", "musk"], src: "/images/ingredients/clean-musk.png"}
+  {keywords: ["clean musk", "musk"], src: "/images/ingredients/clean-musk.png"},
+  {keywords: ["lavender", "lavandin"], src: "/images/ingredients/lavender.png"},
+  {keywords: ["patchouli", "vetiver", "oakmoss", "truffle", "earth"], src: "/images/ingredients/patchouli-earth.png"},
+  {keywords: ["green notes", "mint", "sage", "basil", "davana", "herbal", "tea"], src: "/images/ingredients/green-herbs.png"},
+  {keywords: ["rose", "iris", "orris", "neroli", "violet", "gardenia", "lily", "peony", "geranium", "orange blossom", "orchid", "lotus", "mahonial", "ylang", "floral"], src: "/images/ingredients/floral-bouquet.png"},
+  {keywords: ["apple", "pear", "peach", "plum", "berry", "berries", "currant", "fig", "melon", "mango", "pineapple", "cherry", "fruity", "fruit"], src: "/images/ingredients/fruits.png"},
+  {keywords: ["pepper", "cardamom", "cinnamon", "clove", "ginger", "nutmeg", "spice", "anise", "caraway", "licorice"], src: "/images/ingredients/warm-spices.png"},
+  {keywords: ["almond", "tonka", "chestnut", "praline", "coumarin"], src: "/images/ingredients/nuts-tonka.png"},
+  {keywords: ["coffee", "cacao", "chocolate"], src: "/images/ingredients/coffee-cacao.png"},
+  {keywords: ["caramel", "honey", "sugar"], src: "/images/ingredients/sugar-honey.png"},
+  {keywords: ["marine", "water", "ozonic", "beach", "salt"], src: "/images/ingredients/marine-salt.png"},
+  {keywords: ["tobacco"], src: "/images/ingredients/tobacco.png"},
+  {keywords: ["cognac", "liquor", "rum"], src: "/images/ingredients/spirits.png"},
+  {keywords: ["benzoin", "elemi", "incense", "resin", "ambroxan", "iso e", "leather"], src: "/images/ingredients/base-accents.png"},
+  {keywords: ["amber", "wood", "cedar", "sandalwood", "cypress", "cashmeran", "oak"], src: "/images/ingredients/amber-woods.png"},
+  {keywords: ["orange", "tangerine"], src: "/images/ingredients/mandarin.png"},
+  {keywords: ["citron", "grapefruit", "lemon", "lime", "yuzu", "citrus"], src: "/images/ingredients/bergamot.png"}
 ];
+
+const ingredientCategoryImages: Record<string, string> = {
+  "Citrus & Fresh": "/images/ingredients/bergamot.png",
+  Fruits: "/images/ingredients/fruits.png",
+  "Sweet & Gourmand": "/images/ingredients/madagascar-vanilla.png",
+  "Herbal & Floral": "/images/ingredients/floral-bouquet.png",
+  "Woody & Earthy": "/images/ingredients/amber-woods.png",
+  "Spicy & Aromatic": "/images/ingredients/warm-spices.png",
+  "Base & Accent Notes": "/images/ingredients/base-accents.png",
+  "Top Notes": "/images/ingredients/bergamot.png",
+  "Middle Notes": "/images/ingredients/jasmine.png",
+  "Base Notes": "/images/ingredients/base-accents.png"
+};
 
 function clean(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -204,12 +234,16 @@ export function ingredientCategorySortOrder(category: string) {
   return index === -1 ? defaultIngredientCategories.length : index;
 }
 
-export function ingredientFinderImage(name: string) {
+export function ingredientCategoryImage(category: string) {
+  return ingredientCategoryImages[category] ?? ingredientCategoryImages["Base & Accent Notes"];
+}
+
+export function ingredientFinderImage(name: string, category?: string | null) {
   const normalizedName = clean(name).toLocaleLowerCase();
   return (
     ingredientFinderImages.find(({keywords}) =>
       keywords.some((keyword) => normalizedName.includes(keyword))
-    )?.src ?? null
+    )?.src ?? ingredientCategoryImage(ingredientCategoryFor(name, category))
   );
 }
 

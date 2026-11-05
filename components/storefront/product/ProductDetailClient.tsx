@@ -679,66 +679,71 @@ export default function ProductDetailClient({
 
             <div className="my-8 h-px w-1/3 bg-outline/70" />
 
-            <div className="mb-8">
-              <p className="label-caps mb-4 text-parchment">
-                {isArabic ? "اختر الحجم" : "Select Size"}
-              </p>
-              <div className="flex flex-wrap gap-4">
-                {product.variants.map((variant) => {
-                  const isSelected = selectedVariant?.id === variant.id;
-                  return (
-                    <button
-                      key={variant.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedVariantId(variant.id);
-                        setCartStatus("");
-                      }}
-                      className={`label-caps min-h-11 border px-8 transition-colors ${
-                        isSelected
-                          ? "border-parchment bg-parchment text-surface-hi"
-                          : "border-outline hover:border-gold hover:text-gold text-parchment"
-                      }`}
-                    >
-                      {variant.sizeML}ml
-                    </button>
-                  );
-                })}
+            <div className="mb-8 flex items-start gap-4">
+              <div className="min-w-0">
+                <p className="label-caps mb-4 text-parchment">
+                  {isArabic ? "اختر الحجم" : "Select Size"}
+                </p>
+                <div className="flex flex-wrap gap-2 sm:gap-4">
+                  {product.variants.map((variant) => {
+                    const isSelected = selectedVariant?.id === variant.id;
+                    return (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedVariantId(variant.id);
+                          setCartStatus("");
+                        }}
+                        className={`label-caps min-h-12 border px-4 transition-colors sm:px-8 ${
+                          isSelected
+                            ? "border-parchment bg-parchment text-surface-hi"
+                            : "border-outline hover:border-gold hover:text-gold text-parchment"
+                        }`}
+                      >
+                        {variant.sizeML}ml
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-
-            <div className="mb-5 flex flex-col gap-4">
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <div className="flex min-h-12 items-center border border-outline">
+              <div className="min-w-[7rem] flex-1">
+                <p className="label-caps mb-4 text-parchment">
+                  {isArabic ? "الكمية" : "Quantity"}
+                </p>
+                <div className="flex h-12 items-center border border-outline">
                   <button
                     type="button"
                     aria-label="Decrease quantity"
                     onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                    className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+                    className="focus-gold h-full px-3 text-parchment hover:text-gold sm:px-4"
                   >
                     -
                   </button>
-                  <span className="w-10 text-center text-sm text-parchment">
+                  <span className="min-w-8 flex-1 text-center text-sm text-parchment">
                     {quantity}
                   </span>
                   <button
                     type="button"
                     aria-label="Increase quantity"
                     onClick={() => setQuantity((value) => value + 1)}
-                    className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+                    className="focus-gold h-full px-3 text-parchment hover:text-gold sm:px-4"
                   >
                     +
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={addToCart}
-                  disabled={selectedVariant.stock < 1}
-                  className="label-caps focus-gold inline-flex min-h-12 flex-1 items-center justify-center gap-3 border border-outline px-8 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isArabic ? "إضافة إلى السلة" : "Add to Cart"}
-                </button>
               </div>
+            </div>
+
+            <div className="mb-5 flex flex-col gap-4">
+              <button
+                type="button"
+                onClick={addToCart}
+                disabled={selectedVariant.stock < 1}
+                className="label-caps focus-gold inline-flex min-h-12 flex-1 items-center justify-center gap-3 border border-outline px-8 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isArabic ? "إضافة إلى السلة" : "Add to Cart"}
+              </button>
               <button
                 type="button"
                 onClick={buyNow}

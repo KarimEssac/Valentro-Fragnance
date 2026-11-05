@@ -717,7 +717,11 @@ export default function ShopClient({
         ) : null}
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]">
-          <aside className="hidden lg:sticky lg:top-20 lg:block lg:self-start">
+          <aside
+            aria-label="Fragrance filters"
+            tabIndex={0}
+            className="fragrance-filters focus-gold hidden lg:sticky lg:top-28 lg:block lg:max-h-[calc(100dvh-8rem)] lg:self-start lg:overflow-y-auto lg:overscroll-y-contain lg:pr-3 lg:[scrollbar-gutter:stable]"
+          >
             <div className="border-y border-outline/70 py-6 lg:border-t-0 lg:pt-0">
               {filterControls}
             </div>

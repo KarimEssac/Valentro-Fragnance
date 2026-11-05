@@ -14,6 +14,7 @@ import {
 } from "@/lib/scent-finder-logic";
 import {
   ingredientCategoryFor,
+  ingredientCategoryImage,
   ingredientCategoryIcon,
   ingredientCategoryLabel,
   ingredientCategorySortOrder,
@@ -60,6 +61,7 @@ type ScoredFragrance = FinderFragrance & {
 type FinderIngredient = {
   key: string;
   name: string;
+  searchTerms: string;
   category: string;
   frequency: number;
   profileMatches: number;
@@ -174,6 +176,7 @@ export default function ScentFinder() {
         byIngredient.set(key, {
           key,
           name,
+          searchTerms: normalizeFinderTerm(`${ingredient.nameEn} ${ingredient.nameAr}`),
           category,
           frequency: 1,
           profileMatches,
@@ -843,6 +846,8 @@ function NotePicker({
   onToggle: (value: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedSearchCategories, setCollapsedSearchCategories] = useState<string[]>([]);
   const [openCategory, setOpenCategory] = useState<string | null>(
     categories[0]?.category ?? null
   );
@@ -850,16 +855,28 @@ function NotePicker({
     (sum, category) => sum + category.ingredients.length,
     0
   );
+  const searchWords = normalizeFinderTerm(searchQuery).split(" ").filter(Boolean);
+  const isSearching = searchWords.length > 0;
+  const visibleCategories = isSearching
+    ? categories.map((group) => ({
+        ...group,
+        ingredients: group.ingredients.filter((note) => {
+          const searchableText = `${note.searchTerms} ${normalizeFinderTerm(group.category)} ${normalizeFinderTerm(ingredientCategoryLabel(group.category, true))}`;
+          return searchWords.every((word) => searchableText.includes(word));
+        })
+      })).filter((group) => group.ingredients.length > 0)
+    : categories;
+  const matchingNotes = visibleCategories.reduce((sum, group) => sum + group.ingredients.length, 0);
 
   function isSelected(note: FinderIngredient) {
-    return selected.some((value) => normalizeFinderTerm(value) === note.key);
+    return selected.some((value) => normalizeFinderTerm(value) === normalizeFinderTerm(note.name));
   }
 
   function noteButtonClass(note: FinderIngredient, compact = false) {
     const isDisabled = disabled?.(note.name) ?? false;
     const active = isSelected(note);
 
-    return `${compact ? "min-h-10 px-3 py-2" : "min-h-32 px-3 py-4"} focus-gold group relative border transition-all duration-300 ${
+    return `${compact ? "inline-flex min-h-10 items-center px-3 py-2" : "min-h-32 px-3 py-4"} focus-gold group relative border transition-all duration-300 ${
       active
         ? "border-[#D4AF37] bg-[#201B11] text-[#F9F6F0] shadow-[0_0_18px_rgba(212,175,55,0.18)]"
         : "border-[#7A6A4F]/35 bg-white/35 text-[#201B11] hover:border-[#D4AF37] hover:bg-[#D4AF37]/10"
@@ -875,7 +892,7 @@ function NotePicker({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {quickPicks.map((note, index) => {
           const unavailable = disabled?.(note.name) ?? false;
-          const noteImage = ingredientFinderImage(note.name);
+          const noteImage = ingredientFinderImage(note.key, note.category);
 
           return (
             <button
@@ -958,13 +975,36 @@ function NotePicker({
         }`}
       >
         <div className="min-h-0 overflow-hidden">
+          <label className="mb-3 flex min-h-12 items-center gap-3 border border-[#7A6A4F]/35 bg-white/50 px-4 text-[#7A6A4F] focus-within:border-[#7A6A4F] focus-within:ring-1 focus-within:ring-[#7A6A4F]">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5 shrink-0">
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 4.5 4.5" />
+            </svg>
+            <span className="sr-only">{isArabic ? "ابحث عن النوتات" : "Search notes"}</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setCollapsedSearchCategories([]);
+              }}
+              placeholder={isArabic ? "ابحث عن مكوّن أو عائلة عطرية…" : "Search ingredients or scent families…"}
+              dir="auto"
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm text-[#201B11] outline-none placeholder:text-[#7A6A4F]/80"
+            />
+          </label>
+          {isSearching ? (
+            <p role="status" className="mb-3 text-sm text-[#7A6A4F]">
+              {matchingNotes === 0
+                ? isArabic ? "لا توجد نوتات مطابقة. جرّب اسماً آخر." : "No matching notes. Try another ingredient or scent family."
+                : isArabic ? `${matchingNotes} نوتات مطابقة` : `${matchingNotes} matching ${matchingNotes === 1 ? "note" : "notes"}`}
+            </p>
+          ) : null}
           <div className="space-y-2">
-          {categories.map(({category, ingredients}) => {
-            const isOpen = openCategory === category;
+          {visibleCategories.map(({category, ingredients}) => {
+            const isOpen = isSearching ? !collapsedSearchCategories.includes(category) : openCategory === category;
             const categoryId = `finder-category-${category.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-            const categoryImage = ingredients
-              .map((ingredient) => ingredientFinderImage(ingredient.name))
-              .find((image): image is string => Boolean(image));
+            const categoryImage = ingredientCategoryImage(category);
 
             return (
               <section key={category} className="overflow-hidden border border-[#7A6A4F]/20 bg-white/35">
@@ -972,7 +1012,13 @@ function NotePicker({
                   type="button"
                   aria-expanded={isOpen}
                   aria-controls={categoryId}
-                  onClick={() => setOpenCategory((current) => (current === category ? null : category))}
+                  onClick={() => {
+                    if (isSearching) {
+                      setCollapsedSearchCategories((current) => toggleValue(current, category));
+                    } else {
+                      setOpenCategory((current) => (current === category ? null : category));
+                    }
+                  }}
                   className="focus-gold flex min-h-15 w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-[#EAE4D8]/65"
                 >
                   <span className="flex items-center gap-3">
@@ -1014,7 +1060,7 @@ function NotePicker({
                     <div className="flex flex-wrap gap-2 border-t border-[#7A6A4F]/15 p-3">
                       {ingredients.map((note) => {
                         const unavailable = disabled?.(note.name) ?? false;
-                        const noteImage = ingredientFinderImage(note.name);
+                        const noteImage = ingredientFinderImage(note.key, note.category);
 
                         return (
                           <button

@@ -136,6 +136,25 @@
     display: none;
   }
 
+  .fragrance-filters {
+    scrollbar-width: thin;
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    .fragrance-filters {
+      scrollbar-color: auto;
+      scrollbar-width: auto;
+    }
+
+    .fragrance-filters::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .fragrance-filters::-webkit-scrollbar-thumb {
+      border-width: 1px;
+    }
+  }
+
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
     font-family: 'Material Symbols Outlined';
