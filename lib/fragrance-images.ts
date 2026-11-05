@@ -1,6 +1,28 @@
-import sharp from "sharp";
-
 import {uploadBufferToCloudinary} from "@/lib/cloudinary";
+
+async function optimizeImageBuffer(original: Buffer, maxDimension: number): Promise<Buffer> {
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default || sharpModule;
+    return await sharp(original)
+      .rotate()
+      .resize({
+        width: maxDimension,
+        height: maxDimension,
+        fit: "inside",
+        withoutEnlargement: true
+      })
+      .webp({
+        quality: 88,
+        effort: 6,
+        smartSubsample: true
+      })
+      .toBuffer();
+  } catch (error) {
+    console.warn("Sharp image optimization bypassed:", error instanceof Error ? error.message : error);
+    return original;
+  }
+}
 
 async function uploadOptimizedImages(
   files: File[],
@@ -24,22 +46,9 @@ async function uploadOptimizedImages(
       "-"
     );
     const original = Buffer.from(await file.arrayBuffer());
-    const optimized = await sharp(original)
-      .rotate()
-      .resize({
-        width: maxDimension,
-        height: maxDimension,
-        fit: "inside",
-        withoutEnlargement: true
-      })
-      .webp({
-        quality: 88,
-        effort: 6,
-        smartSubsample: true
-      })
-      .toBuffer();
+    const payload = await optimizeImageBuffer(original, maxDimension);
 
-    const upload = await uploadBufferToCloudinary(optimized, {
+    const upload = await uploadBufferToCloudinary(payload, {
       folder,
       public_id: publicId,
       resource_type: "image",
