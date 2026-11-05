@@ -29,7 +29,7 @@ export default function FragranceReference({
       <div className={`relative shrink-0 ${isDetail ? "h-10 w-7 sm:h-[72px] sm:w-14" : "h-11 w-8"}`}>
         <Image
           src={imageUrl}
-          alt={isArabic ? `العطر المرجعي لـ ${productName}` : `Reference fragrance for ${productName}`}
+          alt={isArabic ? `العطر الذي ألهم ${productName}` : `Fragrance inspiration for ${productName}`}
           fill
           sizes={isDetail ? "(min-width: 640px) 56px, 28px" : "32px"}
           data-loaded="true"
@@ -38,7 +38,7 @@ export default function FragranceReference({
       </div>
       <div className={`relative flex min-w-0 flex-col items-start ${isDetail ? "gap-1.5 sm:gap-2" : "gap-2"}`}>
         <span className={`whitespace-nowrap font-serif font-normal leading-none text-white/90 ${isDetail ? "text-xs sm:text-lg" : "text-[11px]"}`}>
-          {isArabic ? "المرجع" : "Reference"}
+          {isArabic ? "الإلهام" : "Inspiration"}
         </span>
         <span aria-hidden="true" className={`h-px bg-gradient-to-r from-white/50 to-white/10 ${isDetail ? "w-5 sm:w-8" : "w-4"}`} />
       </div>

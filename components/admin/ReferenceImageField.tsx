@@ -34,17 +34,17 @@ export default function ReferenceImageField({
 
   return (
     <fieldset className="space-y-4 border border-outline/60 bg-surface/40 p-4">
-      <legend className="label-caps px-2 text-gold">Reference Image (Optional)</legend>
+      <legend className="label-caps px-2 text-gold">Inspiration Image (Optional)</legend>
       <p id={`${inputId}-help`} className="text-xs leading-5 text-on-surface/70">
         Upload the original fragrance used as inspiration. It appears as a small
-        reference badge inside the product image. Images up to 5MB.
+        inspiration badge inside the product image. Images up to 5MB.
       </p>
       {displayedImage ? (
         <div className="flex items-center gap-4">
           <div className="relative h-20 w-16 shrink-0 overflow-hidden border border-outline/60 bg-surface-hi">
             <Image
               src={displayedImage}
-              alt={`Reference fragrance for ${productName}`}
+              alt={`Fragrance inspiration for ${productName}`}
               fill
               unoptimized={Boolean(previewUrl)}
               sizes="64px"
@@ -52,12 +52,12 @@ export default function ReferenceImageField({
             />
           </div>
           <span className="text-xs text-on-surface/70">
-            {previewUrl ? "New reference preview" : "Current reference"}
+            {previewUrl ? "New inspiration preview" : "Current inspiration"}
           </span>
         </div>
       ) : null}
       <label htmlFor={inputId} className="label-caps block text-gold">
-        {currentImageUrl ? "Replace reference image" : "Upload reference image"}
+        {currentImageUrl ? "Replace inspiration image" : "Upload inspiration image"}
       </label>
       <input
         id={inputId}
@@ -78,7 +78,7 @@ export default function ReferenceImageField({
             checked={removeReference}
             onChange={(event) => setRemoveReference(event.target.checked)}
           />
-          Remove reference image
+          Remove inspiration image
         </label>
       ) : null}
     </fieldset>
