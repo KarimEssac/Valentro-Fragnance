@@ -46,7 +46,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="w-full border-t border-muted-brass/30 bg-surface-container-low px-6 py-10 font-body-md text-body-md text-primary dark:bg-deep-onyx dark:text-on-primary md:px-margin-desktop md:py-12">
+    <footer className="relative z-40 w-full border-t border-muted-brass/30 bg-surface-container-low px-6 py-10 font-body-md text-body-md text-primary dark:bg-deep-onyx dark:text-on-primary md:px-margin-desktop md:py-12">
       <div className="mx-auto grid w-full max-w-container-max grid-cols-1 gap-10 text-center md:grid-cols-12 md:gap-x-gutter md:text-start" dir={isRtl ? "rtl" : "ltr"}>
         {/* Brand Signature */}
         <div className="flex flex-col items-center gap-4 md:col-span-4 md:items-start">

@@ -412,7 +412,7 @@ export default function ScentFinder() {
       <button
         type="button"
         onClick={openFinder}
-        className="focus-gold fixed bottom-5 right-5 z-[90] grid h-20 w-20 place-items-center border border-gold bg-parchment text-surface-hi shadow-[0_18px_44px_rgba(47,36,27,0.28)] transition-transform duration-300 hover:-translate-y-1 hover:bg-gold md:bottom-8 md:right-8 md:h-24 md:w-24"
+        className="focus-gold fixed bottom-5 right-5 z-30 grid h-20 w-20 place-items-center border border-gold bg-parchment text-surface-hi shadow-[0_18px_44px_rgba(47,36,27,0.28)] transition-transform duration-300 hover:-translate-y-1 hover:bg-gold md:bottom-8 md:right-8 md:h-24 md:w-24"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-label="Open scent finder"
