@@ -69,7 +69,7 @@ function CartIconWithCount({
   countClassName?: string;
 }) {
   return (
-    <span className="relative inline-flex items-center justify-center">
+    <span className="relative flex items-center justify-center leading-none">
       <BagIcon className={iconClassName} />
       <span
         className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 font-semibold leading-none text-gold ${countClassName}`}
@@ -481,7 +481,7 @@ export default function Navbar({cartCount = 0}: NavbarProps) {
           <button
             type="button"
             onClick={() => setCartOpen(true)}
-            className="focus-gold relative text-gold transition-colors duration-300 hover:text-parchment"
+            className="focus-gold relative flex h-6 w-6 items-center justify-center leading-none text-gold transition-colors duration-300 hover:text-parchment"
             aria-label={t("cart")}
           >
             <CartIconWithCount count={localCartCount} />

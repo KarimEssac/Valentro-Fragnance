@@ -2,18 +2,20 @@ type ProductImageTransition = {
   slug: string;
   imageUrl: string;
   imageAlt: string;
-};
-
-type ViewTransitionHandle = {
+  previewUrl: string;
   finished: Promise<void>;
 };
 
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (
-    update: () => void | Promise<void>
-  ) => ViewTransitionHandle;
+type StartProductTransitionOptions = {
+  slug: string;
+  imageUrl: string;
+  imageAlt: string;
+  source: HTMLElement;
+  navigate: () => void;
 };
 
+const TRANSITION_DURATION_MS = 720;
+const TRANSITION_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 let pendingTransition: ProductImageTransition | null = null;
 
 export function getProductTransitionName(slug: string) {
@@ -24,240 +26,250 @@ export function getPendingProductTransition(slug: string) {
   return pendingTransition?.slug === slug ? pendingTransition : null;
 }
 
-function waitForProductTarget(slug: string, timeoutMs = 4000) {
-  return new Promise<HTMLElement | null>((resolve) => {
-    const findTarget = () =>
-      Array.from(
-        document.querySelectorAll<HTMLElement>(
-          "[data-product-transition-target]"
-        )
-      ).find((element) => element.dataset.productTransitionTarget === slug);
+function waitForElement<T>(read: () => T | null, timeoutMs: number) {
+  const current = read();
+  if (current) return Promise.resolve(current);
 
-    if (findTarget()) {
-      resolve(findTarget() ?? null);
-      return;
-    }
-
+  return new Promise<T | null>((resolve) => {
     const observer = new MutationObserver(() => {
-      if (findTarget()) {
-        cleanup();
-        resolve(findTarget() ?? null);
-      }
+      const value = read();
+      if (value) finish(value);
     });
-    const timeout = window.setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, timeoutMs);
+    const timeout = window.setTimeout(() => finish(null), timeoutMs);
 
-    function cleanup() {
-      window.clearTimeout(timeout);
+    function finish(value: T | null) {
       observer.disconnect();
+      window.clearTimeout(timeout);
+      resolve(value);
     }
 
     observer.observe(document.body, {childList: true, subtree: true});
   });
 }
 
-function estimateProductTarget() {
-  const viewportWidth = window.innerWidth;
+function waitForImage(image: HTMLImageElement, timeoutMs = 1200) {
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const timeout = window.setTimeout(() => finish(false), timeoutMs);
 
-  if (viewportWidth < 768) {
-    const width = viewportWidth - 48;
-    return {left: 24, top: 144, width, height: width * 1.25};
-  }
+    function finish(ready: boolean) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      image.removeEventListener("load", decode);
+      image.removeEventListener("error", failed);
+      resolve(ready);
+    }
 
-  const pageWidth = Math.min(viewportWidth - 128, 1280);
-  const galleryColumnWidth = (pageWidth * 7) / 12;
-  const width = galleryColumnWidth - 120;
+    function failed() {
+      finish(false);
+    }
 
-  return {
-    left: (viewportWidth - pageWidth) / 2 + 120,
-    top: 128,
-    width,
-    height: width * 1.25
-  };
+    function decode() {
+      if (!image.naturalWidth) return finish(false);
+      if (image.decode) {
+        void image.decode().then(() => finish(true), () => finish(false));
+      } else {
+        finish(true);
+      }
+    }
+
+    image.addEventListener("load", decode, {once: true});
+    image.addEventListener("error", failed, {once: true});
+    if (image.complete) decode();
+  });
 }
 
-function animateElement(
-  element: HTMLElement,
-  keyframes: Keyframe[],
-  options: KeyframeAnimationOptions
+async function prepareProductTarget(
+  slug: string,
+  previousTargets: Set<Element>,
+  sourceDialog: Element | null
 ) {
-  return element.animate(keyframes, options).finished.catch(() => undefined);
+  const [target] = await Promise.all([
+    waitForElement(() =>
+      Array.from(document.querySelectorAll<HTMLElement>("[data-product-transition-target]"))
+        .find((element) =>
+          element.dataset.productTransitionTarget === slug &&
+          !previousTargets.has(element) &&
+          !element.closest("[data-route-loading='true']")
+        ) ?? null,
+    4000),
+    // Let an outgoing cart/modal release its scroll lock before capturing the new page.
+    sourceDialog
+      ? waitForElement(() => sourceDialog.isConnected ? null : true, 400)
+      : Promise.resolve(true)
+  ]);
+
+  if (!target?.isConnected) return null;
+  // The router can settle its scroll without waiting for a paint, which a native
+  // View Transition update callback can suppress.
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  const image = target.querySelector<HTMLImageElement>("[data-product-transition-preview]") ??
+    target.querySelector<HTMLImageElement>("img");
+  if (!image || !(await waitForImage(image))) return null;
+  return target.isConnected ? target : null;
 }
 
-async function runFallbackTransition({
-  slug,
-  imageUrl,
-  imageAlt,
-  source,
-  navigate
-}: StartProductTransitionOptions) {
+function clipToRect(rect: DOMRect) {
+  return `inset(${rect.top}px ${window.innerWidth - rect.right}px ${window.innerHeight - rect.bottom}px ${rect.left}px)`;
+}
+
+function imageTransform(image: HTMLImageElement, rect: DOMRect) {
+  const scale = Math.max(rect.width / image.naturalWidth, rect.height / image.naturalHeight);
+  const x = rect.left + (rect.width - image.naturalWidth * scale) / 2;
+  const y = rect.top + (rect.height - image.naturalHeight * scale) / 2;
+  return `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+}
+
+async function runFallbackTransition(
+  options: StartProductTransitionOptions,
+  preview: ProductImageTransition,
+  previousTargets: Set<Element>,
+  sourceDialog: Element | null,
+  complete: () => void
+) {
+  const {source, navigate, slug, imageAlt} = options;
   const sourceRect = source.getBoundingClientRect();
+  const previousOpacity = source.style.opacity;
   const overlay = document.createElement("div");
   const image = document.createElement("img");
-
   overlay.setAttribute("aria-hidden", "true");
   overlay.dataset.productTransitionOverlay = slug;
   Object.assign(overlay.style, {
     position: "fixed",
-    left: `${sourceRect.left}px`,
-    top: `${sourceRect.top}px`,
-    width: `${sourceRect.width}px`,
-    height: `${sourceRect.height}px`,
+    inset: "0",
     zIndex: "2600",
     overflow: "hidden",
     pointerEvents: "none",
-    background: "#201d19",
-    border: "1px solid rgba(227, 210, 186, 0.35)",
-    boxShadow: "0 18px 60px rgba(12, 10, 8, 0.18)"
+    clipPath: clipToRect(sourceRect)
   });
-  Object.assign(image.style, {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block"
-  });
-  image.src = imageUrl;
   image.alt = imageAlt;
-  overlay.appendChild(image);
-  document.body.appendChild(overlay);
-  source.style.opacity = "0";
-  document.documentElement.dataset.productImageTransition = "fallback";
-
-  navigate();
+  image.src = preview.previewUrl;
 
   try {
-    const target = await waitForProductTarget(slug, 650);
-    const targetRect = target?.getBoundingClientRect() ?? estimateProductTarget();
-
-    await animateElement(
-      overlay,
-      [
-        {
-          left: `${sourceRect.left}px`,
-          top: `${sourceRect.top}px`,
-          width: `${sourceRect.width}px`,
-          height: `${sourceRect.height}px`,
-          transform: "translateY(0) scale(1)",
-          borderRadius: "0px"
-        },
-        {
-          offset: 0.18,
-          transform: "translateY(-14px) scale(1.025)",
-          boxShadow: "0 28px 80px rgba(12, 10, 8, 0.28)"
-        },
-        {
-          left: `${targetRect.left}px`,
-          top: `${targetRect.top}px`,
-          width: `${targetRect.width}px`,
-          height: `${targetRect.height}px`,
-          transform: "translateY(0) scale(1)",
-          borderRadius: "0px",
-          boxShadow: "0 12px 42px rgba(12, 10, 8, 0.12)"
-        }
-      ],
-      {
-        duration: 820,
-        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-        fill: "forwards"
-      }
-    );
-
-    const resolvedTarget = target ?? (await waitForProductTarget(slug, 2600));
-    if (resolvedTarget) {
-      const resolvedRect = resolvedTarget.getBoundingClientRect();
-      const overlayRect = overlay.getBoundingClientRect();
-
-      await animateElement(
-        overlay,
-        [
-          {
-            left: `${overlayRect.left}px`,
-            top: `${overlayRect.top}px`,
-            width: `${overlayRect.width}px`,
-            height: `${overlayRect.height}px`
-          },
-          {
-            left: `${resolvedRect.left}px`,
-            top: `${resolvedRect.top}px`,
-            width: `${resolvedRect.width}px`,
-            height: `${resolvedRect.height}px`
-          }
-        ],
-        {
-          duration: 220,
-          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-          fill: "forwards"
-        }
-      );
+    if (!(await waitForImage(image))) {
+      navigate();
+      return;
     }
 
+    Object.assign(image.style, {
+      position: "absolute",
+      left: "0",
+      top: "0",
+      width: `${image.naturalWidth}px`,
+      height: `${image.naturalHeight}px`,
+      maxWidth: "none",
+      transformOrigin: "0 0",
+      transform: imageTransform(image, sourceRect),
+      willChange: "transform"
+    });
+    overlay.appendChild(image);
+    document.body.appendChild(overlay);
+    source.style.opacity = "0";
+    navigate();
+
+    const target = await prepareProductTarget(slug, previousTargets, sourceDialog);
+    if (!target) return;
+    const targetRect = target.getBoundingClientRect();
+    const timing = {
+      duration: TRANSITION_DURATION_MS,
+      easing: TRANSITION_EASING,
+      fill: "forwards" as const
+    };
+
+    // Move a uniformly scaled image and its crop instead of animating layout
+    // dimensions. This also preserves the photo's proportions across aspect ratios.
+    await Promise.all([
+      overlay.animate([
+        {clipPath: clipToRect(sourceRect)},
+        {clipPath: clipToRect(targetRect)}
+      ], timing).finished,
+      image.animate([
+        {transform: imageTransform(image, sourceRect)},
+        {transform: imageTransform(image, targetRect)}
+      ], timing).finished
+    ]);
+
     document.documentElement.dataset.productImageTransition = "handoff";
-    await animateElement(
-      overlay,
-      [{opacity: 1}, {opacity: 0}],
-      {duration: 220, easing: "ease-out", fill: "forwards"}
-    );
+    await overlay.animate([{opacity: 1}, {opacity: 0}], {
+      duration: 140, easing: "ease-out", fill: "forwards"
+    }).finished;
   } finally {
     overlay.remove();
-    source.style.opacity = "";
-    delete document.documentElement.dataset.productImageTransition;
-    pendingTransition = null;
+    source.style.opacity = previousOpacity;
+    complete();
   }
 }
 
-type StartProductTransitionOptions = ProductImageTransition & {
-  source: HTMLElement;
-  navigate: () => void;
-};
+export function startProductImageTransition(options: StartProductTransitionOptions) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  if (pendingTransition) return true;
 
-export function startProductImageTransition({
-  slug,
-  imageUrl,
-  imageAlt,
-  source,
-  navigate
-}: StartProductTransitionOptions) {
-  const transitionDocument = document as ViewTransitionDocument;
-  const prefersReducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)"
-  ).matches;
+  const {source, slug, imageUrl, imageAlt, navigate} = options;
+  const sourceImage = source instanceof HTMLImageElement ? source : source.querySelector("img");
+  const sourceRect = source.getBoundingClientRect();
+  if (
+    !sourceImage?.complete || !sourceImage.naturalWidth ||
+    sourceRect.width <= 0 || sourceRect.height <= 0 ||
+    sourceRect.bottom <= 0 || sourceRect.top >= window.innerHeight
+  ) return false;
 
-  if (!transitionDocument.startViewTransition || prefersReducedMotion) {
-    if (prefersReducedMotion) return false;
+  const hasNativeTransition = typeof document.startViewTransition === "function";
+  if (!hasNativeTransition && typeof source.animate !== "function") return false;
 
-    void runFallbackTransition({
-      slug,
-      imageUrl,
-      imageAlt,
-      source,
-      navigate
-    });
+  let resolveFinished = () => {};
+  const finished = new Promise<void>((resolve) => { resolveFinished = resolve; });
+  const preview: ProductImageTransition = {
+    slug, imageUrl, imageAlt,
+    // Reuse the exact decoded resource on screen, including Next.js srcset URLs.
+    previewUrl: sourceImage.currentSrc || sourceImage.src || imageUrl,
+    finished
+  };
+  const previousTargets = new Set(document.querySelectorAll("[data-product-transition-target]"));
+  const sourceDialog = source.closest("[role='dialog']");
+  const previousName = source.style.viewTransitionName;
+  let target: HTMLElement | null = null;
+  let previousTargetName = "";
+  pendingTransition = preview;
+
+  function complete() {
+    source.style.viewTransitionName = previousName;
+    if (target) target.style.viewTransitionName = previousTargetName;
+    if (pendingTransition === preview) {
+      pendingTransition = null;
+      delete document.documentElement.dataset.productImageTransition;
+    }
+    resolveFinished();
+  }
+
+  if (!hasNativeTransition) {
+    document.documentElement.dataset.productImageTransition = "fallback";
+    void runFallbackTransition(options, preview, previousTargets, sourceDialog, complete)
+      .catch(() => undefined);
     return true;
   }
 
-  pendingTransition = {slug, imageUrl, imageAlt};
   source.style.viewTransitionName = getProductTransitionName(slug);
   document.documentElement.dataset.productImageTransition = "native";
 
   try {
-    const transition = transitionDocument.startViewTransition(async () => {
+    const transition: ViewTransition = document.startViewTransition(async () => {
       navigate();
-      await waitForProductTarget(slug);
+      target = await prepareProductTarget(slug, previousTargets, sourceDialog);
+      if (!target) {
+        transition.skipTransition();
+        return;
+      }
+      previousTargetName = target.style.viewTransitionName;
+      target.style.viewTransitionName = getProductTransitionName(slug);
+      target.getBoundingClientRect();
     });
-
-    transition.finished.finally(() => {
-      source.style.viewTransitionName = "";
-      delete document.documentElement.dataset.productImageTransition;
-      pendingTransition = null;
-    });
-
+    void transition.ready.catch(() => undefined);
+    void transition.updateCallbackDone.catch(() => undefined);
+    void transition.finished.then(complete, complete);
     return true;
   } catch {
-    source.style.viewTransitionName = "";
-    delete document.documentElement.dataset.productImageTransition;
-    pendingTransition = null;
+    complete();
     return false;
   }
 }

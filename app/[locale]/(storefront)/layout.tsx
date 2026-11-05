@@ -1,4 +1,5 @@
 import type {ReactNode} from "react";
+import CartNotification from "@/components/storefront/cart/CartNotification";
 import Footer from "@/components/storefront/layout/Footer";
 import StorefrontHeader from "@/components/storefront/layout/StorefrontHeader";
 
@@ -12,6 +13,7 @@ export default function StorefrontLayout({children}: StorefrontLayoutProps) {
       <StorefrontHeader />
       {children}
       <Footer />
+      <CartNotification />
     </>
   );
 }

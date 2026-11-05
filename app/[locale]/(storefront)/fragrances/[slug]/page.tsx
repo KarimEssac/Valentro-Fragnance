@@ -20,7 +20,7 @@ export default async function ProductDetailPage({
 
   return (
     <>
-      <ProductDetailClient slug={slug} initialProduct={product} />
+      <ProductDetailClient key={slug} slug={slug} initialProduct={product} />
     </>
   );
 }

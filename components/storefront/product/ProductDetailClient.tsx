@@ -10,13 +10,10 @@ import type {FormEvent, ReactNode} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 
 import Modal from "@/components/ui/Modal";
-import type {CartItem} from "@/lib/cart-items";
+import {notifyCartAdded, type CartItem} from "@/lib/cart-items";
 import {productDiscountBadge} from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
-import {
-  getPendingProductTransition,
-  getProductTransitionName
-} from "@/lib/product-image-transition";
+import {getPendingProductTransition} from "@/lib/product-image-transition";
 import type {StorefrontFragranceDetail as ProductDetail} from "@/lib/storefront-data";
 
 type SessionResponse = {
@@ -26,8 +23,6 @@ type SessionResponse = {
     email?: string | null;
   };
 };
-
-const PRODUCT_TRANSITION_HOLD_MS = 920;
 
 function ArrowIcon({direction}: {direction: "left" | "right"}) {
   return (
@@ -135,14 +130,17 @@ export default function ProductDetailClient({
     getPendingProductTransition(slug)
   );
   const [product, setProduct] = useState<ProductDetail | null>(() =>
-    transitionPreview ? null : (initialProduct ?? null)
+    initialProduct ?? null
   );
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    transitionPreview || !initialProduct ? "loading" : "ready"
+    initialProduct ? "ready" : "loading"
   );
-  const [activeImage, setActiveImage] = useState(0);
+  const [activeImage, setActiveImage] = useState(() => Math.max(
+    0, initialProduct?.images.findIndex((image) => image.url === transitionPreview?.imageUrl) ?? 0
+  ));
+  const [transitionFinished, setTransitionFinished] = useState(!transitionPreview);
+  const [transitionImageReady, setTransitionImageReady] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [cartStatus, setCartStatus] = useState("");
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [restockEmail, setRestockEmail] = useState("");
   const [restockStatus, setRestockStatus] = useState("");
@@ -160,9 +158,6 @@ export default function ProductDetailClient({
   const [openProductInformation, setOpenProductInformation] = useState<string | null>(
     "scent-details"
   );
-  const transitionStyle = transitionPreview
-    ? {viewTransitionName: getProductTransitionName(slug)}
-    : undefined;
 
   const priceFormatter = useMemo(
     () =>
@@ -184,41 +179,30 @@ export default function ProductDetailClient({
   );
 
   useEffect(() => {
-    if (initialProduct && !transitionPreview) return;
+    if (!transitionPreview) return;
+    let isMounted = true;
+    void transitionPreview.finished.then(() => {
+      if (isMounted) setTransitionFinished(true);
+    });
+    return () => { isMounted = false; };
+  }, [transitionPreview]);
+
+  useEffect(() => {
+    if (initialProduct) return;
 
     let isMounted = true;
-    let revealTimer: ReturnType<typeof setTimeout> | null = null;
-    const loadStartedAt = performance.now();
 
     async function loadProduct() {
       try {
-        const data = initialProduct ?? (await (async () => {
-          const response = await fetch(`/api/storefront/fragrances/${slug}`, {
-            headers: {Accept: "application/json"}
-          });
-
-          if (!response.ok) {
-            throw new Error("Unable to load fragrance");
-          }
-
-          return (await response.json()) as ProductDetail;
-        })());
+        const response = await fetch(`/api/storefront/fragrances/${slug}`, {
+          headers: {Accept: "application/json"}
+        });
+        if (!response.ok) throw new Error("Unable to load fragrance");
+        const data = (await response.json()) as ProductDetail;
         if (isMounted) {
-          const revealProduct = () => {
-            if (!isMounted) return;
-            setProduct(data);
-            setStatus("ready");
-          };
-          const elapsed = performance.now() - loadStartedAt;
-          const revealDelay = transitionPreview
-            ? Math.max(0, PRODUCT_TRANSITION_HOLD_MS - elapsed)
-            : 0;
-
-          if (revealDelay > 0) {
-            revealTimer = setTimeout(revealProduct, revealDelay);
-          } else {
-            revealProduct();
-          }
+          setProduct(data);
+          setActiveImage(Math.max(0, data.images.findIndex((image) => image.url === transitionPreview?.imageUrl)));
+          setStatus("ready");
         }
       } catch {
         if (isMounted) {
@@ -231,7 +215,6 @@ export default function ProductDetailClient({
 
     return () => {
       isMounted = false;
-      if (revealTimer) clearTimeout(revealTimer);
     };
   }, [initialProduct, slug, transitionPreview]);
 
@@ -269,6 +252,12 @@ export default function ProductDetailClient({
 
   const images = product?.images ?? [];
   const selectedImage = images[activeImage] ?? images[0] ?? null;
+  const transitionImageIndex = transitionPreview
+    ? Math.max(0, images.findIndex((image) => image.url === transitionPreview.imageUrl))
+    : -1;
+  const isTransitionImage = Boolean(transitionPreview && activeImage === transitionImageIndex);
+  const showGalleryImage = !isTransitionImage ||
+    (transitionFinished && transitionImageReady);
   const selectedVariant = useMemo(() => {
     if (!product || product.variants.length === 0) return null;
     if (selectedVariantId) {
@@ -350,7 +339,7 @@ export default function ProductDetailClient({
 
   function addToCart() {
     if (performAddToCart()) {
-      setCartStatus(isArabic ? "تمت الإضافة إلى السلة" : "Added to cart");
+      notifyCartAdded(productName);
     }
   }
 
@@ -492,16 +481,16 @@ export default function ProductDetailClient({
             <div className="hidden shrink-0 md:block md:w-24" />
             <div
               data-product-transition-target={slug}
-              style={transitionStyle}
               className="relative aspect-[4/5] w-full overflow-hidden bg-surface-mid/60"
             >
               {transitionPreview ? (
                 <Image
-                  src={transitionPreview.imageUrl}
+                  src={transitionPreview.previewUrl}
                   alt={transitionPreview.imageAlt}
                   fill
                   priority
-                  sizes="(min-width: 1024px) 52vw, 100vw"
+                  unoptimized
+                  data-product-transition-preview
                   className="object-cover"
                 />
               ) : (
@@ -536,7 +525,7 @@ export default function ProductDetailClient({
           <div className="md:col-span-7 flex flex-col gap-6 md:flex-row">
             <div
               className={`no-scrollbar flex shrink-0 gap-4 overflow-x-auto pb-2 md:w-24 md:flex-col md:overflow-visible md:pb-0 ${
-                transitionPreview ? "product-detail-thumbnails-reveal" : ""
+                transitionPreview ? (transitionFinished ? "product-detail-thumbnails-reveal" : "opacity-0") : ""
               }`}
             >
               {images.map((image, index) => (
@@ -564,17 +553,17 @@ export default function ProductDetailClient({
 
             <div
               data-product-transition-target={slug}
-              style={transitionStyle}
               className="relative aspect-[4/5] w-full overflow-hidden bg-surface-mid"
             >
-              {transitionPreview ? (
+              {transitionPreview && isTransitionImage ? (
                 <Image
-                  src={transitionPreview.imageUrl}
+                  src={transitionPreview.previewUrl}
                   alt=""
                   fill
                   priority
+                  unoptimized
                   aria-hidden="true"
-                  sizes="(min-width: 1024px) 52vw, 100vw"
+                  data-product-transition-preview
                   className="z-0 object-cover"
                 />
               ) : null}
@@ -585,8 +574,9 @@ export default function ProductDetailClient({
                   fill
                   priority
                   sizes="(min-width: 1024px) 52vw, 100vw"
-                  className={`z-10 object-cover transition-transform duration-700 ease-out hover:scale-[1.02] ${
-                    transitionPreview ? "product-detail-image-reveal" : ""
+                  onLoad={isTransitionImage ? () => setTransitionImageReady(true) : undefined}
+                  className={`z-10 object-cover ease-out hover:scale-[1.02] ${isTransitionImage ? "transition-[opacity,transform] [transition-duration:200ms,700ms] motion-reduce:transition-none" : "transition-transform duration-700"} ${
+                    showGalleryImage ? "opacity-100" : "opacity-0"
                   }`}
                 />
               ) : null}
@@ -626,7 +616,7 @@ export default function ProductDetailClient({
 
           <div
             className={`flex h-full flex-col justify-center md:col-span-5 md:pl-8 lg:pl-12 ${
-              transitionPreview ? "product-detail-copy-reveal" : ""
+              transitionPreview ? (transitionFinished ? "product-detail-copy-reveal" : "opacity-0") : ""
             }`}
           >
             <Link
@@ -693,7 +683,6 @@ export default function ProductDetailClient({
                         type="button"
                         onClick={() => {
                           setSelectedVariantId(variant.id);
-                          setCartStatus("");
                         }}
                         className={`label-caps min-h-12 border px-4 transition-colors sm:px-8 ${
                           isSelected
@@ -869,9 +858,6 @@ export default function ProductDetailClient({
               >
                 {isArabic ? "هل ترغب بهذا العطر؟" : "Want that product?"}
               </button>
-            ) : null}
-            {cartStatus ? (
-              <p className="mt-4 text-sm text-gold">{cartStatus}</p>
             ) : null}
           </div>
         </section>

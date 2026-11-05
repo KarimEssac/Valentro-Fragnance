@@ -13,6 +13,7 @@ import {
   cartSubtotal,
   cartUpdatedEvent,
   mergeCartPricing,
+  notifyCartAdded,
   readCartItems,
   requestCartPricing,
   writeCartItems,
@@ -23,9 +24,11 @@ import {
   type ActiveProductDiscount
 } from "@/lib/product-discounts";
 import {startProductImageTransition} from "@/lib/product-image-transition";
+import {selectCartRecommendations} from "@/lib/cart-recommendations";
 
 type Recommendation = {
   id: string;
+  isFeatured?: boolean;
   slug: string;
   nameEn: string;
   nameAr: string;
@@ -245,25 +248,28 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
     async function loadRecommendations() {
       try {
-        const [fragrancesResponse, collectionsResponse] = await Promise.all([
-          fetch("/api/storefront/fragrances?featured=true&limit=4", {
+        const [fragrancesResult, collectionsResult] = await Promise.allSettled([
+          fetch("/api/storefront/fragrances?limit=100", {
             headers: {Accept: "application/json"}
+          }).then(async (response) => {
+            if (!response.ok) throw new Error("Unable to load fragrance recommendations");
+            return (await response.json()) as Recommendation[];
           }),
           fetch("/api/storefront/collections", {
             headers: {Accept: "application/json"}
+          }).then(async (response) => {
+            if (!response.ok) throw new Error("Unable to load collection recommendations");
+            const data = (await response.json()) as {collections: CollectionRecommendation[]};
+            return data.collections;
           })
         ]);
 
-        if (isMounted && fragrancesResponse.ok) {
-          const data = (await fragrancesResponse.json()) as Recommendation[];
-          setRecommendations(data);
+        if (!isMounted) return;
+        if (fragrancesResult.status === "fulfilled") {
+          setRecommendations(fragrancesResult.value);
         }
-
-        if (isMounted && collectionsResponse.ok) {
-          const data = (await collectionsResponse.json()) as {
-            collections: CollectionRecommendation[];
-          };
-          setCollections(data.collections);
+        if (collectionsResult.status === "fulfilled") {
+          setCollections(collectionsResult.value);
         }
       } catch {
         // Recommendations are optional.
@@ -299,8 +305,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
   }
 
   function addRecommendation(recommendation: Recommendation) {
-    const variant = recommendation.variants.find((item) => item.stock > 0) ??
-      recommendation.variants[0];
+    const variant = recommendation.variants.find((item) => item.stock > 0);
     if (!variant) return;
 
     const name = isArabic ? recommendation.nameAr : recommendation.nameEn;
@@ -329,6 +334,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
     setItems(existing);
     writeCartItems(existing);
+    notifyCartAdded(name);
   }
 
   const scrollRecommendations = useCallback((direction: "previous" | "next") => {
@@ -360,9 +366,9 @@ export default function SideCart({open, onClose}: SideCartProps) {
       collectionFragranceIds.has(id)
     );
   });
-  const suggestedFragrances = recommendations
-    .filter((recommendation) => !cartFragranceIds.has(recommendation.id))
-    .slice(0, matchingCollection ? 3 : 4);
+  const suggestedFragrances = selectCartRecommendations(
+    recommendations, cartFragranceIds, matchingCollection ? 3 : 4
+  );
   const suggested: SuggestedItem[] = [
     ...(matchingCollection
       ? [{kind: "collection" as const, collection: matchingCollection}]
@@ -634,7 +640,8 @@ export default function SideCart({open, onClose}: SideCartProps) {
                   }
 
                   const fragrance = suggestion.fragrance;
-                  const variant = fragrance.variants[0];
+                  const availableVariant = fragrance.variants.find((item) => item.stock > 0);
+                  const variant = availableVariant ?? fragrance.variants[0];
                   const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
                   const imageAlt = fragrance.primaryImage
                     ? isArabic
@@ -695,10 +702,10 @@ export default function SideCart({open, onClose}: SideCartProps) {
                       <button
                         type="button"
                         onClick={() => addRecommendation(fragrance)}
-                        disabled={!variant}
+                        disabled={!availableVariant}
                         className="label-caps mx-3 mb-3 min-h-9 border border-parchment px-3 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-45"
                       >
-                        Add
+                        {availableVariant ? (isArabic ? "إضافة" : "Add") : (isArabic ? "غير متوفر" : "Out of stock")}
                       </button>
                     </article>
                   );

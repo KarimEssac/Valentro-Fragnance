@@ -5,6 +5,7 @@ import {useState} from "react";
 
 import {
   collectionCartKey,
+  notifyCartAdded,
   readCartItems,
   writeCartItems,
   type CartItem
@@ -57,7 +58,6 @@ export default function CollectionPurchaseActions({
   const router = useRouter();
   const isArabic = locale === "ar";
   const [quantity, setQuantity] = useState(1);
-  const [cartStatus, setCartStatus] = useState("");
   const collectionPrice = offerPrice ?? "0";
   const itemKey = collectionCartKey(id);
 
@@ -97,7 +97,7 @@ export default function CollectionPurchaseActions({
 
   function addToCart() {
     if (performAddToCart()) {
-      setCartStatus(isArabic ? "تمت الإضافة إلى السلة" : "Added to cart");
+      notifyCartAdded(isArabic ? nameAr : nameEn);
     }
   }
 
@@ -157,7 +157,6 @@ export default function CollectionPurchaseActions({
             ? "غير متاح حاليًا"
             : "Currently out of stock"}
       </p>
-      {cartStatus ? <p className="text-sm text-gold">{cartStatus}</p> : null}
     </div>
   );
 }

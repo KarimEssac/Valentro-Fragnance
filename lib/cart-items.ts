@@ -2,6 +2,13 @@ import type {ActiveProductDiscount} from "@/lib/product-discounts";
 
 export const cartStorageKey = "valentro-cart";
 export const cartUpdatedEvent = "valentro-cart-updated";
+export const cartAddedEvent = "valentro-cart-added";
+
+export type CartAddedDetail = {name: string};
+
+export function notifyCartAdded(name: string) {
+  window.dispatchEvent(new CustomEvent<CartAddedDetail>(cartAddedEvent, {detail: {name}}));
+}
 
 export type CartItemType = "fragrance" | "collection";
 

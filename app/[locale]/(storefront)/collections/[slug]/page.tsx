@@ -3,7 +3,6 @@ import Link from "next/link";
 import {notFound} from "next/navigation";
 
 import {prisma} from "@/lib/prisma";
-import {getProductTransitionName} from "@/lib/product-image-transition";
 import CollectionFragranceLink from "@/components/storefront/product/CollectionFragranceLink";
 import CollectionPurchaseActions from "@/components/storefront/product/CollectionPurchaseActions";
 
@@ -93,7 +92,6 @@ export default async function CollectionDetailPage({
         <div className="mx-auto grid max-w-container gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
           <div
             data-product-transition-target={slug}
-            style={{viewTransitionName: getProductTransitionName(slug)}}
             className="relative aspect-[4/5] overflow-hidden bg-surface"
           >
             <Image

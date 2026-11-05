@@ -2,6 +2,7 @@
 
 import {useLocale} from "next-intl";
 import Image from "next/image";
+import Link from "next/link";
 import {useRouter} from "next/navigation";
 import type {MouseEvent} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
@@ -271,7 +272,7 @@ export default function TestimonialsSection({
                             />
                           </span>
                         </p>
-                        <a
+                        <Link
                           href={`/${locale}/fragrances/${testimonial.fragrance.slug}`}
                           onClick={(event) =>
                             handleBuyNow(
@@ -285,7 +286,7 @@ export default function TestimonialsSection({
                           className="label-caps mt-6 inline-flex min-h-11 items-center justify-center border border-parchment bg-parchment px-6 text-surface-hi transition-colors hover:border-gold hover:bg-gold"
                         >
                           {isArabic ? "اشتر الآن" : "Buy Now"}
-                        </a>
+                        </Link>
                       </>
                     ) : null}
                   </div>
