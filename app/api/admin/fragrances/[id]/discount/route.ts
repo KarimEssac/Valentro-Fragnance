@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     });
 
-    revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
     return NextResponse.json({
       message: "Product discount saved",
       discount: {
@@ -127,29 +127,37 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  if (!(await isAdminRequest(request))) {
-    return NextResponse.json({message: "Unauthorized"}, {status: 401});
-  }
-
-  const {id} = await context.params;
-  const existing = await prisma.fragrance.findUnique({
-    where: {id},
-    select: {id: true}
-  });
-
-  if (!existing) {
-    return NextResponse.json({message: "Fragrance was not found"}, {status: 404});
-  }
-
   try {
+    if (!(await isAdminRequest(request))) {
+      return NextResponse.json({message: "Unauthorized"}, {status: 401});
+    }
+
+    const {id} = await context.params;
+    if (!id) {
+      return NextResponse.json({message: "Product not found"}, {status: 404});
+    }
+
+    const existing = await prisma.fragrance.findUnique({
+      where: {id},
+      select: {id: true}
+    });
+
+    if (!existing) {
+      return NextResponse.json({message: "Fragrance was not found"}, {status: 404});
+    }
+
     await prisma.fragrance.update({
       where: {id},
       data: {discountIsActive: false}
     });
 
-    revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
     return NextResponse.json({message: "Product discount stopped"});
-  } catch {
-    return NextResponse.json({message: "Unable to stop discount"}, {status: 400});
+  } catch (error) {
+    console.error("Failed to stop fragrance discount:", error);
+    return NextResponse.json(
+      {message: error instanceof Error ? error.message : "Unable to stop discount"},
+      {status: 400}
+    );
   }
 }

@@ -143,7 +143,7 @@ export async function POST(
     }
   });
 
-  revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
+  revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
   revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
 
   return NextResponse.json({message: "Review saved"});
@@ -220,7 +220,7 @@ export async function DELETE(
     }
   });
 
-  revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
+  revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
   revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
 
   return NextResponse.json({message: "Review deleted successfully"});

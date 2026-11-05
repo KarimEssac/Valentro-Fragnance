@@ -19,7 +19,7 @@ import {prisma} from "@/lib/prisma";
 import {
   sendRestockNotifications
 } from "@/lib/restock-notifications";
-import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/cache-tags";
+import {STOREFRONT_FRAGRANCES_TAG, STOREFRONT_TESTIMONIALS_TAG} from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -574,7 +574,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
     }
 
-    revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
     return NextResponse.json({
       message:
         restockedVariantIds.length > 0
@@ -591,32 +591,84 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  if (!(await isAdminRequest(request))) {
-    return NextResponse.json({message: "Unauthorized"}, {status: 401});
-  }
-
-  const {id} = await context.params;
-
   try {
+    if (!(await isAdminRequest(request))) {
+      return NextResponse.json({message: "Unauthorized"}, {status: 401});
+    }
+
+    const {id} = await context.params;
+    if (!id) {
+      return NextResponse.json({message: "Product ID is required"}, {status: 400});
+    }
+
     const fragrance = await prisma.fragrance.findUnique({
       where: {id},
-      select: {position: true}
+      select: {
+        id: true,
+        position: true,
+        referenceImageUrl: true,
+        images: {select: {url: true}},
+        variants: {select: {id: true}},
+        reviews: {select: {id: true}}
+      }
     });
 
     if (!fragrance) {
       return NextResponse.json({message: "Product not found"}, {status: 404});
     }
 
-    await prisma.$transaction([
-      prisma.fragrance.delete({where: {id}}),
-      prisma.fragrance.updateMany({
+    const variantIds = fragrance.variants.map((v) => v.id);
+    const reviewIds = fragrance.reviews.map((r) => r.id);
+    const imageUrls = [
+      ...(fragrance.referenceImageUrl ? [fragrance.referenceImageUrl] : []),
+      ...fragrance.images.map((img) => img.url)
+    ];
+
+    await prisma.$transaction(async (tx) => {
+      // Preserve order items history by unlinking variant foreign keys before deletion
+      if (variantIds.length > 0) {
+        await tx.orderItem.updateMany({
+          where: {variantId: {in: variantIds}},
+          data: {variantId: null}
+        });
+      }
+
+      // Detach or remove testimonials connected to this fragrance or its customer reviews
+      await tx.testimonial.deleteMany({
+        where: {
+          OR: [
+            {fragranceId: id},
+            ...(reviewIds.length > 0 ? [{reviewId: {in: reviewIds}}] : [])
+          ]
+        }
+      });
+
+      // Delete the fragrance (cascades variants, ingredients, images, collections, and reviews)
+      await tx.fragrance.delete({where: {id}});
+
+      // Compact display positions for remaining fragrances
+      await tx.fragrance.updateMany({
         where: {position: {gt: fragrance.position}},
         data: {position: {decrement: 1}}
-      })
-    ]);
-    revalidateTag(STOREFRONT_FRAGRANCES_TAG, "max");
+      });
+    });
+
+    if (imageUrls.length > 0) {
+      after(async () => {
+        await Promise.allSettled(
+          imageUrls.map((url) => deleteCloudinaryImageByUrl(url))
+        );
+      });
+    }
+
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
+    revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
     return NextResponse.json({message: "Product deleted"});
-  } catch {
-    return NextResponse.json({message: "Unable to delete product"}, {status: 400});
+  } catch (error) {
+    console.error("Failed to delete admin fragrance:", error);
+    return NextResponse.json(
+      {message: error instanceof Error ? error.message : "Unable to delete product"},
+      {status: 400}
+    );
   }
 }

@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    revalidateTag(STOREFRONT_COLLECTIONS_TAG, "max");
+    revalidateTag(STOREFRONT_COLLECTIONS_TAG, {expire: 0});
     return NextResponse.json({message: "Collection offer created"}, {status: 201});
   } catch (error) {
     return NextResponse.json(

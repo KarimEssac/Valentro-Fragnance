@@ -15,13 +15,16 @@ type RouteContext = {
 };
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  if (!(await isAdminRequest(request))) {
-    return NextResponse.json({message: "Unauthorized"}, {status: 401});
-  }
-
-  const {id} = await context.params;
-
   try {
+    if (!(await isAdminRequest(request))) {
+      return NextResponse.json({message: "Unauthorized"}, {status: 401});
+    }
+
+    const {id} = await context.params;
+    if (!id) {
+      return NextResponse.json({message: "Collection offer was not found"}, {status: 404});
+    }
+
     const collection = await prisma.collection.findUnique({
       where: {id},
       select: {id: true, isOffer: true, position: true}
@@ -42,9 +45,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       });
     });
 
-    revalidateTag(STOREFRONT_COLLECTIONS_TAG, "max");
+    revalidateTag(STOREFRONT_COLLECTIONS_TAG, {expire: 0});
     return NextResponse.json({message: "Collection offer deleted"});
-  } catch {
+  } catch (error) {
+    console.error("Failed to delete collection offer:", error);
     return NextResponse.json({message: "Unable to delete collection offer"}, {status: 400});
   }
 }

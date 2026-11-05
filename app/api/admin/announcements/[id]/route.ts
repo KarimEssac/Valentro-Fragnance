@@ -96,7 +96,7 @@ export async function PUT(
       }
     });
 
-    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, "max");
+    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, {expire: 0});
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Failed to update admin announcement:", error);
@@ -121,7 +121,7 @@ export async function DELETE(
       where: {id}
     });
 
-    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, "max");
+    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, {expire: 0});
     return NextResponse.json({message: "Announcement deleted"});
   } catch (error) {
     console.error("Failed to delete admin announcement:", error);

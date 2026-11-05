@@ -123,6 +123,24 @@ function Field({label, children}: {label: string; children: React.ReactNode}) {
   );
 }
 
+async function parseApiResponse(response: Response, defaultMessage: string): Promise<string> {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      const result = (await response.json()) as {message?: string};
+      return result?.message || defaultMessage;
+    } catch {
+      return defaultMessage;
+    }
+  }
+  try {
+    const text = await response.text();
+    return text || defaultMessage;
+  } catch {
+    return defaultMessage;
+  }
+}
+
 type DiscountStatusKey = "active" | "scheduled" | "expired" | "stopped" | "none";
 
 const discountStatusStyles: Record<DiscountStatusKey, string> = {
@@ -294,8 +312,8 @@ export default function AdminInventoryClient({locale, products}: Props) {
       const response = await fetch(`/api/admin/fragrances/${details.id}`, {
         method: "DELETE"
       });
-      const result = (await response.json()) as {message?: string};
-      if (!response.ok) throw new Error(result.message ?? "Unable to delete product");
+      const message = await parseApiResponse(response, "Unable to delete product");
+      if (!response.ok) throw new Error(message);
 
       closeDetails();
       router.refresh();
@@ -377,9 +395,9 @@ export default function AdminInventoryClient({locale, products}: Props) {
           })
         }
       );
-      const result = (await response.json()) as {message?: string};
+      const message = await parseApiResponse(response, "Unable to save discount");
       if (!response.ok) {
-        throw new Error(result.message ?? "Unable to save discount");
+        throw new Error(message);
       }
 
       setDiscountProduct(null);
@@ -400,9 +418,9 @@ export default function AdminInventoryClient({locale, products}: Props) {
       const response = await fetch(`/api/admin/fragrances/${product.id}/discount`, {
         method: "DELETE"
       });
-      const result = (await response.json()) as {message?: string};
+      const message = await parseApiResponse(response, "Unable to stop discount");
       if (!response.ok) {
-        throw new Error(result.message ?? "Unable to stop discount");
+        throw new Error(message);
       }
 
       setCurrentTime(Date.now());
@@ -440,8 +458,8 @@ export default function AdminInventoryClient({locale, products}: Props) {
         method: "POST",
         body: form
       });
-      const result = (await response.json()) as {message?: string};
-      if (!response.ok) throw new Error(result.message ?? "Unable to create product");
+      const message = await parseApiResponse(response, "Unable to create product");
+      if (!response.ok) throw new Error(message);
 
       setAddOpen(false);
       router.refresh();
@@ -1087,9 +1105,9 @@ function EditProductForm({
         method: "PUT",
         body
       });
-      const result = (await response.json()) as {message?: string};
-      if (!response.ok) throw new Error(result.message ?? "Unable to update product");
-      onSaved(result.message ?? "Product updated.");
+      const message = await parseApiResponse(response, "Unable to update product");
+      if (!response.ok) throw new Error(message);
+      onSaved(message || "Product updated.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to update product");
     } finally {

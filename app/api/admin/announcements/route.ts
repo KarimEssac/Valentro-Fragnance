@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, "max");
+    revalidateTag(STOREFRONT_ANNOUNCEMENTS_TAG, {expire: 0});
     return NextResponse.json(announcement, {status: 201});
   } catch (error) {
     console.error("Failed to create admin announcement:", error);
