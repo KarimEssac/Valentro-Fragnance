@@ -16,21 +16,21 @@ const categories: Category[] = [
   {
     title: "For Her",
     gender: "HER",
-    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613530/valentro/fragrances/emporio-armani.webp",
-    alt: "Warm vanilla fragrance ingredients for her"
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793835494/valentro/fragrances/cinderella-785239c3f28d10e6.webp",
+    alt: "Cinderella fragrance for her"
   },
   {
     title: "For Him",
     gender: "HIM",
-    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613536/valentro/fragrances/valentino-uomo.webp",
-    alt: "Aromatic woody fragrance ingredients for him",
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793835501/valentro/fragrances/golden-angel-c3d9ef6edbc90aec.webp",
+    alt: "Gold Angel fragrance for him",
     offset: true
   },
   {
     title: "Unisex",
     gender: "UNISEX",
-    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1781613535/valentro/fragrances/ultra-male.webp",
-    alt: "Balanced aromatic gourmand fragrance ingredients"
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793835495/valentro/fragrances/ocean-king-a0dc86c6989ba512.webp",
+    alt: "Ocean King unisex marine aromatic fragrance"
   }
 ];
 

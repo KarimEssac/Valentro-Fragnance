@@ -55,7 +55,7 @@ export default function SignatureCollectionSection({
     async function loadFragrances() {
       try {
         const response = await fetch(
-          "/api/storefront/fragrances?collection=signature-line&limit=8",
+          "/api/storefront/fragrances?collection=signature-line&limit=100",
           {headers: {Accept: "application/json"}}
         );
 
@@ -89,10 +89,10 @@ export default function SignatureCollectionSection({
     const card = carousel.querySelector<HTMLElement>("[data-card]");
     const scrollAmount = card ? card.offsetWidth + 24 : carousel.clientWidth;
     carousel.scrollBy({
-      left: direction === "previous" ? -scrollAmount : scrollAmount,
+      left: (direction === "previous" ? -scrollAmount : scrollAmount) * (isArabic ? -1 : 1),
       behavior: "smooth"
     });
-  }, []);
+  }, [isArabic]);
 
   function formatPriceRange(range: StorefrontFragrance["priceRange"]) {
     const min = range.min === null ? Number.NaN : Number(range.min);

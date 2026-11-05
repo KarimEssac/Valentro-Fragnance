@@ -14,7 +14,7 @@ import {
 export default async function HomePage() {
   const [announcement, fragrances, testimonials] = await Promise.all([
     getActiveAnnouncement(),
-    getStorefrontFragrances({collection: "signature-line", limit: 8}),
+    getStorefrontFragrances({collection: "signature-line", limit: 100}),
     getStorefrontTestimonials(8)
   ]);
 

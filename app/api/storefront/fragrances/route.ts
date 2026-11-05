@@ -6,7 +6,7 @@ import {getStorefrontFragrances} from "@/lib/storefront-data";
 export async function GET(request: NextRequest) {
   const {searchParams} = request.nextUrl;
   const isFinderRequest = searchParams.get("finder") === "true";
-  const maxLimit = isFinderRequest ? 100 : 24;
+  const maxLimit = 100;
   const requestedLimit = Number(searchParams.get("limit") ?? 12) || 12;
   const fragrances = await getStorefrontFragrances({
     collection: searchParams.get("collection"),

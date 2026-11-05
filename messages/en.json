@@ -17,6 +17,12 @@
     "shopNow": "Shop Now",
     "previous": "Previous fragrance",
     "next": "Next fragrance",
+    "product": {
+      "collection": "Signature Collection",
+      "name": "Magnito",
+      "tagline": "A sophisticated woody aromatic profile with crisp apple, lavender, and spicy cardamom.",
+      "alt": "Magnito Valentro fragrance bottle"
+    },
     "slides": {
       "noir": {
         "collection": "Private Collection",
