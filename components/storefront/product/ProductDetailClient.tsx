@@ -725,6 +725,12 @@ export default function ProductDetailClient({
             </div>
 
             <div className="mb-5 flex flex-col gap-4">
+              {selectedVariant.stock < 1 ? (
+                <p className="label-caps flex w-fit items-center gap-2 border border-gold/50 px-3 py-2 text-gold">
+                  <span aria-hidden="true" className="h-2 w-2 bg-gold" />
+                  {isArabic ? "نفد المخزون حاليًا" : "Currently out of stock"}
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={addToCart}
@@ -840,12 +846,12 @@ export default function ProductDetailClient({
               </ProductInformationDisclosure>
             </div>
 
-            <p className="label-caps flex items-center gap-2 text-on-surface/70">
-              <span className="h-2 w-2 bg-gold" />
-              {selectedVariant.stock > 0
-                ? "In Stock - Ready for immediate dispatch"
-                : "Currently out of stock"}
-            </p>
+            {selectedVariant.stock > 0 ? (
+              <p className="label-caps flex items-center gap-2 text-on-surface/70">
+                <span aria-hidden="true" className="h-2 w-2 bg-gold" />
+                In Stock - Ready for immediate dispatch
+              </p>
+            ) : null}
             {selectedVariant.stock < 1 ? (
               <button
                 type="button"

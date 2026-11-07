@@ -12,6 +12,7 @@ import type {ActiveProductDiscount} from "@/lib/product-discounts";
 import {startProductImageTransition} from "@/lib/product-image-transition";
 import type {StorefrontFragrance} from "@/lib/storefront-data";
 import FragranceReference from "@/components/storefront/product/FragranceReference";
+import OutOfStockBadge from "@/components/storefront/product/OutOfStockBadge";
 
 function formatScentProfile(value: string) {
   return value
@@ -210,6 +211,7 @@ export default function SignatureCollectionSection({
           >
             {fragrances.map((fragrance) => {
               const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
+              const isOutOfStock = !fragrance.variants.some((variant) => variant.stock > 0);
               const tagline = isArabic
                 ? fragrance.taglineAr
                 : fragrance.taglineEn;
@@ -258,8 +260,9 @@ export default function SignatureCollectionSection({
                       productName={name}
                       isArabic={isArabic}
                     />
+                    {isOutOfStock ? <OutOfStockBadge isArabic={isArabic} /> : null}
                     {fragrance.discount ? (
-                      <span className="label-caps absolute bottom-3 end-3 z-30 bg-gold px-3 py-2 text-surface-hi">
+                      <span className={"label-caps absolute end-3 z-30 bg-gold px-3 py-2 text-surface-hi " + (isOutOfStock ? "bottom-12" : "bottom-3")}>
                         {formatDiscountBadge(fragrance.discount)}
                       </span>
                     ) : null}

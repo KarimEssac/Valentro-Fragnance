@@ -24,7 +24,7 @@ export default async function FragrancesPage({
   const {locale} = await params;
   const {type = ""} = await searchParams;
   const [fragrances, collections] = await Promise.all([
-    getStorefrontFragrances({limit: 100}),
+    getStorefrontFragrances({limit: null}),
     getStorefrontCollectionOffers()
   ]);
   const products: ShopFragrance[] = fragrances;

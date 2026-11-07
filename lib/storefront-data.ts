@@ -130,6 +130,7 @@ export type StorefrontCollectionOffer = {
   offerPrice: string | null;
   combinedValue: string;
   discountPercent: number;
+  isAvailable: boolean;
   products: {
     id: string;
     slug: string;
@@ -144,12 +145,13 @@ export type FragranceFilters = {
   gender?: string | null;
   scentProfile?: string | null;
   featured?: boolean;
-  limit?: number;
+  limit?: number | null;
 };
 
 const getCachedFragrances = unstable_cache(
   async (filters: FragranceFilters): Promise<StorefrontFragrance[]> => {
-    const take = Math.max(1, Math.min(filters.limit ?? 12, 100));
+    const take =
+      filters.limit === null ? undefined : Math.max(1, Math.min(filters.limit ?? 12, 100));
     const where: Prisma.FragranceWhereInput = {
       isPublished: true,
       ...(filters.collection
@@ -492,7 +494,7 @@ const getCachedCollectionOffers = unstable_cache(
                 variants: {
                   orderBy: {price: "asc"},
                   take: 1,
-                  select: {price: true}
+                  select: {price: true, stock: true}
                 }
               }
             }
@@ -528,6 +530,9 @@ const getCachedCollectionOffers = unstable_cache(
         coverImage: collection.coverImage,
         offerPrice: collection.offerPrice?.toString() ?? null,
         combinedValue: combinedValue.toFixed(2),
+        isAvailable:
+          collection.fragrances.length > 0 &&
+          collection.fragrances.every(({fragrance}) => (fragrance.variants[0]?.stock ?? 0) > 0),
         discountPercent:
           combinedValue > 0 && offerPrice > 0
             ? Math.max(
@@ -539,8 +544,8 @@ const getCachedCollectionOffers = unstable_cache(
       };
     });
   },
-  ["storefront-collection-offers-v1"],
-  {revalidate: 60, tags: [STOREFRONT_COLLECTIONS_TAG]}
+  ["storefront-collection-offers-v2"],
+  {revalidate: 60, tags: [STOREFRONT_COLLECTIONS_TAG, STOREFRONT_FRAGRANCES_TAG]}
 );
 
 export function getStorefrontCollectionOffers() {

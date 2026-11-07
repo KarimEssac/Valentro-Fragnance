@@ -702,7 +702,7 @@ export default function ScentFinder() {
                         No exact match found
                       </h3>
                       <p className="mt-3 text-sm leading-6 text-[#4B463E]">
-                        Remove an avoided note or broaden the season to All Year.
+                        Try another audience or review your note selections.
                       </p>
                     </div>
                   )}

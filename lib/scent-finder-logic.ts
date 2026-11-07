@@ -127,14 +127,6 @@ function termSimilarity(first: string, second: string, aliases: FinderAliasMap) 
   );
 }
 
-function audienceFit(selectedAudience: string, productGender: string) {
-  if (!selectedAudience) return 0;
-  if (selectedAudience === productGender) return 1;
-  if (productGender === "UNISEX") return 0.9;
-  if (selectedAudience === "UNISEX") return 0.68;
-  return 0.15;
-}
-
 function singleSeasonFit(selectedSeason: string, productSeasons: string[]) {
   if (!selectedSeason) return 0;
   if (productSeasons.length === 0) return 0.35;
@@ -214,20 +206,9 @@ function loveFit(
 
 function conflictsWithAvoidedTerm(
   avoided: string[],
-  fragrance: FinderScoringFragrance,
+  productTerms: string[],
   aliases: FinderAliasMap
 ) {
-  if (avoided.length === 0) return false;
-
-  const productTerms = [
-    fragrance.scentProfile.replace(/_/g, " "),
-    ...fragrance.ingredients.flatMap((ingredient) => [
-      ingredient.nameEn,
-      ingredient.nameAr
-    ]),
-    ...finderRuleIngredients(fragrance.avoidIf)
-  ];
-
   return avoided.some((selectedTerm) =>
     productTerms.some(
       (productTerm) => termSimilarity(selectedTerm, productTerm, aliases) >= 0.8
@@ -240,29 +221,35 @@ export function scoreFragranceMatch(
   preferences: FinderPreferences,
   aliases: FinderAliasMap
 ) {
-  if (conflictsWithAvoidedTerm(preferences.avoided, fragrance, aliases)) {
+  if (preferences.audience && preferences.audience !== fragrance.gender) {
+    return 0;
+  }
+
+  if (
+    preferences.avoided.length > 0 &&
+    conflictsWithAvoidedTerm(
+      preferences.avoided,
+      finderRuleIngredients(fragrance.avoidIf),
+      aliases
+    )
+  ) {
     return 0;
   }
 
   const criteria = [
     {
-      active: Boolean(preferences.audience),
-      weight: 20,
-      fit: audienceFit(preferences.audience, fragrance.gender)
-    },
-    {
       active: preferences.loved.length > 0,
-      weight: 45,
+      weight: 90,
       fit: loveFit(preferences.loved, fragrance, aliases)
     },
     {
       active: preferences.seasons.length > 0,
-      weight: 18,
+      weight: 5,
       fit: seasonFit(preferences.seasons, fragrance.seasons)
     },
     {
       active: preferences.presences.length > 0,
-      weight: 17,
+      weight: 5,
       fit: presenceFit(preferences.presences, fragrance.sillage)
     }
   ].filter((criterion) => criterion.active);
@@ -271,12 +258,30 @@ export function scoreFragranceMatch(
     (total, criterion) => total + criterion.weight,
     0
   );
-  if (totalWeight === 0) return 0;
+  if (totalWeight === 0 && !preferences.audience && preferences.avoided.length === 0) {
+    return 0;
+  }
 
   const weightedScore = criteria.reduce(
     (total, criterion) => total + criterion.fit * criterion.weight,
     0
   );
 
-  return Math.max(1, Math.min(100, Math.round((weightedScore / totalWeight) * 100)));
+  const score = totalWeight > 0 ? (weightedScore / totalWeight) * 100 : 100;
+  const hasAvoidedNote =
+    preferences.avoided.length > 0 &&
+    conflictsWithAvoidedTerm(
+      preferences.avoided,
+      [
+        fragrance.scentProfile,
+        ...fragrance.ingredients.flatMap((ingredient) => [
+          ingredient.nameEn,
+          ingredient.nameAr
+        ])
+      ],
+      aliases
+    );
+  const adjustedScore = hasAvoidedNote ? score * 0.15 : score;
+
+  return Math.max(1, Math.min(100, Math.round(adjustedScore)));
 }

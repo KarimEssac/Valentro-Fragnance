@@ -4,10 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import {useRouter, useSearchParams} from "next/navigation";
 import type {MouseEvent} from "react";
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 
 import ValentroSelect from "@/components/ui/ValentroSelect";
 import FragranceReference from "@/components/storefront/product/FragranceReference";
+import OutOfStockBadge from "@/components/storefront/product/OutOfStockBadge";
 import {productDiscountBadge} from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
 import {startProductImageTransition} from "@/lib/product-image-transition";
@@ -41,6 +42,7 @@ export type ShopFragrance = {
     max: string | null;
   };
   discount: ActiveProductDiscount | null;
+  variants: {price: string; stock: number}[];
 };
 
 export type ShopCollectionOffer = {
@@ -56,6 +58,7 @@ export type ShopCollectionOffer = {
   offerPrice: string | null;
   combinedValue: string;
   discountPercent: number;
+  isAvailable: boolean;
   products: {
     id: string;
     slug: string;
@@ -88,6 +91,7 @@ const itemTypeOptions = [
 
 const genderValues = genderOptions.map((option) => option.value);
 const itemTypeValues = itemTypeOptions.map((option) => option.value);
+const priceStep = 500;
 
 const sortOptions = [
   {value: "position", label: "Curated"},
@@ -145,6 +149,18 @@ function itemMaxPrice(item: CatalogItem) {
   return item.kind === "collection"
     ? priceNumber(item.collection.offerPrice)
     : priceNumber(item.fragrance.priceRange.max);
+}
+
+function itemMatchesPriceRange(item: CatalogItem, min: number, max: number) {
+  function isInRange(price: string | null) {
+    if (price === null) return false;
+    const amount = Number(price);
+    return amount >= min && amount <= max;
+  }
+
+  return item.kind === "collection"
+    ? isInRange(item.collection.offerPrice)
+    : item.fragrance.variants.some(({price}) => isInRange(price));
 }
 
 function CheckboxFilter({
@@ -263,6 +279,11 @@ export default function ShopClient({
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
   const [sort, setSort] = useState("position");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteSearch, setNoteSearch] = useState("");
+  const notesDialogRef = useRef<HTMLDialogElement>(null);
+  const [selectedMinPrice, setSelectedMinPrice] = useState(0);
+  const [selectedMaxPrice, setSelectedMaxPrice] = useState<number | null>(null);
 
   const priceFormatter = useMemo(
     () =>
@@ -294,9 +315,12 @@ export default function ShopClient({
         )
       )
         .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b))
-        .slice(0, 12),
-    [fragrances, isArabic]
+        .sort((a, b) => a.localeCompare(b, locale)),
+    [fragrances, isArabic, locale]
+  );
+  const normalizedNoteSearch = noteSearch.trim().toLocaleLowerCase(locale);
+  const visibleNotes = noteOptions.filter((note) =>
+    note.toLocaleLowerCase(locale).includes(normalizedNoteSearch)
   );
 
   const catalogItems = useMemo<CatalogItem[]>(
@@ -315,6 +339,19 @@ export default function ShopClient({
     [collections, fragrances]
   );
 
+  const priceCeiling = useMemo(() => {
+    const highestPrice = catalogItems.reduce(
+      (highest, item) => Math.max(highest, itemMaxPrice(item)),
+      0
+    );
+    return Math.max(priceStep, Math.ceil(highestPrice / priceStep) * priceStep);
+  }, [catalogItems]);
+  const maxPrice = Math.min(selectedMaxPrice ?? priceCeiling, priceCeiling);
+  const minPrice = Math.min(selectedMinPrice, maxPrice - priceStep);
+  const hasPriceFilter = minPrice > 0 || maxPrice < priceCeiling;
+  const minPriceLabel = priceFormatter.format(minPrice);
+  const maxPriceLabel = priceFormatter.format(maxPrice);
+
   const filteredCatalogItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
@@ -324,6 +361,10 @@ export default function ShopClient({
           selectedItemTypes.length > 0 &&
           !selectedItemTypes.includes(item.kind)
         ) {
+          return false;
+        }
+
+        if (hasPriceFilter && !itemMatchesPriceRange(item, minPrice, maxPrice)) {
           return false;
         }
 
@@ -406,7 +447,10 @@ export default function ShopClient({
       });
   }, [
     catalogItems,
+    hasPriceFilter,
     isArabic,
+    maxPrice,
+    minPrice,
     query,
     selectedGenders,
     selectedItemTypes,
@@ -415,29 +459,40 @@ export default function ShopClient({
     sort
   ]);
 
-  const hasFilters =
-    query ||
-    selectedItemTypes.length > 0 ||
-    selectedGenders.length > 0 ||
-    selectedScents.length > 0 ||
-    selectedNotes.length > 0 ||
-    sort !== "position";
-
   const activeFilterCount =
     selectedItemTypes.length +
     selectedGenders.length +
     selectedScents.length +
     selectedNotes.length +
     (query ? 1 : 0) +
-    (sort !== "position" ? 1 : 0);
+    (sort !== "position" ? 1 : 0) +
+    (hasPriceFilter ? 1 : 0);
 
+  const filterDialogOpen = filtersOpen || notesOpen;
   useEffect(() => {
-    document.body.style.overflow = filtersOpen ? "hidden" : "";
+    if (!filterDialogOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
     };
-  }, [filtersOpen]);
+  }, [filterDialogOpen]);
+
+  function openNotes() {
+    const dialog = notesDialogRef.current;
+    if (!dialog || dialog.open) return;
+
+    setNoteSearch("");
+    dialog.showModal();
+    setNotesOpen(true);
+  }
+
+  function resetPriceRange() {
+    setSelectedMinPrice(0);
+    setSelectedMaxPrice(null);
+  }
 
   function resetFilters() {
     setQuery("");
@@ -446,6 +501,7 @@ export default function ShopClient({
     setSelectedScents([]);
     setSelectedNotes([]);
     setSort("position");
+    resetPriceRange();
   }
 
   function formatFragrancePriceRange(range: ShopFragrance["priceRange"]) {
@@ -525,6 +581,58 @@ export default function ShopClient({
       </div>
 
       <div className="space-y-8">
+        <fieldset>
+          <legend className="label-caps mb-2 text-parchment">
+            {isArabic ? "السعر" : "Price"}
+          </legend>
+          <p className="text-sm font-semibold text-parchment">
+            {minPriceLabel} – {maxPriceLabel}
+          </p>
+          <div className="shop-price-slider relative my-2 h-10">
+            <div aria-hidden="true" className="shop-price-slider-track absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-outline">
+              <div
+                className="absolute inset-y-0 rounded-full bg-gold"
+                style={{
+                  insetInlineStart: (minPrice / priceCeiling) * 100 + "%",
+                  width: ((maxPrice - minPrice) / priceCeiling) * 100 + "%"
+                }}
+              />
+            </div>
+            <input
+              type="range"
+              aria-label={isArabic ? "الحد الأدنى للسعر" : "Minimum price"}
+              aria-valuetext={minPriceLabel}
+              min={0}
+              max={priceCeiling}
+              step={priceStep}
+              value={minPrice}
+              onChange={(event) =>
+                setSelectedMinPrice(Math.min(event.currentTarget.valueAsNumber, maxPrice - priceStep))
+              }
+            />
+            <input
+              type="range"
+              aria-label={isArabic ? "الحد الأقصى للسعر" : "Maximum price"}
+              aria-valuetext={maxPriceLabel}
+              min={0}
+              max={priceCeiling}
+              step={priceStep}
+              value={maxPrice}
+              onChange={(event) => {
+                const price = Math.max(event.currentTarget.valueAsNumber, minPrice + priceStep);
+                setSelectedMaxPrice(price === priceCeiling ? null : price);
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={resetPriceRange}
+            className="focus-gold text-sm text-gold underline underline-offset-4 hover:text-gold-muted"
+          >
+            {isArabic ? "إعادة ضبط نطاق السعر" : "Reset price range"}
+          </button>
+        </fieldset>
+
         <div>
           <h2 className="label-caps mb-4 border-b border-outline/70 pb-3 text-parchment">
             Type
@@ -587,26 +695,29 @@ export default function ShopClient({
 
         {noteOptions.length > 0 ? (
           <div>
-            <h2 className="label-caps mb-4 border-b border-outline/70 pb-3 text-parchment">
-              Notes
+            <h2 className="border-b border-outline/70">
+              <button
+                type="button"
+                onClick={openNotes}
+                aria-haspopup="dialog"
+                aria-controls="shop-notes-drawer"
+                aria-expanded={notesOpen}
+                className="label-caps focus-gold flex min-h-11 w-full items-center justify-between gap-3 pb-3 text-parchment transition-colors hover:text-gold"
+              >
+                <span>
+                  {isArabic ? "النوتات" : "Notes"}
+                  {selectedNotes.length > 0 ? " (" + selectedNotes.length + ")" : ""}
+                </span>
+                <span aria-hidden="true" className="text-base text-gold">
+                  {isArabic ? "←" : "→"}
+                </span>
+              </button>
             </h2>
-            <div className="space-y-3">
-              {noteOptions.map((note) => (
-                <CheckboxFilter
-                  key={note}
-                  label={note}
-                  checked={selectedNotes.includes(note)}
-                  onChange={() =>
-                    setSelectedNotes((values) => toggleValue(values, note))
-                  }
-                />
-              ))}
-            </div>
           </div>
         ) : null}
       </div>
 
-      {hasFilters ? (
+      {activeFilterCount > 0 ? (
         <button
           type="button"
           onClick={resetFilters}
@@ -654,8 +765,7 @@ export default function ShopClient({
             >
               <path d="M4 7h16M7 12h10M10 17h4" />
             </svg>
-            Filters
-            {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
+            {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : "Filters"}
           </button>
           <span className="label-caps text-on-surface/70">
             {filteredCatalogItems.length} shown
@@ -715,6 +825,80 @@ export default function ShopClient({
             </div>
           </div>
         ) : null}
+
+        <dialog
+          ref={notesDialogRef}
+          id="shop-notes-drawer"
+          aria-labelledby="shop-notes-title"
+          onClose={() => setNotesOpen(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) event.currentTarget.close();
+          }}
+          className="animate-cart-drawer-in fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-none w-full max-w-2xl flex-col overflow-hidden border-s border-outline bg-bg text-parchment shadow-2xl backdrop:bg-parchment/45 open:flex motion-reduce:animate-none"
+        >
+          <div className="shrink-0 border-b border-outline px-3 py-4 sm:px-6">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h2 id="shop-notes-title" className="font-serif text-3xl">
+                {isArabic ? "النوتات" : "Notes"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => notesDialogRef.current?.close()}
+                aria-label={isArabic ? "إغلاق النوتات" : "Close notes"}
+                className="focus-gold flex h-11 w-11 items-center justify-center border border-outline text-2xl text-gold"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <input
+              type="search"
+              aria-label={isArabic ? "ابحث عن النوتات" : "Search notes"}
+              placeholder={isArabic ? "ابحث عن النوتات..." : "Search notes..."}
+              value={noteSearch}
+              onChange={(event) => setNoteSearch(event.target.value)}
+              className="focus-gold min-h-11 w-full border border-outline bg-surface px-3 text-sm text-parchment placeholder:text-on-surface/60"
+            />
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6">
+            {visibleNotes.length > 0 ? (
+              <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                {visibleNotes.map((note) => {
+                  const selected = selectedNotes.includes(note);
+                  return (
+                    <button
+                      key={note}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setSelectedNotes((values) => toggleValue(values, note))}
+                      className={"focus-gold min-h-12 border px-1 py-2 text-xs leading-tight transition-colors [overflow-wrap:anywhere] sm:px-2 sm:text-sm " + (
+                        selected
+                          ? "border-parchment bg-parchment text-surface-hi"
+                          : "border-outline bg-surface text-parchment hover:border-gold"
+                      )}
+                    >
+                      {note}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p role="status" className="py-6 text-center text-sm text-on-surface/70">
+                {isArabic ? "لا توجد نوتات مطابقة." : "No matching notes."}
+              </p>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-outline px-3 py-4 sm:px-6">
+            <button
+              type="button"
+              onClick={() => notesDialogRef.current?.close()}
+              className="label-caps focus-gold min-h-11 w-full bg-parchment px-5 text-surface-hi transition-colors hover:bg-gold"
+            >
+              {isArabic ? "تم" : "Done"}
+            </button>
+          </div>
+        </dialog>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]">
           <aside
@@ -805,6 +989,7 @@ function FragranceCard({
   ) => void;
 }) {
   const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
+  const isOutOfStock = !fragrance.variants.some((variant) => variant.stock > 0);
   const tagline = isArabic ? fragrance.taglineAr : fragrance.taglineEn;
   const imageAlt = fragrance.primaryImage
     ? isArabic
@@ -844,8 +1029,9 @@ function FragranceCard({
           productName={name}
           isArabic={isArabic}
         />
+        {isOutOfStock ? <OutOfStockBadge isArabic={isArabic} /> : null}
         {fragrance.discount ? (
-          <span className="label-caps absolute bottom-3 end-3 z-20 bg-gold px-3 py-2 text-surface-hi">
+          <span className={"label-caps absolute end-3 z-20 bg-gold px-3 py-2 text-surface-hi " + (isOutOfStock ? "bottom-12" : "bottom-3")}>
             {formatDiscountBadge(fragrance.discount)}
           </span>
         ) : null}
@@ -921,15 +1107,18 @@ function CollectionCard({
           sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 24vw, (min-width: 768px) 30vw, 50vw"
           className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
         />
-        <div className="absolute left-3 top-3 label-caps bg-parchment px-3 py-2 text-surface-hi">
-          Collection
+        <div className="absolute inset-x-3 top-3 z-10 flex flex-wrap items-start justify-between gap-1">
+          <span className="label-caps bg-parchment px-2 py-2 text-surface-hi">
+            Collection
+          </span>
+          {collection.discountPercent > 0 ? (
+            <span className="label-caps bg-gold px-2 py-2 text-surface-hi">
+              {collection.discountPercent}% off
+            </span>
+          ) : null}
         </div>
-        {collection.discountPercent > 0 ? (
-          <div className="absolute right-3 top-3 label-caps bg-gold px-3 py-2 text-surface-hi">
-            {collection.discountPercent}% off
-          </div>
-        ) : null}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-bg/90 via-bg/45 to-transparent p-4 pt-16">
+        {collection.isAvailable ? null : <OutOfStockBadge isArabic={isArabic} />}
+        <div className={"absolute inset-x-0 bottom-0 bg-gradient-to-t from-bg/90 via-bg/45 to-transparent px-4 pt-16 " + (collection.isAvailable ? "pb-4" : "pb-12")}>
           <div className="flex -space-x-2">
             {collection.products.slice(0, 3).map((product) => {
               const productName = isArabic ? product.nameAr : product.nameEn;

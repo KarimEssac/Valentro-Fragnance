@@ -1,5 +1,6 @@
 import type {NextRequest} from "next/server";
 import {NextResponse} from "next/server";
+import {revalidateTag} from "next/cache";
 import {Prisma, PaymentMethod} from "@prisma/client";
 import {getServerSession} from "next-auth";
 import type {Session} from "next-auth";
@@ -7,6 +8,7 @@ import {createHash, randomBytes} from "crypto";
 import {hash} from "bcryptjs";
 
 import {authOptions} from "@/lib/auth";
+import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/cache-tags";
 import {calculateCartPricing} from "@/lib/cart-pricing";
 import {selectBestCheckoutDiscount} from "@/lib/checkout-discounts";
 import {
@@ -458,6 +460,8 @@ export async function POST(request: NextRequest) {
         }
       });
     });
+
+    revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
 
     try {
       await sendOrderPlacedEmails(order.id, claimToken);

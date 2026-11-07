@@ -1,8 +1,10 @@
 import {after, NextResponse} from "next/server";
 import type {NextRequest} from "next/server";
+import {revalidateTag} from "next/cache";
 import {OrderStatus, PaymentMethod, Prisma} from "@prisma/client";
 
 import {isAdminRequest} from "@/lib/admin-auth";
+import {STOREFRONT_FRAGRANCES_TAG} from "@/lib/cache-tags";
 import {sendOrderShippedEmail} from "@/lib/order-email";
 import {prisma} from "@/lib/prisma";
 
@@ -96,6 +98,10 @@ export async function PATCH(request: NextRequest, {params}: AdminOrderRouteProps
       });
       return {order, previousStatus: previous.status};
     }, {isolationLevel: Prisma.TransactionIsolationLevel.Serializable});
+
+    if (result.order.status === OrderStatus.CANCELLED) {
+      revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
+    }
 
     if (result.order.status === OrderStatus.SHIPPED && result.previousStatus !== OrderStatus.SHIPPED) {
       after(async () => {
