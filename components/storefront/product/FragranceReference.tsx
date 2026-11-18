@@ -18,7 +18,7 @@ export default function FragranceReference({
   const isCompactCard = variant === "compact-card";
   const imageSizes = isDetail
     ? "(min-width: 640px) 56px, 28px"
-    : isCompactCard ? "(min-width: 640px) 32px, 20px" : "32px";
+    : isCompactCard ? "(min-width: 1280px) 32px, 20px" : "32px";
 
   return (
     <div
@@ -26,12 +26,14 @@ export default function FragranceReference({
       className={`pointer-events-none absolute z-30 inline-flex max-w-[calc(100%_-_1.5rem)] items-center overflow-hidden rounded-[2px] border border-white/20 bg-black shadow-[0_10px_28px_-14px_rgba(0,0,0,0.8)] ${
         isDetail
           ? "start-2.5 top-2.5 gap-2 px-2.5 py-2 sm:start-5 sm:top-5 sm:gap-4 sm:px-4 sm:py-3"
-          : "start-2.5 top-2.5 gap-2 px-2 py-2 sm:start-3 sm:top-3"
-      } ${isCompactCard ? "max-sm:start-2 max-sm:top-2 max-sm:gap-1 max-sm:px-1.5 max-sm:py-1" : ""}`}
+          : isCompactCard
+            ? "start-2 top-2 gap-1 px-1.5 py-1 xl:start-3 xl:top-3 xl:gap-2 xl:px-2 xl:py-2"
+            : "start-2.5 top-2.5 gap-2 px-2 py-2 sm:start-3 sm:top-3"
+      }`}
     >
       <span aria-hidden="true" className="absolute inset-[3px] rounded-[1px] border border-white/[0.07]" />
       <div className={`relative shrink-0 ${isDetail ? "h-10 w-7 sm:h-[72px] sm:w-14" : "h-11 w-8"} ${
-        isCompactCard ? "max-sm:h-7 max-sm:w-5" : ""
+        isCompactCard ? "max-xl:h-7 max-xl:w-5" : ""
       }`}>
         <Image
           src={imageUrl}
@@ -49,7 +51,7 @@ export default function FragranceReference({
         <span
           aria-hidden="true"
           className={`h-px bg-gradient-to-r from-white/50 to-white/10 ${isDetail ? "w-5 sm:w-8" : "w-4"} ${
-            isCompactCard ? "max-sm:hidden" : ""
+            isCompactCard ? "max-xl:hidden" : ""
           }`}
         />
       </div>
