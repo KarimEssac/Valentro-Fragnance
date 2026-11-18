@@ -4,7 +4,7 @@ type FragranceReferenceProps = {
   imageUrl?: string | null;
   productName: string;
   isArabic: boolean;
-  variant?: "card" | "detail";
+  variant?: "card" | "compact-card" | "detail";
 };
 
 export default function FragranceReference({
@@ -15,6 +15,10 @@ export default function FragranceReference({
 }: FragranceReferenceProps) {
   if (!imageUrl) return null;
   const isDetail = variant === "detail";
+  const isCompactCard = variant === "compact-card";
+  const imageSizes = isDetail
+    ? "(min-width: 640px) 56px, 28px"
+    : isCompactCard ? "(min-width: 640px) 32px, 20px" : "32px";
 
   return (
     <div
@@ -23,15 +27,17 @@ export default function FragranceReference({
         isDetail
           ? "start-2.5 top-2.5 gap-2 px-2.5 py-2 sm:start-5 sm:top-5 sm:gap-4 sm:px-4 sm:py-3"
           : "start-2.5 top-2.5 gap-2 px-2 py-2 sm:start-3 sm:top-3"
-      }`}
+      } ${isCompactCard ? "max-sm:start-2 max-sm:top-2 max-sm:gap-1 max-sm:px-1.5 max-sm:py-1" : ""}`}
     >
       <span aria-hidden="true" className="absolute inset-[3px] rounded-[1px] border border-white/[0.07]" />
-      <div className={`relative shrink-0 ${isDetail ? "h-10 w-7 sm:h-[72px] sm:w-14" : "h-11 w-8"}`}>
+      <div className={`relative shrink-0 ${isDetail ? "h-10 w-7 sm:h-[72px] sm:w-14" : "h-11 w-8"} ${
+        isCompactCard ? "max-sm:h-7 max-sm:w-5" : ""
+      }`}>
         <Image
           src={imageUrl}
           alt={isArabic ? `العطر الذي ألهم ${productName}` : `Fragrance inspiration for ${productName}`}
           fill
-          sizes={isDetail ? "(min-width: 640px) 56px, 28px" : "32px"}
+          sizes={imageSizes}
           data-loaded="true"
           className="object-contain"
         />
@@ -40,7 +46,12 @@ export default function FragranceReference({
         <span className={`whitespace-nowrap font-serif font-normal leading-none text-white/90 ${isDetail ? "text-xs sm:text-lg" : "text-[11px]"}`}>
           {isArabic ? "الإلهام" : "Inspiration"}
         </span>
-        <span aria-hidden="true" className={`h-px bg-gradient-to-r from-white/50 to-white/10 ${isDetail ? "w-5 sm:w-8" : "w-4"}`} />
+        <span
+          aria-hidden="true"
+          className={`h-px bg-gradient-to-r from-white/50 to-white/10 ${isDetail ? "w-5 sm:w-8" : "w-4"} ${
+            isCompactCard ? "max-sm:hidden" : ""
+          }`}
+        />
       </div>
     </div>
   );

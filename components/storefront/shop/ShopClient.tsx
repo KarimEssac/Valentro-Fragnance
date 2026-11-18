@@ -1028,6 +1028,7 @@ function FragranceCard({
           imageUrl={fragrance.referenceImageUrl}
           productName={name}
           isArabic={isArabic}
+          variant="compact-card"
         />
         {isOutOfStock ? <OutOfStockBadge isArabic={isArabic} /> : null}
         {fragrance.discount ? (
