@@ -726,10 +726,23 @@ export default function ProductDetailClient({
 
             <div className="mb-5 flex flex-col gap-4">
               {selectedVariant.stock < 1 ? (
-                <p className="label-caps flex w-fit items-center gap-2 border border-gold/50 px-3 py-2 text-gold">
-                  <span aria-hidden="true" className="h-2 w-2 bg-gold" />
-                  {isArabic ? "نفد المخزون حاليًا" : "Currently out of stock"}
-                </p>
+                <div className="flex flex-nowrap gap-2">
+                  <p className="label-caps flex min-w-0 items-center gap-2 border border-gold/50 px-3 py-2 text-gold">
+                    <span aria-hidden="true" className="h-2 w-2 shrink-0 bg-gold" />
+                    <span>{isArabic ? "نفد المخزون حاليًا" : "Currently out of stock"}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRestockStatus("");
+                      setRestockSaved(false);
+                      setShowRestockModal(true);
+                    }}
+                    className="label-caps focus-gold min-h-12 min-w-0 border border-gold px-3 py-2 text-gold transition-colors hover:bg-gold hover:text-surface-hi"
+                  >
+                    {isArabic ? "هل ترغب بهذا العطر؟" : "Want that product?"}
+                  </button>
+                </div>
               ) : null}
               <button
                 type="button"
@@ -851,19 +864,6 @@ export default function ProductDetailClient({
                 <span aria-hidden="true" className="h-2 w-2 bg-gold" />
                 In Stock - Ready for immediate dispatch
               </p>
-            ) : null}
-            {selectedVariant.stock < 1 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setRestockStatus("");
-                  setRestockSaved(false);
-                  setShowRestockModal(true);
-                }}
-                className="label-caps focus-gold mt-5 inline-flex min-h-12 w-full items-center justify-center border border-gold px-8 text-gold transition-colors hover:bg-gold hover:text-surface-hi"
-              >
-                {isArabic ? "هل ترغب بهذا العطر؟" : "Want that product?"}
-              </button>
             ) : null}
           </div>
         </section>

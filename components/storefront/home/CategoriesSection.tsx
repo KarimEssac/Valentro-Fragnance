@@ -22,8 +22,8 @@ const categories: Category[] = [
   {
     title: "For Him",
     gender: "HIM",
-    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793835501/valentro/fragrances/golden-angel-c3d9ef6edbc90aec.webp",
-    alt: "Gold Angel fragrance for him",
+    image: "https://res.cloudinary.com/dpmmlk1zg/image/upload/v1793835500/valentro/fragrances/u-strength-amber-54bc8823eb4aa4e0.webp",
+    alt: "U Strength fragrance bottle",
     offset: true
   },
   {
