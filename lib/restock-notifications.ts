@@ -42,7 +42,7 @@ export async function sendRestockNotifications(
     where: {
       variantId: {in: uniqueVariantIds},
       notifiedAt: null,
-      variant: {stock: {gt: 0}}
+      variant: {stock: {gt: 0}, fragrance: {isPublished: true}}
     },
     orderBy: {requestedAt: "asc"},
     select: {

@@ -24,7 +24,8 @@ export default async function CollectionDetailPage({
     where: {
       slug,
       isOffer: true,
-      isPublished: true
+      isPublished: true,
+      fragrances: {none: {fragrance: {isPublished: false}}}
     },
     include: {
       fragrances: {

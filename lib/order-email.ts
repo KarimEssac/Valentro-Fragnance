@@ -34,6 +34,7 @@ export type OrderEmailOrder = {
   paymentMethod: string;
   subtotal: {toString(): string} | string | number;
   discountAmount: {toString(): string} | string | number;
+  shippingAmount: {toString(): string} | string | number;
   total: {toString(): string} | string | number;
   addressSnapshot: unknown;
   createdAt: Date | string;
@@ -72,7 +73,8 @@ function price(value: unknown) {
   return new Intl.NumberFormat("en-EG", {
     style: "currency",
     currency: "EGP",
-    maximumFractionDigits: 0
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
   }).format(Number(value));
 }
 
@@ -163,6 +165,7 @@ function orderSummaryHtml(order: OrderEmailOrder) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;color:#4B463E;font-size:14px;line-height:1.7;">
     <tr><td style="padding:3px 0;">Subtotal</td><td align="right" style="padding:3px 0;">${escapeHtml(price(order.subtotal))}</td></tr>
     <tr><td style="padding:3px 0;">Discount</td><td align="right" style="padding:3px 0;">${escapeHtml(price(order.discountAmount))}</td></tr>
+    ${Number(order.shippingAmount) > 0 ? `<tr><td style="padding:3px 0;">Shipping</td><td align="right" style="padding:3px 0;">${escapeHtml(price(order.shippingAmount))}</td></tr>` : ""}
     <tr><td style="padding:12px 0 0;border-top:1px solid #CDC5BB;color:#201B11;font-family:Georgia,serif;font-size:22px;">Total</td><td align="right" style="padding:12px 0 0;border-top:1px solid #CDC5BB;color:#201B11;font-family:Georgia,serif;font-size:22px;">${escapeHtml(price(order.total))}</td></tr>
   </table>`;
 }

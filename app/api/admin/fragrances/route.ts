@@ -230,6 +230,10 @@ export async function POST(request: NextRequest) {
     const scentProfile = text(form, "scentProfile", "Scent profile") as ScentProfile;
     const sillage = text(form, "sillage", "Sillage") as Sillage;
     const displayOrder = optionalPositiveInt(form, "position", "Display order");
+    const isPublished = form.get("isPublished");
+    if (isPublished !== null && isPublished !== "true" && isPublished !== "false") {
+      throw new Error("Display must be true or false");
+    }
 
     if (!genderValues.has(gender)) throw new Error("Gender is invalid");
     if (!scentValues.has(scentProfile)) throw new Error("Scent profile is invalid");
@@ -289,7 +293,7 @@ export async function POST(request: NextRequest) {
           sillage,
           longevity: positiveInt(form, "longevity", "Longevity"),
           position: targetPosition,
-          isPublished: true,
+          isPublished: isPublished !== "false",
           variants: {
             create: variants
           },

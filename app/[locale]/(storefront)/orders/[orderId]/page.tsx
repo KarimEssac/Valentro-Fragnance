@@ -117,7 +117,8 @@ export default async function OrderTrackingPage({
   const priceFormatter = new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "EGP",
-    maximumFractionDigits: 0
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
   });
 
   return (
@@ -292,6 +293,14 @@ export default async function OrderTrackingPage({
                     {priceFormatter.format(Number(order.discountAmount))}
                   </span>
                 </div>
+                {Number(order.shippingAmount) > 0 ? (
+                  <div className="mt-2 flex justify-between gap-4 text-sm text-on-surface/75">
+                    <span>{locale === "ar" ? "الشحن" : "Shipping"}</span>
+                    <span className="text-parchment">
+                      {priceFormatter.format(Number(order.shippingAmount))}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="mt-4 flex items-end justify-between gap-4 font-serif text-3xl text-parchment">
                   <span>Total</span>
                   <span>{priceFormatter.format(Number(order.total))}</span>

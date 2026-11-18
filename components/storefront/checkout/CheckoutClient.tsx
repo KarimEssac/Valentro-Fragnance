@@ -12,14 +12,14 @@ import {
   cartPricingRequestItems,
   cartOriginalSubtotal,
   cartSubtotal,
-  mergeCartPricing,
+  applyCartPricing,
   readCartItems,
   requestCartPricing,
-  writeCartItems,
   type CartItem,
   type CartPricingQuote
 } from "@/lib/cart-items";
 import {productDiscountBadge} from "@/lib/product-discounts";
+import {governorateShippingRates} from "@/lib/shipping-rates";
 
 type CheckoutDiscount = {
   code: string;
@@ -52,36 +52,6 @@ type MissingField = {
   field: keyof CheckoutForm;
   label: string;
 };
-
-const governorates = [
-  "Cairo",
-  "Giza",
-  "Alexandria",
-  "Dakahlia",
-  "Red Sea",
-  "Beheira",
-  "Faiyum",
-  "Gharbia",
-  "Ismailia",
-  "Monufia",
-  "Minya",
-  "Qalyubia",
-  "New Valley",
-  "Suez",
-  "Aswan",
-  "Asyut",
-  "Beni Suef",
-  "Port Said",
-  "Damietta",
-  "Sharqia",
-  "South Sinai",
-  "Kafr El Sheikh",
-  "Matruh",
-  "Luxor",
-  "Qena",
-  "North Sinai",
-  "Sohag"
-];
 
 const initialForm: CheckoutForm = {
   email: "",
@@ -182,7 +152,8 @@ export default function CheckoutClient() {
       new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "EGP",
-        maximumFractionDigits: 0
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
       }),
     [locale]
   );
@@ -225,11 +196,7 @@ export default function CheckoutClient() {
     if (storedItems.length > 0) {
       requestCartPricing(storedItems, controller.signal)
         .then((pricing) => {
-          setItems((current) => {
-            const nextItems = mergeCartPricing(current, pricing);
-            writeCartItems(nextItems, false);
-            return nextItems;
-          });
+          setItems(applyCartPricing(pricing));
         })
         .catch((error) => {
           if (!(error instanceof Error && error.name === "AbortError")) {
@@ -249,7 +216,8 @@ export default function CheckoutClient() {
   );
   const displayedDiscount = subtotal > 0 ? checkoutDiscount : null;
   const discountAmount = displayedDiscount?.discountAmount ?? 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  const shippingAmount = governorateShippingRates.get(form.governorate);
+  const total = Math.max(0, subtotal - discountAmount) + (shippingAmount ?? 0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -290,11 +258,7 @@ export default function CheckoutClient() {
             };
 
             if (data.pricing) {
-              setItems((current) => {
-                const nextItems = mergeCartPricing(current, data.pricing as CartPricingQuote);
-                writeCartItems(nextItems, false);
-                return nextItems;
-              });
+              setItems(applyCartPricing(data.pricing));
             }
 
             if (data.discount !== undefined) {
@@ -666,9 +630,9 @@ export default function CheckoutClient() {
                   className="mt-1.5 bg-surface-hi text-sm"
                 >
                   <option value="">Select Governorate</option>
-                  {governorates.map((governorate) => (
+                  {Array.from(governorateShippingRates.keys(), (governorate) => (
                     <option key={governorate} value={governorate}>
-                      {governorate}
+                      {governorate === "Matruh" ? "Matruh – North Coast" : governorate}
                     </option>
                   ))}
                 </ValentroSelect>
@@ -944,8 +908,10 @@ export default function CheckoutClient() {
             ) : null}
             <div className="flex justify-between gap-4">
               <span>Shipping</span>
-              <span className="label-caps text-[10px] text-parchment">
-                Complimentary
+              <span className="text-parchment">
+                {shippingAmount === undefined
+                  ? "Select a governorate"
+                  : priceFormatter.format(shippingAmount)}
               </span>
             </div>
             <div className="flex justify-between gap-4">
@@ -955,7 +921,7 @@ export default function CheckoutClient() {
           </div>
           <div className="mt-5 flex items-end justify-between gap-4">
             <span className="label-caps text-on-surface/75">Total</span>
-            <span className="font-serif text-4xl leading-none">
+            <span className="font-serif text-4xl leading-none" aria-live="polite">
               {priceFormatter.format(total)}
             </span>
           </div>

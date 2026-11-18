@@ -314,6 +314,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const scentProfile = stringValue(data, "scentProfile", "Scent profile") as ScentProfile;
     const sillage = stringValue(data, "sillage", "Sillage") as Sillage;
     const position = optionalIntValue(data, "position", "Display order", 1);
+    const isPublished = data.isPublished;
+    if (isPublished !== undefined && typeof isPublished !== "boolean") {
+      throw new Error("Display must be true or false");
+    }
     const variants = variantInputs(data);
     const imageEdits = imageInputs(data);
     const selectedSeasons = stringArray(data, "seasons").filter((season) =>
@@ -339,6 +343,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         select: {
           id: true,
           position: true,
+          isPublished: true,
           referenceImageUrl: true,
           variants: {
             select: {id: true, stock: true}
@@ -384,6 +389,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           bestFor: [],
           seasons: selectedSeasons.includes("ALL_YEAR") ? ["ALL_YEAR"] : selectedSeasons,
           sillage,
+          isPublished,
           longevity: intValue(data, "longevity", "Longevity", 1),
           ingredients: {
             deleteMany: {},
@@ -405,7 +411,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       for (const variant of variants) {
         if (variant.id && existingVariantIds.has(variant.id)) {
           const previousStock = existingVariantStock.get(variant.id) ?? 0;
-          if (variant.stock > previousStock && variant.stock > 0) {
+          if (
+            (isPublished ?? existing.isPublished) &&
+            variant.stock > 0 &&
+            (variant.stock > previousStock || !existing.isPublished)
+          ) {
             increasedVariantIds.add(variant.id);
           }
 
@@ -575,6 +585,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
+    revalidateTag(STOREFRONT_TESTIMONIALS_TAG, {expire: 0});
     return NextResponse.json({
       message:
         restockedVariantIds.length > 0

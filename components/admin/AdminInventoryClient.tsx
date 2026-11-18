@@ -114,6 +114,23 @@ function inputClass() {
   return "w-full border-0 border-b border-outline bg-transparent px-0 py-2 text-sm text-parchment outline-none placeholder:text-on-surface/45 focus:border-gold focus:ring-0";
 }
 
+function DisplayField({displayed = true}: {displayed?: boolean}) {
+  return (
+    <fieldset>
+      <legend className="label-caps mb-2 text-gold">Display</legend>
+      <label className="flex items-center gap-2 text-sm text-parchment">
+        <input
+          type="checkbox"
+          name="isPublished"
+          defaultChecked={displayed}
+          className="h-4 w-4 accent-parchment"
+        />
+        Displayed
+      </label>
+    </fieldset>
+  );
+}
+
 function Field({label, children}: {label: string; children: React.ReactNode}) {
   return (
     <label className="block">
@@ -448,6 +465,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
     setSubmitting(true);
 
     const form = new FormData(event.currentTarget);
+    form.set("isPublished", String(form.has("isPublished")));
     form.set("variants", JSON.stringify(createVariants));
     selectedSeasons.forEach((season) => form.append("seasons", season));
     form.set("ingredients", JSON.stringify(selectedIngredients));
@@ -564,6 +582,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
                     <td className="p-5">
                       <p className="font-serif text-xl leading-tight text-parchment">{name}</p>
                       <p className="mt-1 text-sm text-on-surface/60">SKU: {product.variants[0]?.sku ?? "No variants"}</p>
+                      <p className="mt-1 text-xs text-on-surface/70">{product.isPublished ? "Displayed" : "Hidden"}</p>
                     </td>
                     <td className="p-5 text-sm text-parchment">{product.position}</td>
                     <td className="p-5">
@@ -829,6 +848,7 @@ export default function AdminInventoryClient({locale, products}: Props) {
                 <Field label="Sillage"><ValentroSelect name="sillage">{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
                 <Field label="Longevity Hours"><input name="longevity" type="number" min="1" defaultValue="8" required className={inputClass()} /></Field>
                 <Field label="Display Order"><input name="position" type="number" min="1" placeholder="1 displays first" className={inputClass()} /></Field>
+                <DisplayField />
                 <Field label="Product Images">
                   <input name="images" type="file" accept="image/*" multiple className="w-full text-sm text-on-surface/80 file:mr-4 file:border file:border-parchment file:bg-transparent file:px-4 file:py-2 file:text-parchment file:transition-colors hover:file:border-gold hover:file:text-gold" />
                 </Field>
@@ -1074,6 +1094,7 @@ function EditProductForm({
       sillage: form.get("sillage"),
       longevity: form.get("longevity"),
       position: form.get("position"),
+      isPublished: form.has("isPublished"),
       removeReferenceImage: form.get("removeReferenceImage") === "true",
       ingredients: selectedIngredients,
       avoidIf: selectedAvoidIf,
@@ -1128,6 +1149,7 @@ function EditProductForm({
         <Field label="Sillage"><ValentroSelect name="sillage" defaultValue={product.sillage}>{sillages.map((option) => <option key={option} value={option}>{formatEnum(option)}</option>)}</ValentroSelect></Field>
         <Field label="Longevity Hours"><input name="longevity" type="number" min="1" defaultValue={product.longevity} required className={inputClass()} /></Field>
         <Field label="Display Order"><input name="position" type="number" min="1" defaultValue={product.position} placeholder="Leave empty to move last" className={inputClass()} /></Field>
+        <DisplayField displayed={product.isPublished} />
       </div>
       <Field label="English Description"><textarea name="descriptionEn" defaultValue={product.descriptionEn} required rows={3} className={inputClass()} /></Field>
       <Field label="Arabic Description (Optional)"><textarea name="descriptionAr" defaultValue={product.descriptionAr === product.descriptionEn ? "" : product.descriptionAr} rows={3} className={inputClass()} /></Field>

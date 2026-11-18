@@ -34,6 +34,7 @@ export type AdminOrderRow = {
   customerEmail: string;
   subtotal: string;
   discountAmount: string;
+  shippingAmount: string;
   total: string;
   status: string;
   paymentMethod: string;
@@ -155,7 +156,8 @@ export default function AdminOrdersClient({
       new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "EGP",
-        maximumFractionDigits: 0
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
       }),
     [locale]
   );
@@ -363,6 +365,12 @@ export default function AdminOrdersClient({
             <span>Discount</span>
             <span>{currencyFormatter.format(Number(order.discountAmount))}</span>
           </div>
+          {Number(order.shippingAmount) > 0 ? (
+            <div className="flex justify-between gap-4">
+              <span>Shipping</span>
+              <span>{currencyFormatter.format(Number(order.shippingAmount))}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-4 text-parchment">
             <span className="label-caps">Total</span>
             <span className="font-serif text-2xl">

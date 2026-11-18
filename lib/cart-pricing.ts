@@ -176,7 +176,8 @@ export async function calculateCartPricing(
     where: {
       id: {in: Array.from(collectionQuantities.keys())},
       isOffer: true,
-      isPublished: true
+      isPublished: true,
+      fragrances: {none: {fragrance: {isPublished: false}}}
     },
     select: {
       id: true,
@@ -188,7 +189,6 @@ export async function calculateCartPricing(
         select: {
           fragrance: {
             select: {
-              isPublished: true,
               variants: {
                 orderBy: {price: "asc"},
                 take: 1,
@@ -203,11 +203,7 @@ export async function calculateCartPricing(
   const availableCollectionIds = new Set(
     collections
       .filter((collection) => collection.offerPrice && collection.fragrances.length > 0)
-      .filter((collection) =>
-        collection.fragrances.every(
-          ({fragrance}) => fragrance.isPublished && fragrance.variants[0]
-        )
-      )
+      .filter((collection) => collection.fragrances.every(({fragrance}) => fragrance.variants[0]))
       .map((collection) => collection.id)
   );
   const unavailableVariantIds = [

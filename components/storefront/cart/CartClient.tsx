@@ -10,7 +10,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   cartOriginalSubtotal,
   cartSubtotal,
-  mergeCartPricing,
+  applyCartPricing,
   notifyCartAdded,
   readCartItems,
   requestCartPricing,
@@ -323,11 +323,7 @@ export default function CartClient() {
     if (storedItems.length > 0) {
       requestCartPricing(storedItems, controller.signal)
         .then((pricing) => {
-          setItems((current) => {
-            const nextItems = mergeCartPricing(current, pricing);
-            writeCartItems(nextItems, false);
-            return nextItems;
-          });
+          setItems(applyCartPricing(pricing));
         })
         .catch((error) => {
           if (!(error instanceof Error && error.name === "AbortError")) {
@@ -583,7 +579,7 @@ export default function CartClient() {
               </div>
               <div className="flex justify-between gap-4">
                 <span>Shipping</span>
-                <span className="text-parchment">Calculated later</span>
+                <span className="text-parchment">Calculated at checkout</span>
               </div>
             </div>
             <div className="mt-5 flex justify-between gap-4 font-serif text-2xl text-parchment">

@@ -89,7 +89,7 @@
       "title": "Assistance",
       "privacyPolicy": "Privacy Policy",
       "termsConditions": "Terms and Conditions",
-      "refundPolicy": "Refund Policy"
+      "refundPolicy": "Returns & Exchanges Policy"
     },
     "newsletter": {
       "title": "Join the Inner Circle",
@@ -165,47 +165,42 @@
     }
   },
   "refund": {
-    "metaTitle": "Refund Policy - VALENTRO",
-    "metaDescription": "VALENTRO Atelier Refund Policy. Understand our policies on returns and refunds.",
-    "subtitle": "Valentro Policies",
-    "title": "The Art of Return",
-    "introduction": "A Graceful Return. We handle your changing desires with the same reverence as our scent creation. Our commitment to your olfactory journey remains absolute, even when a path diverges.",
+    "metaTitle": "Returns & Exchanges Policy - VALENTRO",
+    "metaDescription": "VALENTRO’s policy on returns, exchanges, and refunds, including how to report damaged, defective, or incorrect orders.",
+    "brand": "VALENTRO",
+    "title": "Returns & Exchanges Policy",
+    "introduction": "At VALENTRO, we believe that every fragrance tells a story, and every customer deserves an exceptional experience. Your satisfaction and trust are our top priorities.\n\nTo ensure transparency and a seamless shopping experience, please review our Returns & Exchanges Policy.",
     "sections": {
-      "window": {
-        "title": "The 30-Day Window",
-        "desc1": "Time is essential in truly experiencing a fragrance, but decisions require clarity. We offer a generous 30-day window from the date of receipt to request a return for any eligible Valentro creation.",
-        "desc2": "This period allows you to consider your acquisition in the comfort of your home, ensuring the piece resonates with your personal aesthetic and intentions.",
-        "timelineTitle": "Timeline Details",
-        "bullet1": "30 days from delivery confirmation.",
-        "bullet2": "Funds returned to original payment method.",
-        "bullet3": "Processing takes 5-7 business days upon receipt."
+      "returns": {
+        "title": "01. Returns & Exchanges",
+        "body": "Customers may request a return or exchange within 14 days of receiving their order, in accordance with applicable Egyptian Consumer Protection Laws.\n\nProducts should be returned in their original condition, including original packaging, accessories, and seals, where applicable, and must not have been altered or damaged by the customer."
       },
-      "sanctuary": {
-        "title": "The Sanctuary of Scent",
-        "desc": "For the integrity of our creations and the safety of our clientele, all returned fragrances must remain unopened, entirely sealed within their original cellophane, and in pristine condition.",
-        "protocolTitle": "The Complimentary Sample Protocol",
-        "protocolDesc": "To ensure absolute confidence in your selection, every full-sized fragrance order includes a complimentary 2ml sample vial of the identical scent. We invite you to experience the sample first. If the olfactory narrative does not align with your spirit, the unopened full bottle may be returned."
+      "damaged": {
+        "title": "02. Damaged or Defective Products",
+        "body": "At VALENTRO, every product undergoes quality checks before dispatch.\n\nIf your order arrives damaged, leaking, or with a manufacturing defect, please contact our customer support team within 30 days of receiving your order.\n\nUpon verification, we will arrange an appropriate solution, including a replacement or refund, as applicable under the law."
       },
-      "path": {
-        "title": "The Path to Resolution",
-        "intro": "Initiating a return is a curated, effortless process designed to respect your time.",
-        "step1Title": "Initiate",
-        "step1Desc": "Navigate to your Atelier account or contact our Concierge to request a Return Authorization code.",
-        "step2Title": "Prepare",
-        "step2Desc": "Carefully package the unopened item in its original shipping materials, including all documentation.",
-        "step3Title": "Dispatch",
-        "step3Desc": "Affix the provided prepaid shipping label and tender the parcel to our designated premium courier."
+      "opened": {
+        "title": "03. Opened or Used Fragrances",
+        "body": "Due to the personal nature of fragrance products, we encourage customers to carefully review fragrance descriptions and notes before making a purchase.\n\nA personal preference regarding a fragrance’s scent, projection, or longevity does not, by itself, constitute a manufacturing defect.\n\nRequests involving opened or used products will be assessed individually in accordance with applicable consumer protection regulations and legal exceptions."
       },
-      "exclusions": {
-        "title": "Exclusions of Rarity",
-        "intro": "Certain creations are bound to their initial patron and cannot traverse backward.",
-        "card1Title": "Bespoke Commissions",
-        "card1Desc": "Fragrances crafted through our personalized Bespoke service, tailored precisely to your unique specifications and engraved with your moniker, are final sale. Their intimate nature precludes any possibility of return.",
-        "card2Title": "Discovery Sets",
-        "card2Desc": "Due to the exploratory and consumable nature of our curated Discovery Sets and individual sample vials, these items are ineligible for return or exchange once dispatched from our Maison.",
-        "button": "Contact Concierge"
+      "incorrect": {
+        "title": "04. Incorrect Orders",
+        "body": "If you receive a product different from the one you ordered, please contact our customer support team.\n\nWe will review the issue and arrange the appropriate replacement or refund in accordance with applicable regulations."
+      },
+      "refunds": {
+        "title": "05. Refund Process",
+        "body": "Once a return is approved, eligible refunds will be processed through the original payment method whenever possible.\n\nRefund processing times may vary depending on the payment provider and banking procedures."
+      },
+      "support": {
+        "title": "06. Customer Support",
+        "body": "For any inquiries regarding returns, exchanges, or refunds, please reach out to our customer support team through our official communication channels.\n\nWe are always here to assist you."
       }
-    }
+    },
+    "contact": "Contact Customer Support",
+    "signature": "An Experience Beyond Fragrance.",
+    "closing": "Thank you for being part of our journey.",
+    "productSummary": "You may request a return or exchange within 14 days of delivery. If your order arrives damaged, leaking, or with a manufacturing defect, contact us within 30 days of delivery. We review requests for opened or used fragrances individually.",
+    "viewPolicy": "View the Returns & Exchanges Policy"
   },
   "terms": {
     "metaTitle": "Terms & Conditions - VALENTRO",
@@ -236,8 +231,8 @@
         "body": "We deliver to supported governorates in Egypt. Delivery dates are estimates and can be affected by courier operations, weather, or circumstances outside our control. Please make sure someone is available to receive the order at the confirmed address."
       },
       "returns": {
-        "title": "6. Returns and refunds",
-        "body": "Returns and refunds are handled under our Refund Policy. In case of a conflict, the Refund Policy governs the conditions and process for return requests."
+        "title": "6. Returns, exchanges, and refunds",
+        "body": "Returns, exchanges, and refunds are handled under our Returns & Exchanges Policy. In case of a conflict, that policy governs the conditions and process for these requests."
       },
       "care": {
         "title": "7. Fragrance care and safe use",

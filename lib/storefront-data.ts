@@ -465,7 +465,11 @@ export function getStorefrontTestimonials(limit = 8) {
 const getCachedCollectionOffers = unstable_cache(
   async (): Promise<StorefrontCollectionOffer[]> => {
     const collections = await prisma.collection.findMany({
-      where: {isOffer: true, isPublished: true},
+      where: {
+        isOffer: true,
+        isPublished: true,
+        fragrances: {none: {fragrance: {isPublished: false}}}
+      },
       orderBy: [{position: "asc"}, {createdAt: "desc"}],
       select: {
         id: true,

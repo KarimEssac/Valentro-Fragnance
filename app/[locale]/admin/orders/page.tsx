@@ -83,6 +83,7 @@ export default async function AdminOrdersPage({params}: AdminOrdersPageProps) {
       total: order.total.toString(),
       subtotal: order.subtotal.toString(),
       discountAmount: order.discountAmount.toString(),
+      shippingAmount: order.shippingAmount.toString(),
       status: order.status,
       paymentMethod: order.paymentMethod,
       instapayClaimedAt: order.instapayClaimedAt?.toISOString() ?? null,

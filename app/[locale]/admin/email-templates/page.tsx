@@ -22,7 +22,8 @@ const previewOrder: OrderEmailOrder = {
   paymentMethod: "CASH_ON_DELIVERY",
   subtotal: "2600",
   discountAmount: "150",
-  total: "2450",
+  shippingAmount: "105",
+  total: "2555",
   addressSnapshot: {
     firstName: "Layla",
     lastName: "Hassan",

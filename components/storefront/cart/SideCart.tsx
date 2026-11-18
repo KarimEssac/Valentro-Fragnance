@@ -12,7 +12,7 @@ import {
   cartOriginalSubtotal,
   cartSubtotal,
   cartUpdatedEvent,
-  mergeCartPricing,
+  applyCartPricing,
   notifyCartAdded,
   readCartItems,
   requestCartPricing,
@@ -217,11 +217,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
     if (storedItems.length > 0) {
       requestCartPricing(storedItems, controller.signal)
         .then((pricing) => {
-          setItems((current) => {
-            const nextItems = mergeCartPricing(current, pricing);
-            writeCartItems(nextItems, false);
-            return nextItems;
-          });
+          setItems(applyCartPricing(pricing));
         })
         .catch((error) => {
           if (!(error instanceof Error && error.name === "AbortError")) {
@@ -404,9 +400,6 @@ export default function SideCart({open, onClose}: SideCartProps) {
             <h2 className="font-serif text-3xl leading-tight uppercase">
               Shopping Bag
             </h2>
-            <p className="label-caps mt-2 text-on-surface/70">
-              Complimentary shipping on orders over EGP 200
-            </p>
           </div>
           <button
             type="button"
@@ -739,7 +732,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
             </div>
             <div className="flex items-center justify-between">
               <span>Shipping</span>
-              <span className="label-caps text-gold">Complimentary</span>
+              <span className="text-parchment">Calculated at checkout</span>
             </div>
             <div className="h-px bg-outline/60" />
             <div className="flex items-center justify-between text-parchment">

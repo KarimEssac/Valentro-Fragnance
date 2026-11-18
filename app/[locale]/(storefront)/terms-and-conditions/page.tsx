@@ -34,7 +34,10 @@ export async function generateMetadata({params}: TermsPageProps): Promise<Metada
 
 export default async function TermsAndConditionsPage({params}: TermsPageProps) {
   const {locale} = await params;
-  const t = await getTranslations({locale, namespace: "terms"});
+  const [t, refund] = await Promise.all([
+    getTranslations({locale, namespace: "terms"}),
+    getTranslations({locale, namespace: "refund"})
+  ]);
   const isRtl = locale === "ar";
 
   return (
@@ -75,7 +78,7 @@ export default async function TermsAndConditionsPage({params}: TermsPageProps) {
                       href={`/${locale}/refund-policy`}
                       className="text-deep-onyx underline decoration-warm-gold underline-offset-4 transition-colors hover:text-warm-gold"
                     >
-                      {isRtl ? "عرض سياسة الاسترجاع" : "View the Refund Policy"}
+                      {refund("viewPolicy")}
                     </Link>
                     .
                   </>

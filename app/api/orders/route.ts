@@ -21,6 +21,7 @@ import {
 import {validateCsrfToken, csrfCookieName} from "@/lib/csrf";
 import {sendOrderPlacedEmails} from "@/lib/order-email";
 import {prisma} from "@/lib/prisma";
+import {governorateShippingRates} from "@/lib/shipping-rates";
 
 type OrderItemInput = {
   variantId?: unknown;
@@ -45,36 +46,6 @@ type CheckoutPayload = {
   couponCode?: unknown;
   items?: unknown;
 };
-
-const egyptGovernorates = new Set([
-  "Alexandria",
-  "Aswan",
-  "Asyut",
-  "Beheira",
-  "Beni Suef",
-  "Cairo",
-  "Dakahlia",
-  "Damietta",
-  "Faiyum",
-  "Gharbia",
-  "Giza",
-  "Ismailia",
-  "Kafr El Sheikh",
-  "Luxor",
-  "Matruh",
-  "Minya",
-  "Monufia",
-  "New Valley",
-  "North Sinai",
-  "Port Said",
-  "Qalyubia",
-  "Qena",
-  "Red Sea",
-  "Sharqia",
-  "Sohag",
-  "South Sinai",
-  "Suez"
-]);
 
 const deniedSpecialCharacters = /[<>{}[\]$;'"`|\\]/;
 const namePattern = /^[\p{L}\s-]+$/u;
@@ -175,7 +146,8 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
     throw new Error("Coupon code is invalid");
   }
 
-  if (!egyptGovernorates.has(governorate)) {
+  const shippingAmount = governorateShippingRates.get(governorate);
+  if (shippingAmount === undefined) {
     throw new Error("Governorate is not supported");
   }
 
@@ -232,6 +204,7 @@ function validateCheckoutPayload(payload: CheckoutPayload) {
     apartment,
     city,
     governorate,
+    shippingAmount,
     postalCode,
     phone,
     notes,
@@ -394,7 +367,8 @@ export async function POST(request: NextRequest) {
           const stockUpdate = await tx.fragranceVariant.updateMany({
             where: {
               id: inventoryVariantId,
-              stock: {gte: quantity}
+              stock: {gte: quantity},
+              fragrance: {isPublished: true}
             },
             data: {
               stock: {decrement: quantity}
@@ -420,7 +394,7 @@ export async function POST(request: NextRequest) {
       }
 
       const discountAmount = selectedDiscount?.discountAmount ?? 0;
-      const total = Math.max(0, subtotal - discountAmount);
+      const total = Math.max(0, subtotal - discountAmount) + checkout.shippingAmount;
       const appliedCouponId =
         selectedDiscount && selectedDiscount.source !== "PRODUCT"
           ? selectedDiscount.coupon.id
@@ -435,6 +409,7 @@ export async function POST(request: NextRequest) {
             : null,
           subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
           discountAmount: new Prisma.Decimal(discountAmount.toFixed(2)),
+          shippingAmount: checkout.shippingAmount,
           total: new Prisma.Decimal(total.toFixed(2)),
           couponId: appliedCouponId,
           notes: checkout.notes || null,

@@ -2,7 +2,7 @@
 
 import FragranceReference from "@/components/storefront/product/FragranceReference";
 
-import {useLocale} from "next-intl";
+import {useLocale, useTranslations} from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
@@ -124,6 +124,7 @@ export default function ProductDetailClient({
   initialProduct?: ProductDetail | null;
 }) {
   const locale = useLocale();
+  const refund = useTranslations("refund");
   const router = useRouter();
   const isArabic = locale === "ar";
   const [transitionPreview] = useState(() =>
@@ -847,14 +848,15 @@ export default function ProductDetailClient({
               >
                 <p>
                   {isArabic
-                    ? "احفظ العطر بعيدًا عن الحرارة وأشعة الشمس المباشرة. يمكن طلب استرجاع المنتجات المؤهلة غير المفتوحة خلال 30 يومًا من الاستلام."
-                    : "Store your fragrance away from heat and direct sunlight. Eligible unopened items can be requested for return within 30 days of delivery."}
+                    ? "احفظ العطر بعيدًا عن الحرارة وأشعة الشمس المباشرة."
+                    : "Store your fragrance away from heat and direct sunlight."}
                 </p>
+                <p className="mt-2">{refund("productSummary")}</p>
                 <Link
                   href={`/${locale}/refund-policy`}
                   className="label-caps focus-gold mt-3 inline-flex text-[10px] text-gold underline-offset-4 hover:underline"
                 >
-                  {isArabic ? "عرض سياسة الاسترجاع" : "View refund policy"}
+                  {refund("viewPolicy")}
                 </Link>
               </ProductInformationDisclosure>
             </div>

@@ -99,13 +99,16 @@ export function writeCartItems(items: CartItem[], notify = true) {
   if (notify) window.dispatchEvent(new Event(cartUpdatedEvent));
 }
 
-export function mergeCartPricing(
-  items: CartItem[],
-  pricing: Pick<CartPricingQuote, "lines">
+export function applyCartPricing(
+  pricing: Pick<CartPricingQuote, "lines" | "unavailableVariantIds">
 ) {
+  const items = readCartItems();
   const byVariantId = new Map(pricing.lines.map((line) => [line.variantId, line]));
 
-  return items.map((item) => {
+  const unavailableVariantIds = new Set(pricing.unavailableVariantIds);
+  const availableItems = items.filter((item) => !unavailableVariantIds.has(item.variantId));
+
+  const nextItems = availableItems.map((item) => {
     const line = byVariantId.get(item.variantId);
     if (!line) return item;
 
@@ -118,6 +121,9 @@ export function mergeCartPricing(
       ...(line.collectionId ? {collectionId: line.collectionId} : {})
     };
   });
+
+  writeCartItems(nextItems, nextItems.length !== items.length);
+  return nextItems;
 }
 
 export function cartPricingRequestItems(items: CartPricingRequestItem[]) {
