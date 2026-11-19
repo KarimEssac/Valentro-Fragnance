@@ -17,16 +17,19 @@ export async function PATCH(request: NextRequest, {params}: AdminOrderRouteProps
   }
   const {id} = await params;
   const body = await request.json().catch(() => null) as
-    | {status?: unknown; action?: unknown; reason?: unknown}
+    | {status?: unknown; action?: unknown; reason?: unknown; stockReturned?: unknown}
     | null;
   const action = typeof body?.action === "string" ? body.action : "status";
   const status = typeof body?.status === "string" ? body.status : "";
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+  const isDeletion = action === "delete";
+  const isCancellation = action === "status" && status === OrderStatus.CANCELLED;
+  const releasesReservation = isDeletion || isCancellation;
 
   if (action === "status" && !validStatuses.has(status)) {
     return NextResponse.json({message: "Invalid order status"}, {status: 400});
   }
-  if (!["status", "verifyInstapay", "convertToCash"].includes(action)) {
+  if (!["status", "verifyInstapay", "convertToCash", "delete"].includes(action)) {
     return NextResponse.json({message: "Invalid order action"}, {status: 400});
   }
   if (action === "convertToCash" && (reason.length < 5 || reason.length > 300)) {
@@ -39,8 +42,49 @@ export async function PATCH(request: NextRequest, {params}: AdminOrderRouteProps
         where: {id},
         include: {items: {select: {variantId: true, collectionId: true, reservedVariantIds: true, quantity: true}}}
       });
-      if (!previous) throw new Error("Order not found");
-      if (previous.status === OrderStatus.CANCELLED) throw new Error("Cancelled orders cannot be changed");
+      if (!previous) {
+        if (isDeletion) return {order: null, previousStatus: null};
+        throw new Error("Order not found");
+      }
+
+      const wasCancelled = previous.status === OrderStatus.CANCELLED;
+      if (wasCancelled && !releasesReservation) {
+        throw new Error("Cancelled orders cannot be changed");
+      }
+
+      if (releasesReservation && !wasCancelled) {
+        const wasShipped = previous.status === OrderStatus.SHIPPED || previous.status === OrderStatus.DELIVERED;
+        if (wasShipped && body?.stockReturned !== true) {
+          throw new Error("Confirm the items are back in stock before cancelling or deleting this order");
+        }
+        if (previous.items.some((item) => item.collectionId && item.reservedVariantIds.length === 0)) {
+          throw new Error("This older collection order is missing its inventory reservation details and needs manual reconciliation");
+        }
+
+        if (previous.couponId) {
+          await tx.coupon.updateMany({
+            where: {id: previous.couponId, usedCount: {gt: 0}},
+            data: {usedCount: {decrement: 1}}
+          });
+        }
+        for (const item of previous.items) {
+          const variantIds = item.reservedVariantIds.length
+            ? item.reservedVariantIds
+            : item.variantId ? [item.variantId] : [];
+          for (const variantId of variantIds) {
+            // A product may have been deleted from inventory since the order was placed.
+            await tx.fragranceVariant.updateMany({
+              where: {id: variantId},
+              data: {stock: {increment: item.quantity}}
+            });
+          }
+        }
+      }
+
+      if (isDeletion) {
+        await tx.order.delete({where: {id}});
+        return {order: null, previousStatus: previous.status};
+      }
 
       if (action === "verifyInstapay") {
         if (previous.paymentMethod !== PaymentMethod.INSTAPAY) throw new Error("This is not an InstaPay order");
@@ -60,29 +104,11 @@ export async function PATCH(request: NextRequest, {params}: AdminOrderRouteProps
           paymentMethodChangedAt: new Date(),
           paymentMethodChangeReason: reason
         }});
-      } else if (status === OrderStatus.CANCELLED) {
-        if (previous.status === OrderStatus.SHIPPED || previous.status === OrderStatus.DELIVERED) {
-          throw new Error("Shipped orders require a manual return or refund process");
-        }
-        if (previous.items.some((item) => item.collectionId && item.reservedVariantIds.length === 0)) {
-          throw new Error("This older collection order needs manual inventory reconciliation before cancellation");
-        }
-        await tx.order.update({where: {id}, data: {status: OrderStatus.CANCELLED, instapayClaimTokenHash: null}});
-        for (const item of previous.items) {
-          const variantIds = item.reservedVariantIds.length
-            ? item.reservedVariantIds
-            : item.variantId ? [item.variantId] : [];
-          for (const variantId of variantIds) {
-            await tx.fragranceVariant.update({
-              where: {id: variantId},
-              data: {stock: {increment: item.quantity}}
-            });
-          }
-        }
-        if (previous.couponId) {
-          await tx.coupon.updateMany({
-            where: {id: previous.couponId, usedCount: {gt: 0}},
-            data: {usedCount: {decrement: 1}}
+      } else if (isCancellation) {
+        if (!wasCancelled) {
+          await tx.order.update({
+            where: {id},
+            data: {status: OrderStatus.CANCELLED, instapayClaimTokenHash: null}
           });
         }
       } else {
@@ -99,18 +125,24 @@ export async function PATCH(request: NextRequest, {params}: AdminOrderRouteProps
       return {order, previousStatus: previous.status};
     }, {isolationLevel: Prisma.TransactionIsolationLevel.Serializable});
 
-    if (result.order.status === OrderStatus.CANCELLED) {
+    if (releasesReservation && result.previousStatus && result.previousStatus !== OrderStatus.CANCELLED) {
       revalidateTag(STOREFRONT_FRAGRANCES_TAG, {expire: 0});
     }
 
-    if (result.order.status === OrderStatus.SHIPPED && result.previousStatus !== OrderStatus.SHIPPED) {
+    const {order} = result;
+    if (!order) return NextResponse.json({message: "Order deleted"});
+
+    if (order.status === OrderStatus.SHIPPED && result.previousStatus !== OrderStatus.SHIPPED) {
       after(async () => {
-        try { await sendOrderShippedEmail(result.order.id); }
+        try { await sendOrderShippedEmail(order.id); }
         catch (error) { console.error("Shipping email failed:", error); }
       });
     }
-    return NextResponse.json({message: "Order updated", order: result.order});
+    return NextResponse.json({message: "Order updated", order});
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      return NextResponse.json({message: "The order or inventory changed during this update. Please try again."}, {status: 409});
+    }
     return NextResponse.json({message: error instanceof Error ? error.message : "Unable to update order"}, {status: 409});
   }
 }

@@ -49,18 +49,9 @@ export type AdminOrderRow = {
   items: AdminOrderItem[];
 };
 
-type OrderSummary = {
-  total: number;
-  pending: number;
-  processing: number;
-  shipped: number;
-  delivered: number;
-};
-
 type AdminOrdersClientProps = {
   locale: string;
   orders: AdminOrderRow[];
-  summary: OrderSummary;
 };
 
 const statusOptions = [
@@ -129,8 +120,7 @@ function addressFromSnapshot(value: unknown): AddressSnapshot {
 
 export default function AdminOrdersClient({
   locale,
-  orders,
-  summary
+  orders
 }: AdminOrdersClientProps) {
   const [orderRows, setOrderRows] = useState(orders);
   const [query, setQuery] = useState("");
@@ -139,7 +129,7 @@ export default function AdminOrdersClient({
     orders[0]?.id ?? null
   );
   const [message, setMessage] = useState("");
-  const [updatingOrderId, setUpdatingOrderId] = useState("");
+  const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
   const [conversionReason, setConversionReason] = useState("");
 
   const dateFormatter = useMemo(
@@ -201,13 +191,30 @@ export default function AdminOrdersClient({
     [orderRows]
   );
 
-  async function updateOrderStatus(orderId: string, nextStatus: string) {
-    if (nextStatus === "CANCELLED" && !window.confirm("Cancel this order and release its reserved stock and coupon?")) return;
-    await updateOrder(orderId, {status: nextStatus});
+  async function updateOrderStatus(order: AdminOrderRow, nextStatus: string) {
+    const isDeletion = nextStatus === "DELETE";
+    const wasShipped = order.status === "SHIPPED" || order.status === "DELIVERED";
+
+    if (isDeletion || nextStatus === "CANCELLED") {
+      const action = isDeletion ? "Permanently delete this order and all its items?" : "Cancel this order?";
+      const restock = order.status === "CANCELLED"
+        ? ""
+        : "\n\nThis restores the purchased quantities and releases any coupon use.";
+      const returned = wasShipped ? "\n\nConfirm that all shipped items have been returned and can be restocked." : "";
+      if (!window.confirm(action + restock + returned)) return;
+    }
+
+    await updateOrder(order.id, isDeletion
+      ? {action: "delete", stockReturned: wasShipped}
+      : {status: nextStatus, stockReturned: wasShipped}
+    );
   }
 
-  async function updateOrder(orderId: string, payload: {status?: string; action?: string; reason?: string}) {
-    setUpdatingOrderId(orderId);
+  async function updateOrder(
+    orderId: string,
+    payload: {status?: string; action?: string; reason?: string; stockReturned?: boolean}
+  ) {
+    setIsUpdatingOrder(true);
     setMessage("");
 
     try {
@@ -225,6 +232,14 @@ export default function AdminOrdersClient({
         throw new Error(result.message ?? "Unable to update order status");
       }
 
+      if (payload.action === "delete") {
+        setOrderRows((current) => current.filter((order) => order.id !== orderId));
+        setSelectedOrderId((current) => current === orderId ? null : current);
+        setConversionReason("");
+        setMessage("Order deleted.");
+        return;
+      }
+
       setOrderRows((current) =>
         current.map((order) =>
           order.id === orderId
@@ -237,7 +252,7 @@ export default function AdminOrdersClient({
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update order");
     } finally {
-      setUpdatingOrderId("");
+      setIsUpdatingOrder(false);
     }
   }
 
@@ -270,12 +285,12 @@ export default function AdminOrdersClient({
               <p className="mt-2 break-all font-mono text-xs text-on-surface/65">Transfer note: {order.id}</p>
               {!order.instapayVerifiedAt && order.status !== "CANCELLED" ? (
                 <div className="mt-4 space-y-3">
-                  <button type="button" disabled={updatingOrderId === order.id} onClick={() => {
+                  <button type="button" disabled={isUpdatingOrder} onClick={() => {
                     if (window.confirm("Have you independently found this transfer in InstaPay?")) updateOrder(order.id, {action: "verifyInstapay"});
                   }} className="label-caps min-h-10 w-full border border-gold px-3 text-gold disabled:opacity-50">Mark transfer verified</button>
                   <p className="text-xs leading-5 text-on-surface/65">After contacting the customer, you can switch this unverified order to cash on delivery.</p>
                   <input value={conversionReason} onChange={(event) => setConversionReason(event.target.value)} maxLength={300} placeholder="Reason for changing payment method" aria-label="Reason for changing payment method" className="min-h-10 w-full border border-outline bg-surface-hi px-3 text-sm text-parchment" />
-                  <button type="button" disabled={updatingOrderId === order.id || conversionReason.trim().length < 5} onClick={() => updateOrder(order.id, {action: "convertToCash", reason: conversionReason})} className="label-caps min-h-10 w-full border border-outline px-3 disabled:opacity-50">Switch to cash on delivery</button>
+                  <button type="button" disabled={isUpdatingOrder || conversionReason.trim().length < 5} onClick={() => updateOrder(order.id, {action: "convertToCash", reason: conversionReason})} className="label-caps min-h-10 w-full border border-outline px-3 disabled:opacity-50">Switch to cash on delivery</button>
                 </div>
               ) : null}
             </>
@@ -292,15 +307,20 @@ export default function AdminOrdersClient({
             </span>
             <ValentroSelect
               value={order.status}
-              disabled={updatingOrderId === order.id}
-              onChange={(event) => updateOrderStatus(order.id, event.target.value)}
+              disabled={isUpdatingOrder}
+              onChange={(event) => updateOrderStatus(order, event.target.value)}
               className="min-h-11 bg-surface-hi"
             >
               {editableStatuses.map((option) => (
-                <option key={option} value={option}>
+                <option
+                  key={option}
+                  value={option}
+                  disabled={order.status === "CANCELLED" && option !== "CANCELLED"}
+                >
                   {option.toLowerCase().replace("_", " ")}
                 </option>
               ))}
+              <option value="DELETE">Delete</option>
             </ValentroSelect>
           </label>
         </div>
@@ -403,7 +423,7 @@ export default function AdminOrdersClient({
         aria-label="Order status summary"
         className="mb-12 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 xl:grid-cols-5"
       >
-        <SummaryCard label="Total Orders" value={currentSummary.total || summary.total} />
+        <SummaryCard label="Total Orders" value={currentSummary.total} />
         <SummaryCard label="Pending" value={currentSummary.pending} tone="gold" />
         <SummaryCard label="Processing" value={currentSummary.processing} />
         <SummaryCard label="Shipped" value={currentSummary.shipped} />
@@ -447,7 +467,7 @@ export default function AdminOrdersClient({
       </section>
 
       {message ? (
-        <p className="mb-6 border border-outline/60 bg-surface px-4 py-3 text-sm text-on-surface">
+        <p role="status" className="mb-6 border border-outline/60 bg-surface px-4 py-3 text-sm text-on-surface">
           {message}
         </p>
       ) : null}
