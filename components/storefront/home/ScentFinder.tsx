@@ -34,7 +34,6 @@ type FinderFragrance = {
   avoidIf: string[];
   seasons: string[];
   sillage: string;
-  isFeatured: boolean;
   ingredients: {
     nameEn: string;
     nameAr: string;
@@ -64,8 +63,6 @@ type FinderIngredient = {
   searchTerms: string;
   category: string;
   frequency: number;
-  profileMatches: number;
-  featuredFrequency: number;
 };
 
 type IngredientCategoryGroup = {
@@ -156,31 +153,25 @@ export default function ScentFinder() {
     const byIngredient = new Map<string, FinderIngredient>();
 
     fragrances.forEach((fragrance) => {
-      const profile = normalizeFinderTerm(formatEnum(fragrance.scentProfile));
+      const seen = new Set<string>();
+
       fragrance.ingredients.forEach((ingredient) => {
         const key = normalizeFinderTerm(ingredient.nameEn);
-        if (!key) return;
+        if (!key || seen.has(key)) return;
+        seen.add(key);
 
         const existing = byIngredient.get(key);
-        const name = isArabic ? ingredient.nameAr || ingredient.nameEn : ingredient.nameEn;
-        const category = ingredientCategoryFor(ingredient.nameEn, ingredient.category);
-        const profileMatches = key.includes(profile) ? 1 : 0;
-
         if (existing) {
           existing.frequency += 1;
-          existing.profileMatches += profileMatches;
-          existing.featuredFrequency += fragrance.isFeatured ? 1 : 0;
           return;
         }
 
         byIngredient.set(key, {
           key,
-          name,
+          name: isArabic ? ingredient.nameAr || ingredient.nameEn : ingredient.nameEn,
           searchTerms: normalizeFinderTerm(`${ingredient.nameEn} ${ingredient.nameAr}`),
-          category,
-          frequency: 1,
-          profileMatches,
-          featuredFrequency: fragrance.isFeatured ? 1 : 0
+          category: ingredientCategoryFor(ingredient.nameEn, ingredient.category),
+          frequency: 1
         });
       });
     });
@@ -190,31 +181,13 @@ export default function ScentFinder() {
     );
   }, [fragrances, isArabic]);
 
-  const quickPicks = useMemo(() => {
-    const ranked = [...ingredientCatalog].sort(
+  const quickPicks = useMemo(
+    () => [...ingredientCatalog].sort(
       (first, second) =>
-        second.frequency - first.frequency ||
-        second.profileMatches - first.profileMatches ||
-        second.featuredFrequency - first.featuredFrequency ||
-        first.name.localeCompare(second.name)
-    );
-    const picked: FinderIngredient[] = [];
-
-    for (const category of [...new Set(ranked.map((ingredient) => ingredient.category))].sort(
-      (first, second) => ingredientCategorySortOrder(first) - ingredientCategorySortOrder(second)
-    )) {
-      const ingredient = ranked.find((candidate) => candidate.category === category);
-      if (ingredient) picked.push(ingredient);
-      if (picked.length === 6) return picked;
-    }
-
-    ranked.forEach((ingredient) => {
-      if (picked.length >= 6 || picked.some((pick) => pick.key === ingredient.key)) return;
-      picked.push(ingredient);
-    });
-
-    return picked;
-  }, [ingredientCatalog]);
+        second.frequency - first.frequency || first.key.localeCompare(second.key, "en")
+    ).slice(0, 6),
+    [ingredientCatalog]
+  );
 
   const ingredientCategories = useMemo<IngredientCategoryGroup[]>(() => {
     const groups = new Map<string, FinderIngredient[]>();
@@ -276,7 +249,7 @@ export default function ScentFinder() {
     async function loadFragrances() {
       try {
         const response = await fetch(
-          "/api/storefront/fragrances?finder=true&limit=100",
+          "/api/storefront/fragrances?finder=true",
           {headers: {Accept: "application/json"}}
         );
         if (!response.ok) throw new Error("Unable to load fragrances");

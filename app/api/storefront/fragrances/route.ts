@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     gender: searchParams.get("gender"),
     scentProfile: searchParams.get("scentProfile"),
     featured: searchParams.get("featured") === "true",
-    limit: Math.min(requestedLimit, maxLimit)
+    limit: isFinderRequest ? null : Math.min(requestedLimit, maxLimit)
   });
 
   return NextResponse.json(fragrances, {

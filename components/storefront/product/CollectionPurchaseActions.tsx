@@ -3,12 +3,13 @@
 import {useRouter} from "next/navigation";
 import {useState} from "react";
 
+import {useCartItems} from "@/components/storefront/cart/useCartItems";
 import {
+  addCartItem,
+  cartQuantityRemaining,
   collectionCartKey,
   notifyCartAdded,
-  readCartItems,
-  writeCartItems,
-  type CartItem
+  type CartInventoryVariant
 } from "@/lib/cart-items";
 
 function ArrowIcon({direction}: {direction: "left" | "right"}) {
@@ -42,6 +43,7 @@ type CollectionPurchaseActionsProps = {
   offerPrice: string | null;
   combinedValue: string;
   isAvailable: boolean;
+  inventory: CartInventoryVariant[];
 };
 
 export default function CollectionPurchaseActions({
@@ -53,18 +55,23 @@ export default function CollectionPurchaseActions({
   image,
   offerPrice,
   combinedValue,
-  isAvailable
+  isAvailable,
+  inventory
 }: CollectionPurchaseActionsProps) {
   const router = useRouter();
   const isArabic = locale === "ar";
-  const [quantity, setQuantity] = useState(1);
+  const cartItems = useCartItems();
+  const [requestedQuantity, setRequestedQuantity] = useState(1);
   const collectionPrice = offerPrice ?? "0";
   const itemKey = collectionCartKey(id);
+  const quantityRemaining = isAvailable ? cartQuantityRemaining(cartItems, itemKey, inventory) : 0;
+  const quantity = Math.min(requestedQuantity, quantityRemaining);
+  const canPurchase = Boolean(offerPrice) && quantity > 0;
 
   function performAddToCart() {
-    if (!offerPrice || !isAvailable) return false;
+    if (!canPurchase) return false;
 
-    const item: CartItem = {
+    const added = addCartItem({
       fragranceId: id,
       variantId: itemKey,
       itemType: "collection",
@@ -76,23 +83,11 @@ export default function CollectionPurchaseActions({
       price: collectionPrice,
       originalPrice: combinedValue,
       discount: null,
-      quantity
-    };
-    const existing = readCartItems();
-    const itemIndex = existing.findIndex((cartItem) => cartItem.variantId === itemKey);
-
-    if (itemIndex >= 0) {
-      existing[itemIndex] = {
-        ...existing[itemIndex],
-        ...item,
-        quantity: existing[itemIndex].quantity + quantity
-      };
-    } else {
-      existing.push(item);
-    }
-
-    writeCartItems(existing);
-    return true;
+      quantity,
+      inventory
+    });
+    if (added) setRequestedQuantity(1);
+    return added;
   }
 
   function addToCart() {
@@ -114,8 +109,9 @@ export default function CollectionPurchaseActions({
           <button
             type="button"
             aria-label="Decrease quantity"
-            onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-            className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+            onClick={() => setRequestedQuantity(quantity - 1)}
+            disabled={quantity <= 1}
+            className="focus-gold h-12 px-4 text-parchment hover:text-gold disabled:cursor-not-allowed disabled:opacity-40"
           >
             -
           </button>
@@ -123,8 +119,9 @@ export default function CollectionPurchaseActions({
           <button
             type="button"
             aria-label="Increase quantity"
-            onClick={() => setQuantity((value) => Math.min(10, value + 1))}
-            className="focus-gold h-12 px-4 text-parchment hover:text-gold"
+            onClick={() => setRequestedQuantity(quantity + 1)}
+            disabled={!canPurchase || quantity >= quantityRemaining}
+            className="focus-gold h-12 px-4 text-parchment hover:text-gold disabled:cursor-not-allowed disabled:opacity-40"
           >
             +
           </button>
@@ -132,7 +129,7 @@ export default function CollectionPurchaseActions({
         <button
           type="button"
           onClick={addToCart}
-          disabled={!offerPrice || !isAvailable}
+          disabled={!canPurchase}
           className="label-caps focus-gold inline-flex min-h-12 flex-1 items-center justify-center gap-3 border border-outline px-8 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isArabic ? "إضافة إلى السلة" : "Add to Cart"}
@@ -141,7 +138,7 @@ export default function CollectionPurchaseActions({
       <button
         type="button"
         onClick={buyNow}
-        disabled={!offerPrice || !isAvailable}
+        disabled={!canPurchase}
         className="label-caps focus-gold inline-flex min-h-12 w-full items-center justify-center gap-3 border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isArabic ? "شراء الآن" : "Buy Now"}

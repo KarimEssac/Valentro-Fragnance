@@ -8,16 +8,15 @@ import type {MouseEvent} from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 
+import {useCartItems} from "@/components/storefront/cart/useCartItems";
 import {
+  addCartItem,
   cartOriginalSubtotal,
+  cartQuantityRemaining,
   cartSubtotal,
-  cartUpdatedEvent,
-  applyCartPricing,
+  changeCartQuantity,
   notifyCartAdded,
-  readCartItems,
-  requestCartPricing,
-  writeCartItems,
-  type CartItem
+  refreshCart
 } from "@/lib/cart-items";
 import {
   productDiscountBadge,
@@ -129,7 +128,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
   const locale = useLocale();
   const router = useRouter();
   const isArabic = locale === "ar";
-  const [items, setItems] = useState<CartItem[]>([]);
+  const items = useCartItems();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [collections, setCollections] = useState<CollectionRecommendation[]>([]);
   const [isClosing, setIsClosing] = useState(false);
@@ -194,39 +193,10 @@ export default function SideCart({open, onClose}: SideCartProps) {
   );
 
   useEffect(() => {
-    function syncCart() {
-      setItems(readCartItems());
-    }
-
-    syncCart();
-    window.addEventListener("storage", syncCart);
-    window.addEventListener(cartUpdatedEvent, syncCart);
-
-    return () => {
-      window.removeEventListener("storage", syncCart);
-      window.removeEventListener(cartUpdatedEvent, syncCart);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!open) return;
-
-    const controller = new AbortController();
-    const storedItems = readCartItems();
-
-    if (storedItems.length > 0) {
-      requestCartPricing(storedItems, controller.signal)
-        .then((pricing) => {
-          setItems(applyCartPricing(pricing));
-        })
-        .catch((error) => {
-          if (!(error instanceof Error && error.name === "AbortError")) {
-            // Keep the last display snapshot; checkout verifies every price.
-          }
-        });
-    }
-
-    return () => controller.abort();
+    void refreshCart().catch(() => {
+      // Keep the saved cart if the inventory request fails.
+    });
   }, [open]);
 
   useEffect(() => {
@@ -288,49 +258,23 @@ export default function SideCart({open, onClose}: SideCartProps) {
     }, 260);
   }
 
-  function updateQuantity(variantId: string, quantity: number) {
-    const nextItems =
-      quantity <= 0
-        ? items.filter((item) => item.variantId !== variantId)
-        : items.map((item) =>
-            item.variantId === variantId ? {...item, quantity} : item
-          );
-
-    setItems(nextItems);
-    writeCartItems(nextItems);
-  }
-
-  function addRecommendation(recommendation: Recommendation) {
-    const variant = recommendation.variants.find((item) => item.stock > 0);
-    if (!variant) return;
-
+  function addRecommendation(recommendation: Recommendation, variant: Recommendation["variants"][number]) {
     const name = isArabic ? recommendation.nameAr : recommendation.nameEn;
-    const existing = readCartItems();
-    const itemIndex = existing.findIndex((item) => item.variantId === variant.id);
-
-    if (itemIndex >= 0) {
-      existing[itemIndex] = {
-        ...existing[itemIndex],
-        quantity: existing[itemIndex].quantity + 1
-      };
-    } else {
-      existing.push({
-        fragranceId: recommendation.id,
-        variantId: variant.id,
-        slug: recommendation.slug,
-        name,
-        image: recommendation.primaryImage?.url ?? null,
-        sizeML: variant.sizeML,
-        price: variant.price,
-        originalPrice: variant.originalPrice ?? variant.price,
-        discount: recommendation.discount ?? null,
-        quantity: 1
-      });
+    if (addCartItem({
+      fragranceId: recommendation.id,
+      variantId: variant.id,
+      slug: recommendation.slug,
+      name,
+      image: recommendation.primaryImage?.url ?? null,
+      sizeML: variant.sizeML,
+      price: variant.price,
+      originalPrice: variant.originalPrice ?? variant.price,
+      discount: recommendation.discount ?? null,
+      quantity: 1,
+      inventory: [{id: variant.id, stock: variant.stock}]
+    })) {
+      notifyCartAdded(name);
     }
-
-    setItems(existing);
-    writeCartItems(existing);
-    notifyCartAdded(name);
   }
 
   const scrollRecommendations = useCallback((direction: "previous" | "next") => {
@@ -485,7 +429,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
                         <button
                           type="button"
                           aria-label="Remove item"
-                          onClick={() => updateQuantity(item.variantId, 0)}
+                          onClick={() => changeCartQuantity(item.variantId, "remove")}
                           className="text-on-surface/60 transition-colors hover:text-red-700"
                         >
                           ×
@@ -497,9 +441,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
                           <button
                             type="button"
                             aria-label="Decrease quantity"
-                            onClick={() =>
-                              updateQuantity(item.variantId, item.quantity - 1)
-                            }
+                            onClick={() => changeCartQuantity(item.variantId, -1)}
                             className="focus-gold px-2 text-parchment hover:text-gold"
                           >
                             -
@@ -510,10 +452,9 @@ export default function SideCart({open, onClose}: SideCartProps) {
                           <button
                             type="button"
                             aria-label="Increase quantity"
-                            onClick={() =>
-                              updateQuantity(item.variantId, item.quantity + 1)
-                            }
-                            className="focus-gold px-2 text-parchment hover:text-gold"
+                            onClick={() => changeCartQuantity(item.variantId, 1)}
+                            disabled={!item.inventory?.length || cartQuantityRemaining(items, item.variantId, item.inventory) < 1}
+                            className="focus-gold px-2 text-parchment hover:text-gold disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             +
                           </button>
@@ -634,6 +575,7 @@ export default function SideCart({open, onClose}: SideCartProps) {
 
                   const fragrance = suggestion.fragrance;
                   const availableVariant = fragrance.variants.find((item) => item.stock > 0);
+                  const canAdd = availableVariant && cartQuantityRemaining(items, availableVariant.id, [availableVariant]) > 0;
                   const variant = availableVariant ?? fragrance.variants[0];
                   const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
                   const imageAlt = fragrance.primaryImage
@@ -694,8 +636,8 @@ export default function SideCart({open, onClose}: SideCartProps) {
                       </div>
                       <button
                         type="button"
-                        onClick={() => addRecommendation(fragrance)}
-                        disabled={!availableVariant}
+                        onClick={() => availableVariant && addRecommendation(fragrance, availableVariant)}
+                        disabled={!canAdd}
                         className="label-caps mx-3 mb-3 min-h-9 border border-parchment px-3 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {availableVariant ? (isArabic ? "إضافة" : "Add") : (isArabic ? "غير متوفر" : "Out of stock")}

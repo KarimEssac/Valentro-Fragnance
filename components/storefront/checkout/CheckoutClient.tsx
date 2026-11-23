@@ -6,16 +6,18 @@ import Link from "next/link";
 import type {FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
+import {useCartItems} from "@/components/storefront/cart/useCartItems";
 import ValentroSelect from "@/components/ui/ValentroSelect";
 import InstapayPayment from "@/components/storefront/checkout/InstapayPayment";
 import {
   cartPricingRequestItems,
   cartOriginalSubtotal,
+  cartStorageKey,
   cartSubtotal,
+  cartUpdatedEvent,
   applyCartPricing,
   readCartItems,
-  requestCartPricing,
-  type CartItem,
+  refreshCart,
   type CartPricingQuote
 } from "@/lib/cart-items";
 import {productDiscountBadge} from "@/lib/product-discounts";
@@ -125,9 +127,8 @@ function Field({
 
 export default function CheckoutClient() {
   const locale = useLocale();
-  const [items, setItems] = useState<CartItem[]>(() =>
-    typeof window === "undefined" ? [] : readCartItems()
-  );
+  const items = useCartItems();
+  const [cartRefreshing, setCartRefreshing] = useState(true);
   const [form, setForm] = useState<CheckoutForm>(initialForm);
   const [csrfToken, setCsrfToken] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -190,22 +191,17 @@ export default function CheckoutClient() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const storedItems = readCartItems();
+    let active = true;
 
-    if (storedItems.length > 0) {
-      requestCartPricing(storedItems, controller.signal)
-        .then((pricing) => {
-          setItems(applyCartPricing(pricing));
-        })
-        .catch((error) => {
-          if (!(error instanceof Error && error.name === "AbortError")) {
-            setStatus("Current product prices will be verified before purchase.");
-          }
-        });
-    }
+    void refreshCart()
+      .catch(() => {
+        if (active) setStatus("Current stock and prices will be verified before purchase.");
+      })
+      .finally(() => {
+        if (active) setCartRefreshing(false);
+      });
 
-    return () => controller.abort();
+    return () => { active = false; };
   }, []);
 
   const subtotal = cartSubtotal(items);
@@ -223,7 +219,7 @@ export default function CheckoutClient() {
     const controller = new AbortController();
     const normalizedEmail = form.email.trim().toLowerCase();
 
-    if (!csrfToken || pricingRequestItems === "[]") {
+    if (cartRefreshing || !csrfToken || pricingRequestItems === "[]") {
       return () => controller.abort();
     }
 
@@ -257,9 +253,12 @@ export default function CheckoutClient() {
               message?: string;
             };
 
-            if (data.pricing) {
-              setItems(applyCartPricing(data.pricing));
-            }
+            if (
+              controller.signal.aborted ||
+              JSON.stringify(cartPricingRequestItems(readCartItems())) !== pricingRequestItems
+            ) return;
+
+            if (data.pricing) applyCartPricing(data.pricing);
 
             if (data.discount !== undefined) {
               setCheckoutDiscount(data.discount ?? null);
@@ -307,7 +306,7 @@ export default function CheckoutClient() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [appliedCouponCode, csrfToken, discountRequestVersion, form.email, pricingRequestItems]);
+  }, [appliedCouponCode, cartRefreshing, csrfToken, discountRequestVersion, form.email, pricingRequestItems]);
 
   function applyCoupon() {
     const code = couponInput.trim().toUpperCase();
@@ -415,7 +414,7 @@ export default function CheckoutClient() {
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (items.length === 0) return;
+    if (cartRefreshing || items.length === 0) return;
 
     const nextMissingFields = getMissingFields();
 
@@ -459,9 +458,8 @@ export default function CheckoutClient() {
       return;
     }
 
-    window.localStorage.removeItem("valentro-cart");
-    window.dispatchEvent(new Event("valentro-cart-updated"));
-    setItems([]);
+    window.localStorage.removeItem(cartStorageKey);
+    window.dispatchEvent(new Event(cartUpdatedEvent));
     setOrderId(data.orderId ?? "");
     setOrderTotal(data.total ?? "0");
     setClaimToken(data.claimToken ?? "");
@@ -495,6 +493,16 @@ export default function CheckoutClient() {
             </Link>
           </div>
         </section>
+      </main>
+    );
+  }
+
+  if (cartRefreshing) {
+    return (
+      <main className="min-h-screen bg-bg px-gutter pb-20 text-parchment lg:px-16">
+        <p role="status" className="mx-auto max-w-2xl py-10 text-center">
+          {locale === "ar" ? "جارٍ تحديث سلة التسوق…" : "Updating your cart…"}
+        </p>
       </main>
     );
   }

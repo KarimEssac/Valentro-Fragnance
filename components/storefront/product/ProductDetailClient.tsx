@@ -10,7 +10,13 @@ import type {FormEvent, ReactNode} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 
 import Modal from "@/components/ui/Modal";
-import {notifyCartAdded, type CartItem} from "@/lib/cart-items";
+import {useCartItems} from "@/components/storefront/cart/useCartItems";
+import {
+  addCartItem,
+  cartQuantityRemaining,
+  notifyCartAdded,
+  requestCartPricing
+} from "@/lib/cart-items";
 import {productDiscountBadge} from "@/lib/product-discounts";
 import type {ActiveProductDiscount} from "@/lib/product-discounts";
 import {getPendingProductTransition} from "@/lib/product-image-transition";
@@ -141,7 +147,9 @@ export default function ProductDetailClient({
   ));
   const [transitionFinished, setTransitionFinished] = useState(!transitionPreview);
   const [transitionImageReady, setTransitionImageReady] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  const cartItems = useCartItems();
+  const [requestedQuantity, setRequestedQuantity] = useState(1);
+  const [liveStock, setLiveStock] = useState<Record<string, number> | null>(null);
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [restockEmail, setRestockEmail] = useState("");
   const [restockStatus, setRestockStatus] = useState("");
@@ -251,6 +259,40 @@ export default function ProductDetailClient({
     };
   }, []);
 
+  const variants = product?.variants;
+  useEffect(() => {
+    if (!variants?.length) return;
+
+    const controller = new AbortController();
+    const items = variants.map(({id}) => ({variantId: id, quantity: 1}));
+    const initialStock = Object.fromEntries(variants.map(({id, stock}) => [id, stock]));
+
+    function loadStock() {
+      void requestCartPricing(items, controller.signal)
+        .then(({lines}) => {
+          if (!controller.signal.aborted) {
+            setLiveStock(Object.fromEntries(lines.map(({variantId, stock}) => [variantId, stock])));
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setLiveStock((current) => current ?? initialStock);
+          }
+        });
+    }
+
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) loadStock();
+    }
+
+    loadStock();
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      controller.abort();
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [variants]);
+
   const images = product?.images ?? [];
   const selectedImage = images[activeImage] ?? images[0] ?? null;
   const transitionImageIndex = transitionPreview
@@ -266,6 +308,15 @@ export default function ProductDetailClient({
     }
     return product.variants.find((v) => v.sizeML === 50) ?? product.variants[0];
   }, [product, selectedVariantId]);
+  const stock = liveStock && selectedVariant
+    ? liveStock[selectedVariant.id] ?? 0
+    : selectedVariant?.stock ?? 0;
+  const inventory = selectedVariant ? [{id: selectedVariant.id, stock}] : [];
+  const quantityRemaining = selectedVariant
+    ? cartQuantityRemaining(cartItems, selectedVariant.id, inventory)
+    : 0;
+  const quantity = Math.min(requestedQuantity, quantityRemaining);
+  const canPurchase = liveStock !== null && quantity > 0;
   const productName = product
     ? isArabic
       ? product.nameAr
@@ -301,9 +352,9 @@ export default function ProductDetailClient({
   }
 
   function performAddToCart() {
-    if (!product || !selectedVariant) return false;
+    if (!product || !selectedVariant || !canPurchase) return false;
 
-    const item: CartItem = {
+    const added = addCartItem({
       fragranceId: product.id,
       variantId: selectedVariant.id,
       slug: product.slug,
@@ -313,29 +364,11 @@ export default function ProductDetailClient({
       price: selectedVariant.price,
       originalPrice: selectedVariant.originalPrice,
       discount: product.discount,
-      quantity
-    };
-
-    const existing = JSON.parse(
-      window.localStorage.getItem("valentro-cart") ?? "[]"
-    ) as CartItem[];
-    const itemIndex = existing.findIndex(
-      (cartItem) => cartItem.variantId === item.variantId
-    );
-
-    if (itemIndex >= 0) {
-      existing[itemIndex] = {
-        ...existing[itemIndex],
-        ...item,
-        quantity: existing[itemIndex].quantity + quantity
-      };
-    } else {
-      existing.push(item);
-    }
-
-    window.localStorage.setItem("valentro-cart", JSON.stringify(existing));
-    window.dispatchEvent(new Event("valentro-cart-updated"));
-    return true;
+      quantity,
+      inventory
+    });
+    if (added) setRequestedQuantity(1);
+    return added;
   }
 
   function addToCart() {
@@ -683,7 +716,9 @@ export default function ProductDetailClient({
                         key={variant.id}
                         type="button"
                         onClick={() => {
+                          if (isSelected) return;
                           setSelectedVariantId(variant.id);
+                          setRequestedQuantity(1);
                         }}
                         className={`label-caps min-h-12 border px-4 transition-colors sm:px-8 ${
                           isSelected
@@ -705,8 +740,9 @@ export default function ProductDetailClient({
                   <button
                     type="button"
                     aria-label="Decrease quantity"
-                    onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                    className="focus-gold h-full px-3 text-parchment hover:text-gold sm:px-4"
+                    onClick={() => setRequestedQuantity(quantity - 1)}
+                    disabled={quantity <= 1}
+                    className="focus-gold h-full px-3 text-parchment hover:text-gold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
                   >
                     -
                   </button>
@@ -716,8 +752,9 @@ export default function ProductDetailClient({
                   <button
                     type="button"
                     aria-label="Increase quantity"
-                    onClick={() => setQuantity((value) => value + 1)}
-                    className="focus-gold h-full px-3 text-parchment hover:text-gold sm:px-4"
+                    onClick={() => setRequestedQuantity(quantity + 1)}
+                    disabled={!canPurchase || quantity >= quantityRemaining}
+                    className="focus-gold h-full px-3 text-parchment hover:text-gold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
                   >
                     +
                   </button>
@@ -726,7 +763,7 @@ export default function ProductDetailClient({
             </div>
 
             <div className="mb-5 flex flex-col gap-4">
-              {selectedVariant.stock < 1 ? (
+              {stock < 1 ? (
                 <div className="flex flex-nowrap gap-2">
                   <p className="label-caps flex min-w-0 items-center gap-2 border border-gold/50 px-3 py-2 text-gold">
                     <span aria-hidden="true" className="h-2 w-2 shrink-0 bg-gold" />
@@ -748,7 +785,7 @@ export default function ProductDetailClient({
               <button
                 type="button"
                 onClick={addToCart}
-                disabled={selectedVariant.stock < 1}
+                disabled={!canPurchase}
                 className="label-caps focus-gold inline-flex min-h-12 flex-1 items-center justify-center gap-3 border border-outline px-8 text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isArabic ? "إضافة إلى السلة" : "Add to Cart"}
@@ -756,7 +793,7 @@ export default function ProductDetailClient({
               <button
                 type="button"
                 onClick={buyNow}
-                disabled={selectedVariant.stock < 1}
+                disabled={!canPurchase}
                 className="label-caps focus-gold inline-flex min-h-12 w-full items-center justify-center gap-3 border border-parchment bg-parchment px-8 text-surface-hi transition-colors hover:border-gold hover:bg-gold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isArabic ? "شراء الآن" : "Buy Now"}
@@ -861,7 +898,7 @@ export default function ProductDetailClient({
               </ProductInformationDisclosure>
             </div>
 
-            {selectedVariant.stock > 0 ? (
+            {stock > 0 ? (
               <p className="label-caps flex items-center gap-2 text-on-surface/70">
                 <span aria-hidden="true" className="h-2 w-2 bg-gold" />
                 In Stock - Ready for immediate dispatch

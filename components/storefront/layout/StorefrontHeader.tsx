@@ -2,9 +2,11 @@
 
 import {useLocale} from "next-intl";
 import {usePathname} from "next/navigation";
+import {useEffect} from "react";
 
 import Navbar from "@/components/storefront/layout/Navbar";
 import SalesBar from "@/components/storefront/layout/SalesBar";
+import {refreshCart} from "@/lib/cart-items";
 
 export default function StorefrontHeader() {
   const locale = useLocale();
@@ -12,6 +14,22 @@ export default function StorefrontHeader() {
   const isHome = pathname === `/${locale}` || pathname === `/${locale}/`;
   const isPolicyPage = /^\/[^/]+\/(privacy-policy|refund-policy|terms-and-conditions)\/?$/.test(pathname);
   const background = isPolicyPage ? "bg-parchment-base" : "bg-bg";
+
+  useEffect(() => {
+    function refreshSavedCart() {
+      void refreshCart().catch(() => {
+        // Keep the saved cart if the inventory request fails.
+      });
+    }
+
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) refreshSavedCart();
+    }
+
+    refreshSavedCart();
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   return (
     <header

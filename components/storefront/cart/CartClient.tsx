@@ -7,15 +7,15 @@ import {useRouter} from "next/navigation";
 import type {MouseEvent} from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
+import {useCartItems} from "@/components/storefront/cart/useCartItems";
 import {
+  addCartItem,
   cartOriginalSubtotal,
+  cartQuantityRemaining,
   cartSubtotal,
-  applyCartPricing,
+  changeCartQuantity,
   notifyCartAdded,
-  readCartItems,
-  requestCartPricing,
-  writeCartItems,
-  type CartItem
+  refreshCart
 } from "@/lib/cart-items";
 import {
   productDiscountBadge,
@@ -192,9 +192,7 @@ export default function CartClient() {
 
     if (didStart) event.preventDefault();
   }
-  const [items, setItems] = useState<CartItem[]>(() =>
-    typeof window === "undefined" ? [] : readCartItems()
-  );
+  const items = useCartItems();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [collections, setCollections] = useState<CollectionRecommendation[]>([]);
 
@@ -208,59 +206,23 @@ export default function CartClient() {
     [locale]
   );
 
-  function persist(nextItems: CartItem[]) {
-    setItems(nextItems);
-    writeCartItems(nextItems);
-  }
-
-  function updateQuantity(variantId: string, quantity: number) {
-    if (quantity <= 0) {
-      removeItem(variantId);
-      return;
-    }
-    persist(
-      items.map((item) =>
-        item.variantId === variantId
-          ? {...item, quantity}
-          : item
-      )
-    );
-  }
-
-  function removeItem(variantId: string) {
-    persist(items.filter((item) => item.variantId !== variantId));
-  }
-
-  function addRecommendation(recommendation: Recommendation) {
-    const variant = recommendation.variants.find((item) => item.stock > 0);
-    if (!variant) return;
-
+  function addRecommendation(recommendation: Recommendation, variant: Recommendation["variants"][number]) {
     const name = isArabic ? recommendation.nameAr : recommendation.nameEn;
-    const itemIndex = items.findIndex((item) => item.variantId === variant.id);
-    const nextItems = [...items];
-
-    if (itemIndex >= 0) {
-      nextItems[itemIndex] = {
-        ...nextItems[itemIndex],
-        quantity: nextItems[itemIndex].quantity + 1
-      };
-    } else {
-      nextItems.push({
-        fragranceId: recommendation.id,
-        variantId: variant.id,
-        slug: recommendation.slug,
-        name,
-        image: recommendation.primaryImage?.url ?? null,
-        sizeML: variant.sizeML,
-        price: variant.price,
-        originalPrice: variant.originalPrice ?? variant.price,
-        discount: recommendation.discount ?? null,
-        quantity: 1
-      });
+    if (addCartItem({
+      fragranceId: recommendation.id,
+      variantId: variant.id,
+      slug: recommendation.slug,
+      name,
+      image: recommendation.primaryImage?.url ?? null,
+      sizeML: variant.sizeML,
+      price: variant.price,
+      originalPrice: variant.originalPrice ?? variant.price,
+      discount: recommendation.discount ?? null,
+      quantity: 1,
+      inventory: [{id: variant.id, stock: variant.stock}]
+    })) {
+      notifyCartAdded(name);
     }
-
-    persist(nextItems);
-    notifyCartAdded(name);
   }
 
   const scrollRecommendations = useCallback((direction: "previous" | "next") => {
@@ -317,22 +279,9 @@ export default function CartClient() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const storedItems = readCartItems();
-
-    if (storedItems.length > 0) {
-      requestCartPricing(storedItems, controller.signal)
-        .then((pricing) => {
-          setItems(applyCartPricing(pricing));
-        })
-        .catch((error) => {
-          if (!(error instanceof Error && error.name === "AbortError")) {
-            // The saved snapshot remains usable until checkout verifies it.
-          }
-        });
-    }
-
-    return () => controller.abort();
+    void refreshCart().catch(() => {
+      // Keep the saved cart if the inventory request fails.
+    });
   }, []);
 
   const subtotal = cartSubtotal(items);
@@ -516,9 +465,7 @@ export default function CartClient() {
                           <button
                             type="button"
                             aria-label="Decrease quantity"
-                            onClick={() =>
-                              updateQuantity(item.variantId, item.quantity - 1)
-                            }
+                            onClick={() => changeCartQuantity(item.variantId, -1)}
                             className="focus-gold h-full px-2.5 text-parchment hover:text-gold lg:px-4"
                           >
                             -
@@ -529,17 +476,16 @@ export default function CartClient() {
                           <button
                             type="button"
                             aria-label="Increase quantity"
-                            onClick={() =>
-                              updateQuantity(item.variantId, item.quantity + 1)
-                            }
-                            className="focus-gold h-full px-2.5 text-parchment hover:text-gold lg:px-4"
+                            onClick={() => changeCartQuantity(item.variantId, 1)}
+                            disabled={!item.inventory?.length || cartQuantityRemaining(items, item.variantId, item.inventory) < 1}
+                            className="focus-gold h-full px-2.5 text-parchment hover:text-gold disabled:cursor-not-allowed disabled:opacity-40 lg:px-4"
                           >
                             +
                           </button>
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeItem(item.variantId)}
+                          onClick={() => changeCartQuantity(item.variantId, "remove")}
                           className="label-caps text-[10px] text-on-surface/65 transition-colors hover:text-gold lg:text-xs"
                         >
                           Remove
@@ -744,6 +690,7 @@ export default function CartClient() {
 
                 const fragrance = suggestion.fragrance;
                 const availableVariant = fragrance.variants.find((item) => item.stock > 0);
+                const canAdd = availableVariant && cartQuantityRemaining(items, availableVariant.id, [availableVariant]) > 0;
                 const variant = availableVariant ?? fragrance.variants[0];
                 const name = isArabic ? fragrance.nameAr : fragrance.nameEn;
                 const imageAlt = fragrance.primaryImage
@@ -791,8 +738,8 @@ export default function CartClient() {
                       </p>
                       <button
                         type="button"
-                        onClick={() => addRecommendation(fragrance)}
-                        disabled={!availableVariant}
+                        onClick={() => availableVariant && addRecommendation(fragrance, availableVariant)}
+                        disabled={!canAdd}
                         className="label-caps mt-3 min-h-9 w-full border border-parchment text-parchment transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {availableVariant ? (isArabic ? "إضافة" : "Add") : (isArabic ? "غير متوفر" : "Out of stock")}

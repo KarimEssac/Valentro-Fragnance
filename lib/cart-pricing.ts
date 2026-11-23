@@ -1,6 +1,11 @@
 import type {Prisma} from "@prisma/client";
 
-import {collectionCartKey} from "@/lib/cart-items";
+import {
+  collectionCartKey,
+  maxCartItemQuantity,
+  maxCartLines,
+  type CartInventoryVariant
+} from "@/lib/cart-items";
 import {calculateProductPrice} from "@/lib/product-discounts";
 
 export type CartPricingInput =
@@ -42,6 +47,7 @@ export type ServerCartPricingLine = {
   productDiscountAmount: string;
   discount: ReturnType<typeof calculateProductPrice>["discount"];
   inventoryVariantIds: string[];
+  inventory: CartInventoryVariant[];
 };
 
 export type ServerCartPricingQuote = {
@@ -76,7 +82,7 @@ function moneyFromCents(cents: number) {
 export function parseCartPricingItems(value: unknown): CartPricingInput[] {
   if (!Array.isArray(value)) throw new Error("Your cart is empty");
   if (value.length < 1) return [];
-  if (value.length > 20) throw new Error("Too many cart items");
+  if (value.length > maxCartLines) throw new Error("Too many cart items");
 
   const quantities = new Map<string, number>();
 
@@ -88,7 +94,7 @@ export function parseCartPricingItems(value: unknown): CartPricingInput[] {
     const item = valueItem as CartPricingRequestItem;
     const quantity = Number(item.quantity);
 
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > maxCartItemQuantity) {
       throw new Error("Cart item is invalid");
     }
 
@@ -100,7 +106,7 @@ export function parseCartPricingItems(value: unknown): CartPricingInput[] {
 
       const key = `collection:${collectionId}`;
       const combinedQuantity = (quantities.get(key) ?? 0) + quantity;
-      if (combinedQuantity > 10) throw new Error("Cart item quantity is invalid");
+      if (combinedQuantity > maxCartItemQuantity) throw new Error("Cart item quantity is invalid");
       quantities.set(key, combinedQuantity);
       continue;
     }
@@ -111,7 +117,7 @@ export function parseCartPricingItems(value: unknown): CartPricingInput[] {
     }
 
     const combinedQuantity = (quantities.get(variantId) ?? 0) + quantity;
-    if (combinedQuantity > 10) throw new Error("Cart item quantity is invalid");
+    if (combinedQuantity > maxCartItemQuantity) throw new Error("Cart item quantity is invalid");
     quantities.set(variantId, combinedQuantity);
   }
 
@@ -248,7 +254,8 @@ export async function calculateCartPricing(
       lineTotal: moneyFromCents(lineCents),
       productDiscountAmount: moneyFromCents(originalLineCents - lineCents),
       discount: productPrice.discount,
-      inventoryVariantIds: [variant.id]
+      inventoryVariantIds: [variant.id],
+      inventory: [{id: variant.id, stock: variant.stock}]
     };
   });
 
@@ -292,7 +299,8 @@ export async function calculateCartPricing(
       lineTotal: moneyFromCents(lineCents),
       productDiscountAmount: moneyFromCents(Math.max(0, originalLineCents - lineCents)),
       discount: null,
-      inventoryVariantIds: memberVariants.map((variant) => variant.id)
+      inventoryVariantIds: memberVariants.map((variant) => variant.id),
+      inventory: memberVariants.map(({id, stock}) => ({id, stock}))
     }];
   });
 

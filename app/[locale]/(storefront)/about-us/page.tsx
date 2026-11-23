@@ -1,6 +1,11 @@
 import Image from "next/image";
 import type {Metadata} from "next";
 
+import {
+  BrandSocialIcon,
+  valentroSocialLinks,
+  type BrandSocialPlatform
+} from "@/components/storefront/layout/BrandSocial";
 
 type AboutUsPageProps = {
   params: Promise<{
@@ -11,7 +16,7 @@ type AboutUsPageProps = {
 type SocialLink = {
   label: string;
   href: string;
-  icon: "facebook" | "instagram" | "tiktok" | "github" | "linkedin" | "portfolio" | "whatsapp";
+  icon: BrandSocialPlatform | "github" | "linkedin" | "portfolio" | "whatsapp";
 };
 
 const peterLinks: SocialLink[] = [
@@ -25,12 +30,6 @@ const karimLinks: SocialLink[] = [
   {label: "Portfolio", href: "https://karimessac.github.io/My-Portfolio/", icon: "portfolio"},
   {label: "Facebook", href: "https://www.facebook.com/Karim.essac/", icon: "facebook"},
   {label: "WhatsApp", href: "https://wa.me/201200989845", icon: "whatsapp"}
-];
-
-const valentroLinks: SocialLink[] = [
-  {label: "Facebook", href: "#valentro-facebook", icon: "facebook"},
-  {label: "Instagram", href: "#valentro-instagram", icon: "instagram"},
-  {label: "TikTok", href: "#valentro-tiktok", icon: "tiktok"}
 ];
 
 const aboutHeroImage = "/magnito-hero.png";
@@ -47,26 +46,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 function SocialIcon({icon}: {icon: SocialLink["icon"]}) {
   switch (icon) {
-    case "facebook":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-current">
-          <path d="M13.5 22v-8h2.7l.4-3h-3.1V9.1c0-.9.3-1.5 1.6-1.5h1.7V4.9c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3V11H7.3v3h2.8v8h3.4Z" />
-        </svg>
-      );
-    case "instagram":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="5" />
-          <circle cx="12" cy="12" r="4" />
-          <path d="M17.5 6.5h.01" />
-        </svg>
-      );
-    case "tiktok":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-current">
-          <path d="M16.4 3c.4 2.4 1.8 3.9 4.1 4.1v3.1a7.4 7.4 0 0 1-4-1.2v6.4c0 3.8-2.2 5.6-5.2 5.6A5.1 5.1 0 0 1 6 16c0-3.2 2.4-5.3 5.8-5.1v3.2c-1.5-.2-2.6.5-2.6 1.9 0 1.2.9 2 2 2 1.3 0 2-.8 2-2.5V3h3.2Z" />
-        </svg>
-      );
     case "github":
       return (
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-current">
@@ -92,10 +71,12 @@ function SocialIcon({icon}: {icon: SocialLink["icon"]}) {
           <path d="M12 3a8.7 8.7 0 0 0-7.4 13.3L3.5 21l4.8-1.1A8.7 8.7 0 1 0 12 3Zm0 15.8c-1.4 0-2.8-.4-4-1.2l-.3-.2-2.2.5.5-2.1-.2-.3a7.1 7.1 0 1 1 6.2 3.3Zm4-5.3c-.2-.1-1.3-.6-1.5-.7-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a5.9 5.9 0 0 1-2.9-2.5c-.2-.3 0-.4.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5l-.7-1.6c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.2-.9.9-.9 2.1s.9 2.5 1 2.6c.1.2 1.8 2.8 4.4 3.9.6.3 1.1.4 1.5.5.6.2 1.2.1 1.6.1.5-.1 1.3-.5 1.5-1 .2-.5.2-.9.2-1-.1-.2-.2-.3-.4-.4Z" />
         </svg>
       );
+    default:
+      return <BrandSocialIcon platform={icon} className="h-5 w-5" />;
   }
 }
 
-function SocialList({links}: {links: SocialLink[]}) {
+function SocialList({links}: {links: readonly SocialLink[]}) {
   return (
     <div className="flex flex-wrap gap-4">
       {links.map((link) => (
@@ -303,7 +284,7 @@ export default async function AboutUsPage({params}: AboutUsPageProps) {
           Follow Valentro
         </h2>
         <div className="mt-8 flex justify-center">
-          <SocialList links={valentroLinks} />
+          <SocialList links={valentroSocialLinks} />
         </div>
       </section>
       </main>

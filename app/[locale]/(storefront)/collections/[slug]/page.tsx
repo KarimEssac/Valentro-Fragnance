@@ -51,6 +51,7 @@ export default async function CollectionDetailPage({
                 orderBy: {price: "asc"},
                 take: 1,
                 select: {
+                  id: true,
                   price: true,
                   stock: true
                 }
@@ -79,9 +80,14 @@ export default async function CollectionDetailPage({
     0
   );
   const offerPrice = Number(collection.offerPrice ?? 0);
+  const inventory = products.flatMap(({variants}) => {
+    const variant = variants[0];
+    return variant ? [{id: variant.id, stock: variant.stock}] : [];
+  });
   const isAvailable =
-    products.length > 0 &&
-    products.every((product) => Number(product.variants[0]?.stock ?? 0) > 0);
+    inventory.length > 0 &&
+    inventory.length === products.length &&
+    inventory.every(({stock}) => stock > 0);
   const discountPercent =
     combinedValue > 0 && offerPrice > 0
       ? Math.max(0, Math.round(((combinedValue - offerPrice) / combinedValue) * 100))
@@ -147,6 +153,7 @@ export default async function CollectionDetailPage({
               offerPrice={collection.offerPrice?.toString() ?? null}
               combinedValue={combinedValue.toFixed(2)}
               isAvailable={isAvailable}
+              inventory={inventory}
             />
 
             <Link
